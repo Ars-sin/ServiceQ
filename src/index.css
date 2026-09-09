@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans text-gray-800 bg-gray-50 antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+@layer components {
+  /* ── Buttons ─────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500 shadow-sm hover:shadow-brand-glow active:scale-95;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-brand-600 border border-brand-200 hover:bg-brand-50 focus:ring-brand-400 active:scale-95;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 active:scale-95;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-300 active:scale-95;
+  }
+  .btn-lg {
+    @apply px-6 py-3 text-base rounded-2xl;
+  }
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs rounded-lg;
+  }
+
+  /* ── Cards ───────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl shadow-card border border-gray-100 p-6;
+  }
+  .card-hover {
+    @apply card hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 cursor-pointer;
+  }
+
+  /* ── Form Controls ───────────────────────────── */
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm placeholder-gray-400
+           focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent
+           transition duration-150;
+  }
+  .input-error {
+    @apply border-red-400 focus:ring-red-400;
+  }
+  .label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .form-group {
+    @apply flex flex-col gap-1;
+  }
+
+  /* ── Badges ──────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-success  { @apply badge bg-green-100 text-green-700; }
+  .badge-warning  { @apply badge bg-amber-100 text-amber-700; }
+  .badge-danger   { @apply badge bg-red-100   text-red-700;   }
+  .badge-info     { @apply badge bg-blue-100  text-blue-700;  }
+  .badge-neutral  { @apply badge bg-gray-100  text-gray-600;  }
+  .badge-brand    { @apply badge bg-brand-100 text-brand-700; }
+
+  /* ── Tabs ────────────────────────────────────── */
+  .tab-bar {
+    @apply flex gap-1 p-1 bg-gray-100 rounded-xl;
+  }
+  .tab-item {
+    @apply flex-1 py-2 px-3 text-sm font-medium rounded-lg text-gray-500 transition-all duration-150 text-center cursor-pointer hover:text-gray-700;
+  }
+  .tab-item-active {
+    @apply tab-item bg-white text-brand-600 shadow-sm;
+  }
+
+  /* ── Page shell ──────────────────────────────── */
+  .page-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+  .section-title {
+    @apply text-xl font-bold text-gray-900;
+  }
+
+  /* ── Sidebar layout ──────────────────────────── */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-600
+           hover:bg-brand-50 hover:text-brand-700 transition-all duration-150 cursor-pointer;
+  }
+  .sidebar-link-active {
+    @apply sidebar-link bg-brand-50 text-brand-700;
+  }
+
+  /* ── Dividers ────────────────────────────────── */
+  .divider {
+    @apply border-t border-gray-100 my-4;
+  }
+
+  /* ── Stats card ──────────────────────────────── */
+  .stat-card {
+    @apply card flex flex-col gap-1;
+  }
+  .stat-value {
+    @apply text-2xl font-bold text-gray-900;
+  }
+  .stat-label {
+    @apply text-sm text-gray-500;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .gradient-brand {
+    @apply bg-gradient-to-r from-brand-600 to-accent-600;
+  }
+  .gradient-brand-text {
+    @apply bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent;
+  }
+}
