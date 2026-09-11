@@ -20,19 +20,33 @@ export default function RegisterPage() {
   const handleSubmit = async e => {
     e.preventDefault()
     if (form.password !== form.confirmPassword) return toast.error('Passwords do not match')
+    if (form.password.length < 6) return toast.error('Password must be at least 6 characters')
     if (!agreed) return toast.error('Please accept the Terms & Conditions')
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: form.email,
         password: form.password,
         options: { data: { full_name: form.fullName, phone: form.phone, role } },
       })
+
+      console.log('SignUp response:', { data, error })
+
       if (error) throw error
-      toast.success('Account created!')
+
+      // Email confirmation ON — account created but needs email verification
+      if (data?.user && !data?.session) {
+        toast.success('✅ Account created! Please check your email to confirm your account.')
+        return
+      }
+
+      // Email confirmation OFF — logged in immediately
+      toast.success('Account created! Welcome to ServiceQ 🎉')
       navigate(role === 'provider' ? '/provider/onboarding' : '/customer/dashboard')
+
     } catch (err) {
-      toast.error(err.message ?? 'Registration failed')
+      console.error('Registration error:', err)
+      toast.error(err.message ?? 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }
