@@ -44,14 +44,9 @@ export default function ProviderOnboarding() {
     <div className="min-h-screen bg-gray-50 flex">
       {/* Sidebar stepper */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-6 gap-6">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 flex items-center justify-center">
-            <span className="text-white font-black text-lg">S</span>
-          </div>
-          <div>
-            <div className="font-bold text-gray-900 text-sm">ServiceQ</div>
-            <div className="text-xs text-gray-400">Provider Setup</div>
-          </div>
+        <div className="flex flex-col gap-1 mb-4">
+          <img src="/logoword(black).png" alt="ServiceQ" className="h-8 w-auto object-contain self-start" />
+          <div className="text-xs text-gray-400">Provider Setup</div>
         </div>
         {STEPS.map((s, i) => (
           <div key={s} className="flex items-start gap-3">

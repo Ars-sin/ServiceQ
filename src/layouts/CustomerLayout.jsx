@@ -30,10 +30,7 @@ export default function CustomerLayout() {
       )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center">
-            <span className="text-white font-black text-lg">S</span>
-          </div>
-          <span className="font-bold text-xl gradient-brand-text">ServiceQ</span>
+          <img src="/logoword(black).png" alt="ServiceQ" className="h-8 w-auto object-contain" />
         </div>
 
         {/* Nav */}

@@ -36,12 +36,7 @@ export default function LandingPage() {
       {/* NAV */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-gray-100">
         <div className="page-container flex items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center shadow-brand-glow">
-              <span className="text-white font-black text-lg">S</span>
-            </div>
-            <span className="font-bold text-xl gradient-brand-text">ServiceQ</span>
-          </div>
+          <img src="/logoword(black).png" alt="ServiceQ" className="h-9 w-auto object-contain" />
           <div className="flex items-center gap-3">
             <Link to="/login"    className="btn-ghost text-sm">Sign In</Link>
             <Link to="/register" className="btn-primary text-sm">Get Started</Link>
@@ -179,12 +174,7 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="page-container flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center">
-              <span className="text-white font-black text-sm">S</span>
-            </div>
-            <span className="font-bold text-white">ServiceQ</span>
-          </div>
+          <img src="/logoword(white).png" alt="ServiceQ" className="h-8 w-auto object-contain" />
           <p className="text-sm">© 2026 ServiceQ. All rights reserved.</p>
           <div className="flex gap-4 text-sm">
             <button className="hover:text-white transition-colors">Privacy Policy</button>
