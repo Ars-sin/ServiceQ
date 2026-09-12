@@ -9,98 +9,97 @@
 
 ```mermaid
 erDiagram
-    auth_users {
+    AUTH_USERS {
         uuid id PK
-        text email
-        jsonb raw_user_meta_data
-        timestamptz created_at
+        string email
+        json raw_user_meta_data
+        timestamp created_at
     }
 
-    profiles {
-        uuid id PK FK
-        enum role
-        text full_name
-        text email
-        text phone
-        text avatar_url
-        text address
-        text city
-        text province
-        text barangay
-        text postal_code
+    PROFILES {
+        uuid id PK
+        string role
+        string full_name
+        string email
+        string phone
+        string avatar_url
+        string address
+        string city
+        string province
+        string barangay
+        string postal_code
         boolean is_active
-        timestamptz created_at
-        timestamptz updated_at
+        timestamp created_at
+        timestamp updated_at
     }
 
-    providers {
+    PROVIDERS {
         uuid id PK
         uuid user_id FK
-        text business_name
-        text business_description
-        text[] provider_type
+        string business_name
+        string business_description
+        string provider_type
         int years_experience
-        time operating_hours_from
-        time operating_hours_to
-        text service_area
-        text gov_id_type
-        text gov_id_number
-        text gov_id_photo_url
-        text selfie_url
-        enum kyc_status
-        enum provider_status
-        enum subscription_tier
-        numeric subscription_expires_at
-        text gcash_number
-        text maya_number
-        text bank_name
-        text bank_account_name
-        text bank_account_number
+        string operating_hours_from
+        string operating_hours_to
+        string service_area
+        string gov_id_type
+        string gov_id_number
+        string gov_id_photo_url
+        string selfie_url
+        string kyc_status
+        string provider_status
+        string subscription_tier
+        string gcash_number
+        string maya_number
+        string bank_name
+        string bank_account_name
+        string bank_account_number
         numeric total_earnings
         numeric available_balance
-        timestamptz created_at
-        timestamptz updated_at
+        timestamp created_at
+        timestamp updated_at
     }
 
-    listings {
+    LISTINGS {
         uuid id PK
         uuid provider_id FK
-        text title
-        text description
-        enum type
-        text category
-        text[] photos
+        string title
+        string description
+        string type
+        string category
+        string photos
         numeric price_per_unit
-        text price_unit
-        text location
-        text city
-        text province
+        string price_unit
+        string location
+        string city
+        string province
         numeric rating_avg
         int rating_count
         int min_booking_days
         int max_booking_days
-        enum status
-        timestamptz created_at
-        timestamptz updated_at
+        string status
+        timestamp created_at
+        timestamp updated_at
     }
 
-    listing_availability {
+    LISTING_AVAILABILITY {
         uuid id PK
         uuid listing_id FK
         date available_date
         boolean is_available
     }
 
-    listing_blocked_dates {
+    LISTING_BLOCKED_DATES {
         uuid id PK
         uuid listing_id FK
         date blocked_date
-        text reason
+        string reason
     }
 
-    bookings {
+    BOOKINGS {
         uuid id PK
-        text booking_ref
+        string booking_ref
         uuid customer_id FK
         uuid provider_id FK
         uuid listing_id FK
@@ -110,130 +109,130 @@ erDiagram
         numeric subtotal
         numeric platform_fee
         numeric total_amount
-        enum payment_method
-        text payment_reference
-        enum status
-        text cancellation_reason
-        text notes
-        timestamptz created_at
-        timestamptz updated_at
+        string payment_method
+        string payment_reference
+        string status
+        string cancellation_reason
+        string notes
+        timestamp created_at
+        timestamp updated_at
     }
 
-    reviews {
+    REVIEWS {
         uuid id PK
         uuid booking_id FK
         uuid reviewer_id FK
         uuid listing_id FK
         int rating
-        text comment
-        timestamptz created_at
+        string comment
+        timestamp created_at
     }
 
-    favorites {
+    FAVORITES {
         uuid id PK
         uuid customer_id FK
         uuid listing_id FK
-        timestamptz created_at
+        timestamp created_at
     }
 
-    withdrawals {
+    WITHDRAWALS {
         uuid id PK
         uuid provider_id FK
         numeric amount
-        text payout_method
-        text account_name
-        text account_number
-        enum status
-        text rejection_reason
-        timestamptz requested_at
-        timestamptz processed_at
+        string payout_method
+        string account_name
+        string account_number
+        string status
+        string rejection_reason
+        timestamp requested_at
+        timestamp processed_at
     }
 
-    disputes {
+    DISPUTES {
         uuid id PK
         uuid booking_id FK
         uuid raised_by FK
-        text reason
-        text description
-        enum status
-        text resolution
-        timestamptz created_at
-        timestamptz resolved_at
+        string reason
+        string description
+        string status
+        string resolution
+        timestamp created_at
+        timestamp resolved_at
     }
 
-    reports {
+    REPORTS {
         uuid id PK
         uuid reporter_id FK
         uuid listing_id FK
-        text reason
-        text description
-        enum status
-        timestamptz created_at
+        string reason
+        string description
+        string status
+        timestamp created_at
     }
 
-    admin_staff {
-        uuid id PK FK
-        enum admin_role
+    ADMIN_STAFF {
+        uuid id PK
+        string admin_role
         boolean is_active
-        timestamptz created_at
+        timestamp created_at
     }
 
-    audit_logs {
+    AUDIT_LOGS {
         uuid id PK
         uuid staff_id FK
-        text action
-        text target_table
-        text target_id
-        text description
-        jsonb before_data
-        jsonb after_data
-        text ip_address
-        timestamptz created_at
+        string action
+        string target_table
+        string target_id
+        string description
+        json before_data
+        json after_data
+        string ip_address
+        timestamp created_at
     }
 
-    platform_settings {
-        text key PK
-        text value
-        text description
-        timestamptz updated_at
+    PLATFORM_SETTINGS {
+        string key PK
+        string value
+        string description
+        timestamp updated_at
     }
 
-    categories {
+    CATEGORIES {
         uuid id PK
-        text name
-        text slug
-        text icon
+        string name
+        string slug
+        string icon
         boolean is_active
     }
 
-    faqs {
+    FAQS {
         uuid id PK
-        text question
-        text answer
+        string question
+        string answer
         int sort_order
         boolean is_published
     }
 
-    auth_users ||--|| profiles : "auto-created on signup"
-    profiles ||--o| providers : "1 user = 1 provider profile"
-    profiles ||--o{ bookings : "customer_id"
-    profiles ||--o{ reviews : "reviewer_id"
-    profiles ||--o{ favorites : "customer_id"
-    profiles ||--o{ disputes : "raised_by"
-    profiles ||--o{ reports : "reporter_id"
-    profiles ||--o| admin_staff : "admin account"
-    providers ||--o{ listings : "owns many listings"
-    providers ||--o{ bookings : "receives bookings"
-    providers ||--o{ withdrawals : "requests payouts"
-    listings ||--o{ listing_availability : "has availability calendar"
-    listings ||--o{ listing_blocked_dates : "has blocked dates"
-    listings ||--o{ bookings : "is booked"
-    listings ||--o{ reviews : "is reviewed"
-    listings ||--o{ favorites : "is favorited"
-    listings ||--o{ reports : "is reported"
-    bookings ||--o| reviews : "generates 1 review"
-    bookings ||--o| disputes : "may have 1 dispute"
-    admin_staff ||--o{ audit_logs : "creates log entries"
+    AUTH_USERS ||--|| PROFILES : "auto-created on signup"
+    PROFILES ||--o| PROVIDERS : "1 user = 1 provider profile"
+    PROFILES ||--o{ BOOKINGS : "places as customer"
+    PROFILES ||--o{ REVIEWS : "writes review"
+    PROFILES ||--o{ FAVORITES : "saves listing"
+    PROFILES ||--o{ DISPUTES : "raises dispute"
+    PROFILES ||--o{ REPORTS : "reports listing"
+    PROFILES ||--o| ADMIN_STAFF : "admin account"
+    PROVIDERS ||--o{ LISTINGS : "owns many listings"
+    PROVIDERS ||--o{ BOOKINGS : "receives bookings"
+    PROVIDERS ||--o{ WITHDRAWALS : "requests payouts"
+    LISTINGS ||--o{ LISTING_AVAILABILITY : "availability calendar"
+    LISTINGS ||--o{ LISTING_BLOCKED_DATES : "blocked dates"
+    LISTINGS ||--o{ BOOKINGS : "is booked"
+    LISTINGS ||--o{ REVIEWS : "is reviewed"
+    LISTINGS ||--o{ FAVORITES : "is favorited"
+    LISTINGS ||--o{ REPORTS : "is reported"
+    BOOKINGS ||--o| REVIEWS : "generates 1 review"
+    BOOKINGS ||--o| DISPUTES : "may have 1 dispute"
+    ADMIN_STAFF ||--o{ AUDIT_LOGS : "creates log entries"
 ```
 
 ---
@@ -243,7 +242,7 @@ erDiagram
 | Table | Purpose | Key Relationships |
 |---|---|---|
 | **`auth.users`** | Supabase Auth — stores login credentials | Auto-links to `profiles` via trigger |
-| **`profiles`** | All user info (customer/provider/admin) | Extends `auth.users` 1:1 |
+| **`profiles`** | All user info (customer / provider / admin) | Extends `auth.users` 1:1 |
 | **`providers`** | Provider-specific data (KYC, payout, subscription) | 1:1 with `profiles` |
 | **`listings`** | All service and rental listings | Belongs to `providers` |
 | **`listing_availability`** | Day-by-day availability calendar per listing | Belongs to `listings` |
@@ -254,7 +253,7 @@ erDiagram
 | **`withdrawals`** | Provider payout requests | Belongs to `providers` |
 | **`disputes`** | Booking disputes raised by customers or providers | 1:1 with `bookings` |
 | **`reports`** | Content reports on listings | Links `profiles` ↔ `listings` |
-| **`admin_staff`** | Admin accounts with roles (superadmin, financial, support) | Extends `profiles` |
+| **`admin_staff`** | Admin accounts with roles | Extends `profiles` |
 | **`audit_logs`** | Immutable record of every admin action | Belongs to `admin_staff` |
 | **`platform_settings`** | Key-value store for global settings (fee %, etc.) | Standalone |
 | **`categories`** | Listing categories (Services, Gadgets, etc.) | Standalone |
@@ -262,32 +261,32 @@ erDiagram
 
 ---
 
-## Key Relationships Summary
+## Relationship Summary
 
 ```
-auth.users (Supabase Auth)
-    └── profiles (1:1) — all users
-            ├── providers (1:1) — if role = provider
-            │       ├── listings (1:many)
-            │       │       ├── listing_availability (1:many)
-            │       │       ├── listing_blocked_dates (1:many)
-            │       │       ├── reviews (1:many)
-            │       │       ├── favorites (1:many)
-            │       │       └── reports (1:many)
-            │       ├── bookings (1:many) ← receives
-            │       └── withdrawals (1:many)
-            ├── bookings (1:many) ← places (as customer)
-            │       ├── reviews (1:1)
-            │       └── disputes (1:1)
-            ├── favorites (1:many)
-            ├── reports (1:many)
-            └── admin_staff (1:1) — if role = admin
-                    └── audit_logs (1:many)
+AUTH_USERS (Supabase Auth)
+    └── PROFILES (1:1)
+            ├── PROVIDERS (1:1) — role = provider
+            │       ├── LISTINGS (1:many)
+            │       │       ├── LISTING_AVAILABILITY (1:many)
+            │       │       ├── LISTING_BLOCKED_DATES (1:many)
+            │       │       ├── REVIEWS (1:many)
+            │       │       ├── FAVORITES (1:many)
+            │       │       └── REPORTS (1:many)
+            │       ├── BOOKINGS (1:many) ← receives
+            │       └── WITHDRAWALS (1:many)
+            ├── BOOKINGS (1:many) ← places as customer
+            │       ├── REVIEWS (1:1)
+            │       └── DISPUTES (1:1)
+            ├── FAVORITES (1:many)
+            ├── REPORTS (1:many)
+            └── ADMIN_STAFF (1:1) — role = admin
+                    └── AUDIT_LOGS (1:many)
 ```
 
 ---
 
-## ENUMs Used
+## ENUM Reference
 
 | ENUM | Values |
 |---|---|
