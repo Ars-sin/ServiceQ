@@ -2,8 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ROLES } from '@/lib/constants'
 
-// Dev role switcher overlay
-import DevRoleSwitcher from '@/components/dev/DevRoleSwitcher'
+
 
 // Auth pages
 import LoginPage         from '@/pages/auth/LoginPage'
@@ -53,7 +52,7 @@ function AppRoutes() {
 
   return (
     <>
-      <DevRoleSwitcher />
+      
       <Routes>
         {/* Public */}
         <Route path="/"                  element={<LandingPage />} />

@@ -30,7 +30,7 @@ export default function CustomerLayout() {
       )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <img src="/logoword(black).png" alt="ServiceQ" className="h-10 w-auto object-contain" />
+          <div className="flex items-center gap-2"><img src="/logo.png" alt="ServiceQ" className="h-9 w-9 object-contain" /><span className="font-bold text-xl text-gray-900">ServiceQ</span></div>
         </div>
 
         {/* Nav */}
@@ -97,3 +97,4 @@ export default function CustomerLayout() {
     </div>
   )
 }
+

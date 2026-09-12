@@ -36,7 +36,7 @@ export default function LandingPage() {
       {/* NAV */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-gray-100">
         <div className="page-container flex items-center justify-between py-4">
-          <img src="/logoword(black).png" alt="ServiceQ" className="h-12 w-auto object-contain" />
+          <div className="flex items-center gap-2"><img src="/logo.png" alt="ServiceQ" className="h-10 w-10 object-contain" /><span className="font-bold text-xl text-gray-900">ServiceQ</span></div>
           <div className="flex items-center gap-3">
             <Link to="/login"    className="btn-ghost text-sm">Sign In</Link>
             <Link to="/register" className="btn-primary text-sm">Get Started</Link>
@@ -54,14 +54,14 @@ export default function LandingPage() {
           <div className="max-w-2xl mx-auto text-center">
             <AnimFade>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-100 text-brand-700 text-sm font-medium mb-6">
-                <MapPin size={14} /> Now available in Metro Manila
+                <MapPin size={14} /> Now available in Cebu
               </div>
             </AnimFade>
 
             <AnimFade delay={0.1}>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-gray-900 leading-tight mb-6 text-balance">
                 Find Services &{' '}
-                <span className="gradient-brand-text">Rentals Near You</span>
+                <span className="text-brand-700">Rentals Near You</span>
               </h1>
             </AnimFade>
 
@@ -73,11 +73,11 @@ export default function LandingPage() {
 
             <AnimFade delay={0.3}>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link to="/register" className="btn-primary btn-lg gap-2 shadow-brand-glow">
-                  Get Started Free <ChevronRight size={18} />
+                <Link to="/login" className="btn-primary btn-lg gap-2">
+                  Sign In <ChevronRight size={18} />
                 </Link>
-                <Link to="/customer/dashboard" className="btn-secondary btn-lg">
-                  Browse Listings
+                <Link to="/register" className="btn-secondary btn-lg">
+                  Create Account
                 </Link>
               </div>
             </AnimFade>
@@ -152,19 +152,19 @@ export default function LandingPage() {
       </section>
 
       {/* CTA BANNER */}
-      <section className="py-24 bg-gradient-to-r from-brand-600 to-accent-600">
+      <section className="py-24 bg-brand-600">
         <div className="page-container text-center">
           <AnimFade>
             <h2 className="text-3xl font-black text-white mb-4">Ready to Get Started?</h2>
             <p className="text-brand-100 mb-8 max-w-md mx-auto">
-              Join thousands of customers and providers already using ServiceQ across the Philippines.
+              Join customers and providers already using ServiceQ in Cebu.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link to="/register" className="bg-white text-brand-600 font-bold px-8 py-3 rounded-2xl hover:bg-brand-50 transition-colors">
-                Sign Up Free
+              <Link to="/login" className="bg-white text-brand-600 font-bold px-8 py-3 rounded-2xl hover:bg-brand-50 transition-colors">
+                Sign In
               </Link>
-              <Link to="/register?role=provider" className="bg-white/20 text-white font-bold px-8 py-3 rounded-2xl hover:bg-white/30 transition-colors border border-white/30">
-                Become a Provider
+              <Link to="/register" className="bg-white/20 text-white font-bold px-8 py-3 rounded-2xl hover:bg-white/30 transition-colors border border-white/30">
+                Create Account
               </Link>
             </div>
           </AnimFade>
@@ -174,7 +174,7 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="page-container flex flex-col sm:flex-row items-center justify-between gap-4">
-          <img src="/logoword(white).png" alt="ServiceQ" className="h-10 w-auto object-contain" />
+          <div className="flex items-center gap-2"><img src="/logo.png" alt="ServiceQ" className="h-9 w-9 object-contain" /><span className="font-bold text-white">ServiceQ</span></div>
           <p className="text-sm">© 2026 ServiceQ. All rights reserved.</p>
           <div className="flex gap-4 text-sm">
             <button className="hover:text-white transition-colors">Privacy Policy</button>
@@ -185,3 +185,5 @@ export default function LandingPage() {
     </div>
   )
 }
+
+

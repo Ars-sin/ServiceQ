@@ -31,7 +31,7 @@ export default function ProviderLayout() {
       )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <img src="/logoword(black).png" alt="ServiceQ" className="h-10 w-auto object-contain" />
+          <img src="/logo.png" alt="ServiceQ" className="h-9 w-9 object-contain" /><span className="font-bold text-lg text-gray-900">ServiceQ</span>
           <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">Provider</span>
         </div>
 
@@ -99,3 +99,4 @@ export default function ProviderLayout() {
     </div>
   )
 }
+
