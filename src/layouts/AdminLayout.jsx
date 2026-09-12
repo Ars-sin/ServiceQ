@@ -34,7 +34,7 @@ export default function AdminLayout() {
       )}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <img src="/logoword(black).png" alt="ServiceQ" className="h-8 w-auto object-contain" />
+          <img src="/logoword(black).png" alt="ServiceQ" className="h-10 w-auto object-contain" />
           <span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wide">Admin</span>
         </div>
 

@@ -57,7 +57,7 @@ export default function RegisterPage() {
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }} className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <img src="/logo.png" alt="ServiceQ" className="w-14 h-14 object-contain mb-3" />
+          <img src="/logo.png" alt="ServiceQ" className="h-20 w-auto object-contain mb-3" />
           <h1 className="text-2xl font-bold gradient-brand-text">Create your account</h1>
           <p className="text-gray-500 text-sm mt-1">Join the ServiceQ community</p>
         </div>

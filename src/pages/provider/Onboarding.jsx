@@ -45,7 +45,7 @@ export default function ProviderOnboarding() {
       {/* Sidebar stepper */}
       <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-6 gap-6">
         <div className="flex flex-col gap-1 mb-4">
-          <img src="/logoword(black).png" alt="ServiceQ" className="h-8 w-auto object-contain self-start" />
+          <img src="/logoword(black).png" alt="ServiceQ" className="h-10 w-auto object-contain self-start" />
           <div className="text-xs text-gray-400">Provider Setup</div>
         </div>
         {STEPS.map((s, i) => (

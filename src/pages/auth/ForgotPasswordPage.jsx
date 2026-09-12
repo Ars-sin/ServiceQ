@@ -57,7 +57,7 @@ export default function ForgotPasswordPage() {
         className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/logo.png" alt="ServiceQ" className="w-14 h-14 object-contain mb-3" />
+          <img src="/logo.png" alt="ServiceQ" className="h-20 w-auto object-contain mb-3" />
           <h1 className="text-2xl font-bold text-gray-900">Reset Password</h1>
         </div>
 

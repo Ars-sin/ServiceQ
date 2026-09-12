@@ -41,7 +41,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <img src="/logo.png" alt="ServiceQ" className="w-14 h-14 object-contain mb-3" />
+          <img src="/logo.png" alt="ServiceQ" className="h-20 w-auto object-contain mb-3" />
           <h1 className="text-2xl font-bold gradient-brand-text">ServiceQ</h1>
           <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
         </div>
