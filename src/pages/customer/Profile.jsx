@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp } from 'lucide-react';
@@ -101,7 +101,7 @@ export default function Profile() {
           {/* Left Sidebar */}
           <div className="md:w-64 flex-shrink-0">
             <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">
+              <div className="w-20 h-20 rounded-full bg-brand-600 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">
                 MS
               </div>
               <h2 className="font-bold text-gray-900">{profileForm.fullName}</h2>

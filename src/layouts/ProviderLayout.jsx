@@ -30,8 +30,11 @@ export default function ProviderLayout() {
         mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}>
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-100">
-          <img src="/logo.png" alt="ServiceQ" className="h-9 w-9 object-contain" /><span className="font-bold text-lg text-gray-900">ServiceQ</span>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="ServiceQ" className="h-9 w-auto object-contain" />
+            <span className="font-bold text-lg text-gray-900">ServiceQ</span>
+          </div>
           <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">Provider</span>
         </div>
 

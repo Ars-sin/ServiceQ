@@ -36,7 +36,10 @@ export default function LandingPage() {
       {/* NAV */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-gray-100">
         <div className="page-container flex items-center justify-between py-4">
-          <div className="flex items-center gap-2"><img src="/logo.png" alt="ServiceQ" className="h-10 w-10 object-contain" /><span className="font-bold text-xl text-gray-900">ServiceQ</span></div>
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="ServiceQ" className="h-10 w-auto object-contain" />
+            <span className="font-extrabold text-2xl tracking-tight text-gray-900">ServiceQ</span>
+          </div>
           <div className="flex items-center gap-3">
             <Link to="/login"    className="btn-ghost text-sm">Sign In</Link>
             <Link to="/register" className="btn-primary text-sm">Get Started</Link>
@@ -174,7 +177,10 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="page-container flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2"><img src="/logo.png" alt="ServiceQ" className="h-9 w-9 object-contain" /><span className="font-bold text-white">ServiceQ</span></div>
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="ServiceQ" className="h-9 w-auto object-contain brightness-200" />
+            <span className="font-bold text-xl text-white">ServiceQ</span>
+          </div>
           <p className="text-sm">© 2026 ServiceQ. All rights reserved.</p>
           <div className="flex gap-4 text-sm">
             <button className="hover:text-white transition-colors">Privacy Policy</button>

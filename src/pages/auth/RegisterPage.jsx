@@ -34,6 +34,25 @@ export default function RegisterPage() {
 
       if (error) throw error
 
+      // Directly insert or update profiles table so the user is immediately saved in the database
+      if (data?.user?.id) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            email: form.email,
+            full_name: form.fullName,
+            phone: form.phone,
+            role: role || 'customer',
+          }, { onConflict: 'id' })
+
+        if (profileError) {
+          console.error('Profile storage error:', profileError)
+        } else {
+          console.log('Profile saved successfully to database!')
+        }
+      }
+
       // Email confirmation ON — account created but needs email verification
       if (data?.user && !data?.session) {
         toast.success('✅ Account created! Please check your email to confirm your account.')
@@ -53,12 +72,12 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-accent-50 flex items-center justify-center p-4 py-10">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-10">
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }} className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
           <img src="/logo.png" alt="ServiceQ" className="h-20 w-auto object-contain mb-3" />
-          <h1 className="text-2xl font-bold gradient-brand-text">Create your account</h1>
+          <h1 className="text-2xl font-bold text-brand-700">Create your account</h1>
           <p className="text-gray-500 text-sm mt-1">Join the ServiceQ community</p>
         </div>
 
