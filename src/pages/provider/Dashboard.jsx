@@ -1,9 +1,11 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Package, CalendarCheck, Star, Users, Plus, DollarSign, TrendingUp } from 'lucide-react'
+import { Package, CalendarCheck, Star, Users, Plus, DollarSign, TrendingUp, Clock, CheckCircle2, ShieldAlert } from 'lucide-react'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
+import { useAuth } from '@/contexts/AuthContext'
 
 const BOOKINGS = [
   { id: 'SQ-A1B2', customer: 'Ana Reyes',    service: 'Home Cleaning',    date: '2026-09-10', amount: 1100, status: 'scheduled' },
@@ -17,18 +19,65 @@ const STATUS_COUNTS = { pending: 3, scheduled: 5, active: 2, completed: 28, canc
 
 export default function ProviderDashboard() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const [isVerified, setIsVerified] = useState(false)
+
+  useEffect(() => {
+    // Check if approved in admin portal
+    const approved = localStorage.getItem('serviceq_kyc_approved') === 'true'
+    setIsVerified(approved)
+  }, [])
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-8">
-      <div className="flex items-center justify-between">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
-          <p className="text-sm text-gray-500">Welcome back! Here's what's happening.</p>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
+            {isVerified ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                <CheckCircle2 size={12} /> Verified Provider
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                <Clock size={12} /> Verification Pending
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 mt-0.5">Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}! Here's what's happening.</p>
         </div>
         <button onClick={() => navigate('/provider/listings')} className="btn-primary gap-2" style={{ background: '#059669' }}>
           <Plus size={16} /> Add Listing
         </button>
       </div>
+
+      {/* Verification Status Banner (Option B) */}
+      {!isVerified && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
+              <Clock size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-amber-900 text-sm sm:text-base">Application Under Verification</h3>
+                <span className="bg-amber-200 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-full">KYC REVIEW</span>
+              </div>
+              <p className="text-xs sm:text-sm text-amber-800 mt-1 max-w-2xl leading-relaxed">
+                Your provider application and government ID are currently being reviewed by our Admin team. You can set up your services and draft listings now, but they will be made live to customers once approved.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => navigate('/provider/profile')}
+              className="text-xs font-semibold bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 px-3.5 py-2 rounded-xl transition flex-1 sm:flex-none text-center"
+            >
+              View KYC Status
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

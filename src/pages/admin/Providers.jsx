@@ -34,7 +34,10 @@ export default function AdminProviders() {
 
   const approveKYC = id => {
     setQueue(prev => prev.filter(k => k.id !== id))
-    toast.success('Provider KYC approved!')
+    try {
+      localStorage.setItem('serviceq_kyc_approved', 'true')
+    } catch {}
+    toast.success('Provider KYC approved! Provider account is now verified.')
     setReview(null)
   }
 
