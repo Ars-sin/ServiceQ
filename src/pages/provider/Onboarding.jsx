@@ -5,6 +5,7 @@ import { CheckCircle, ChevronRight, ChevronLeft, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { PROVIDER_TYPES, GOV_ID_TYPES, PAYMENT_METHODS, PH_REGIONS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
+import LocationPicker from '@/components/ui/LocationPicker'
 
 const STEPS = [
   'Basic Info', 'Contact & Address', 'Provider Details',
@@ -19,7 +20,7 @@ export default function ProviderOnboarding() {
   const [form, setForm]         = useState({
     // Step 0
     fullName: '', email: '', phone: '', dob: '', password: '', confirmPw: '',
-    // Step 1
+    // Step 1 (kept for compat — filled from locationData)
     street: '', barangay: '', city: '', province: '', postalCode: '',
     // Step 2
     providerType: '', businessName: '', description: '', yearsExp: '',
@@ -31,6 +32,11 @@ export default function ProviderOnboarding() {
   })
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
+
+  const [locationData, setLocationData] = useState({
+    address: '', barangay: '', city: '', province: '', postalCode: '', lat: null, lng: null,
+  })
+
 
   const next = () => { if (step < 5) setStep(s => s + 1); else handleSubmit() }
   const back = () => setStep(s => Math.max(0, s - 1))
@@ -123,36 +129,13 @@ export default function ProviderOnboarding() {
                 </div>
               </>}
 
-              {/* STEP 1: Address */}
+              {/* STEP 1: Address — Google Maps Location Picker */}
               {step === 1 && <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="form-group sm:col-span-2">
-                    <label className="label">House / Unit / Street</label>
-                    <input className="input" placeholder="123 Rizal St., Brgy. Example" value={form.street} onChange={e => set('street', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Barangay</label>
-                    <input className="input" value={form.barangay} onChange={e => set('barangay', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">City / Municipality</label>
-                    <input className="input" value={form.city} onChange={e => set('city', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Province / Region</label>
-                    <select className="input" value={form.province} onChange={e => set('province', e.target.value)}>
-                      <option value="">Select region...</option>
-                      {PH_REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Postal Code</label>
-                    <input className="input" placeholder="1234" value={form.postalCode} onChange={e => set('postalCode', e.target.value)} />
-                  </div>
-                </div>
-                <div className="bg-gray-100 rounded-xl h-40 flex items-center justify-center text-gray-400 text-sm border-2 border-dashed border-gray-300">
-                  📍 Click to pin your location on map — Coming Soon
-                </div>
+                <LocationPicker
+                  value={locationData}
+                  onChange={setLocationData}
+                  label="Search your service address in Cebu"
+                />
               </>}
 
               {/* STEP 2: Provider Type & Details */}
