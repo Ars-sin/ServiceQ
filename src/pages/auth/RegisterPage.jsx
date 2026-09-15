@@ -99,6 +99,20 @@ export default function RegisterPage() {
         else              console.log('Profile with location saved!')
       }
 
+      // Store in sessionStorage so Provider Onboarding has access to auto-fill immediately
+      try {
+        sessionStorage.setItem('serviceq_reg_data', JSON.stringify({
+          fullName: form.fullName,
+          email: form.email,
+          phone: form.phone,
+          address: location.address,
+          barangay: location.barangay,
+          city: location.city,
+          province: location.province,
+          postalCode: location.postalCode,
+        }))
+      } catch {}
+
       if (data?.user && !data?.session) {
         toast.success('✅ Account created! Check your email to confirm your account.')
         return

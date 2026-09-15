@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, ChevronRight, ChevronLeft, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useAuth } from '@/contexts/AuthContext'
 import { PROVIDER_TYPES, GOV_ID_TYPES, PAYMENT_METHODS, PH_REGIONS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
 import LocationPicker from '@/components/ui/LocationPicker'
+import { supabase } from '@/lib/supabase'
 
 const STEPS = [
   'Basic Info', 'Contact & Address', 'Provider Details',
@@ -14,6 +16,7 @@ const STEPS = [
 
 export default function ProviderOnboarding() {
   const navigate = useNavigate()
+  const { user, profile } = useAuth()
   const [step, setStep]         = useState(0)
   const [done, setDone]         = useState(false)
   const [agreed, setAgreed]     = useState({ terms: false, agreement: false, fee: false })
@@ -37,12 +40,85 @@ export default function ProviderOnboarding() {
     address: '', barangay: '', city: '', province: '', postalCode: '', lat: null, lng: null,
   })
 
+  // Auto-fill from registration data (profile, auth user, or cached registration)
+  useEffect(() => {
+    let savedReg = null
+    try {
+      savedReg = JSON.parse(sessionStorage.getItem('serviceq_reg_data'))
+    } catch {}
+
+    const name  = profile?.full_name || user?.user_metadata?.full_name || savedReg?.fullName
+    const email = profile?.email || user?.email || savedReg?.email
+    const phone = profile?.phone || user?.user_metadata?.phone || savedReg?.phone
+
+    if (name || email || phone) {
+      setForm(f => ({
+        ...f,
+        fullName: name  || f.fullName,
+        email:    email || f.email,
+        phone:    phone || f.phone,
+      }))
+    }
+
+    const addr = profile?.address || savedReg?.address
+    const brgy = profile?.barangay || savedReg?.barangay
+    const city = profile?.city || savedReg?.city
+    const prov = profile?.province || savedReg?.province
+    const zip  = profile?.postal_code || savedReg?.postalCode
+
+    if (addr || brgy || city || prov || zip) {
+      setLocationData(loc => ({
+        ...loc,
+        address:    addr || loc.address,
+        barangay:   brgy || loc.barangay,
+        city:       city || loc.city,
+        province:   prov || loc.province,
+        postalCode: zip  || loc.postalCode,
+      }))
+    }
+  }, [profile, user])
 
   const next = () => { if (step < 5) setStep(s => s + 1); else handleSubmit() }
   const back = () => setStep(s => Math.max(0, s - 1))
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!agreed.terms || !agreed.agreement || !agreed.fee) return toast.error('Please accept all agreements')
+
+    if (user?.id) {
+      try {
+        await supabase.from('profiles').update({
+          full_name: form.fullName,
+          phone: form.phone,
+          role: 'provider',
+          address: locationData.address || form.street,
+          barangay: locationData.barangay || form.barangay,
+          city: locationData.city || form.city,
+          province: locationData.province || form.province,
+          postal_code: locationData.postalCode || form.postalCode,
+        }).eq('id', user.id)
+
+        await supabase.from('providers').upsert({
+          user_id: user.id,
+          business_name: form.businessName || form.fullName,
+          business_description: form.description,
+          provider_type: form.providerType || 'individual',
+          years_experience: parseInt(form.yearsExp) || 0,
+          operating_hours_from: form.hoursFrom || '08:00',
+          operating_hours_to: form.hoursTo || '17:00',
+          service_area: form.serviceArea || locationData.city || 'Cebu',
+          gov_id_type: form.idType || 'UMID',
+          gov_id_number: form.idNumber || '',
+          gcash_number: form.gcashNum || form.phone,
+          maya_number: form.mayaNum || '',
+          bank_name: form.bankName || '',
+          bank_account_name: form.accountName || form.fullName,
+          bank_account_number: form.accountNum || '',
+        }, { onConflict: 'user_id' })
+      } catch (err) {
+        console.error('Provider save error:', err)
+      }
+    }
+
     setDone(true)
   }
 
@@ -93,39 +169,66 @@ export default function ProviderOnboarding() {
             <div className="card flex flex-col gap-4">
               {/* STEP 0: Basic Info */}
               {step === 0 && <>
+                {(user || profile || form.fullName) && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-800 flex items-start gap-2.5">
+                    <CheckCircle size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold">Registered info auto-filled!</span>
+                      <p className="text-emerald-700 mt-0.5">Your name, email, and phone number were loaded from your registration. Please fill in the missing details below (Date of Birth & Profile Photo).</p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="form-group sm:col-span-2">
                     <label className="label">Full Name</label>
                     <input className="input" placeholder="Juan dela Cruz" value={form.fullName} onChange={e => set('fullName', e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="label">Email Address</label>
-                    <input type="email" className="input" value={form.email} onChange={e => set('email', e.target.value)} />
+                    <label className="label">
+                      Email Address {user && <span className="text-xs text-emerald-600 font-normal">(registered account)</span>}
+                    </label>
+                    <input
+                      type="email"
+                      className={`input ${user ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+                      readOnly={!!user}
+                      value={form.email}
+                      onChange={e => set('email', e.target.value)}
+                    />
                   </div>
                   <div className="form-group">
                     <label className="label">Phone Number</label>
                     <input className="input" placeholder="09xxxxxxxxx" value={form.phone} onChange={e => set('phone', e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="label">Date of Birth</label>
+                    <label className="label flex items-center justify-between">
+                      <span>Date of Birth</span>
+                      <span className="text-xs text-amber-600 font-medium">Missing — please select</span>
+                    </label>
                     <input type="date" className="input" value={form.dob} onChange={e => set('dob', e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="label">Profile Photo</label>
+                    <label className="label flex items-center justify-between">
+                      <span>Profile Photo</span>
+                      <span className="text-xs text-amber-600 font-medium">Missing — please upload</span>
+                    </label>
                     <label className="input flex items-center gap-2 cursor-pointer">
                       <Upload size={14} className="text-gray-400" />
                       <span className="text-gray-400 text-sm">Upload photo...</span>
                       <input type="file" accept="image/*" className="hidden" />
                     </label>
                   </div>
-                  <div className="form-group">
-                    <label className="label">Password</label>
-                    <input type="password" className="input" value={form.password} onChange={e => set('password', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Confirm Password</label>
-                    <input type="password" className="input" value={form.confirmPw} onChange={e => set('confirmPw', e.target.value)} />
-                  </div>
+                  {!user && (
+                    <>
+                      <div className="form-group">
+                        <label className="label">Password</label>
+                        <input type="password" className="input" value={form.password} onChange={e => set('password', e.target.value)} />
+                      </div>
+                      <div className="form-group">
+                        <label className="label">Confirm Password</label>
+                        <input type="password" className="input" value={form.confirmPw} onChange={e => set('confirmPw', e.target.value)} />
+                      </div>
+                    </>
+                  )}
                 </div>
               </>}
 
