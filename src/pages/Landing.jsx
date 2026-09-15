@@ -233,14 +233,8 @@ export default function LandingPage() {
                       <span className="text-xs text-gray-400 font-medium">{cat.count}</span>
                     </div>
                     <h3 className="text-base font-bold text-gray-900 mb-1">{cat.title}</h3>
-                    <p className="text-xs text-gray-500 leading-relaxed mb-4">{cat.desc}</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">{cat.desc}</p>
                   </div>
-                  <Link
-                    to="/login"
-                    className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-brand-800 mt-2"
-                  >
-                    Browse Listings <ChevronRight size={14} />
-                  </Link>
                 </div>
               </AnimFade>
             ))}
