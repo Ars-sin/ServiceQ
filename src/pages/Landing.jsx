@@ -242,6 +242,32 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── FEATURES GRID ─────────────────────────────────────────── */}
+      <section id="features" className="py-20 bg-brand-950 text-white border-t border-brand-800/60">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <AnimFade>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">Why Choose ServiceQ</h2>
+              <p className="text-brand-100 text-sm max-w-md mx-auto">Built specifically for Filipino service consumers and verified local providers.</p>
+            </div>
+          </AnimFade>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURES.map((f, i) => (
+              <AnimFade key={f.title} delay={i * 0.08}>
+                <div className="bg-brand-900/80 border border-brand-800 rounded-2xl p-6 hover:bg-brand-850 transition duration-200 shadow-md">
+                  <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-4 shadow-sm">
+                    <f.icon size={22} />
+                  </div>
+                  <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
+                  <p className="text-xs text-brand-100 leading-relaxed">{f.desc}</p>
+                </div>
+              </AnimFade>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── HOW IT WORKS (White Section with High-Contrast Blue Borders) ─── */}
       <section id="how-it-works" className="py-20 bg-white">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
@@ -264,32 +290,6 @@ export default function LandingPage() {
                   </div>
                   <h3 className="font-extrabold text-gray-900 text-base mb-2">{s.title}</h3>
                   <p className="text-xs text-gray-500 leading-relaxed max-w-xs">{s.desc}</p>
-                </div>
-              </AnimFade>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── FEATURES GRID ─────────────────────────────────────────── */}
-      <section id="features" className="py-20 bg-brand-900 text-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <AnimFade>
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">Why Choose ServiceQ</h2>
-              <p className="text-brand-100 text-sm max-w-md mx-auto">Built specifically for Filipino service consumers and verified local providers.</p>
-            </div>
-          </AnimFade>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURES.map((f, i) => (
-              <AnimFade key={f.title} delay={i * 0.08}>
-                <div className="bg-brand-850/80 border border-brand-700/60 rounded-2xl p-6 hover:bg-brand-800 transition duration-200 shadow-md">
-                  <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-4 shadow-sm">
-                    <f.icon size={22} />
-                  </div>
-                  <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
-                  <p className="text-xs text-brand-100 leading-relaxed">{f.desc}</p>
                 </div>
               </AnimFade>
             ))}
