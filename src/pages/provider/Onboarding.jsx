@@ -97,7 +97,7 @@ export default function ProviderOnboarding() {
           postal_code: locationData.postalCode || form.postalCode,
         }).eq('id', user.id)
 
-        await supabase.from('providers').upsert({
+        const { data: provResult, error: provErr } = await supabase.from('providers').upsert({
           user_id: user.id,
           business_name: form.businessName || form.fullName,
           business_description: form.description,
@@ -106,14 +106,21 @@ export default function ProviderOnboarding() {
           operating_hours_from: form.hoursFrom || '08:00',
           operating_hours_to: form.hoursTo || '17:00',
           service_area: form.serviceArea || locationData.city || 'Cebu',
-          gov_id_type: form.idType || 'UMID',
+          gov_id_type: form.idType || 'PhilSys (National ID)',
           gov_id_number: form.idNumber || '',
           gcash_number: form.gcashNum || form.phone,
           maya_number: form.mayaNum || '',
           bank_name: form.bankName || '',
           bank_account_name: form.accountName || form.fullName,
           bank_account_number: form.accountNum || '',
+          status: 'under_verification',
         }, { onConflict: 'user_id' })
+
+        if (provErr) {
+          console.warn('Provider table upsert warning (check RLS):', provErr.message)
+        } else {
+          console.log('Provider application saved to database!')
+        }
       } catch (err) {
         console.error('Provider save error:', err)
       }

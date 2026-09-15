@@ -1,4 +1,4 @@
-﻿import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
@@ -7,6 +7,7 @@ import {
   TrendingUp, ArrowDownCircle, Download, FileText
 } from "lucide-react"
 import { formatPHP, relativeTime, statusVariant, cn } from "@/lib/utils"
+import { supabase } from "@/lib/supabase"
 
 // ── Mock KPI Data ────────────────────────────────────────────────────────
 const KPI = {
@@ -60,6 +61,31 @@ const STAT_CARDS = [
 export default function Dashboard() {
   const navigate = useNavigate()
   const [period, setPeriod] = useState("Monthly")
+  const [liveStats, setLiveStats] = useState({
+    users: null,
+    providers: null,
+    kycPending: null,
+  })
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const { data: profs } = await supabase.from('profiles').select('id, role')
+        if (profs) {
+          const uCount = profs.length
+          const pCount = profs.filter(p => p.role === 'provider').length
+          setLiveStats({
+            users: uCount,
+            providers: pCount,
+            kycPending: pCount,
+          })
+        }
+      } catch (e) {
+        console.error('Error fetching admin dashboard stats:', e)
+      }
+    }
+    loadStats()
+  }, [])
 
   const today = new Date().toLocaleDateString("en-PH", {
     weekday: "long", year: "numeric", month: "long", day: "numeric"
@@ -88,17 +114,22 @@ export default function Dashboard() {
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {STAT_CARDS.map(({ label, value, Icon, color, bg, border }) => (
-          <div key={label} className={cn("rounded-xl border p-4 flex items-center gap-4", bg, border)}>
-            <div className={cn("p-2 rounded-lg bg-white/70", color)}>
-              <Icon size={20} />
+        {STAT_CARDS.map(({ label, value, Icon, color, bg, border }) => {
+          let displayVal = value
+          if (label === "Total Users" && liveStats.users !== null) displayVal = liveStats.users.toLocaleString()
+          if (label === "Total Providers" && liveStats.providers !== null) displayVal = liveStats.providers.toLocaleString()
+          return (
+            <div key={label} className={cn("rounded-xl border p-4 flex items-center gap-4", bg, border)}>
+              <div className={cn("p-2 rounded-lg bg-white/70", color)}>
+                <Icon size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500">{label}</p>
+                <p className="text-lg font-bold text-gray-900">{displayVal}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-medium text-gray-500">{label}</p>
-              <p className="text-lg font-bold text-gray-900">{value}</p>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* ── Analytics Section ── */}
@@ -175,7 +206,7 @@ export default function Dashboard() {
         <div className="space-y-4">
           <h2 className="font-semibold text-gray-900">Pending Actions</h2>
           {[
-            { label: "KYC Verification Queue", count: 14, action: "Review",   path: "/admin/providers", color: "bg-yellow-50 border-yellow-200", btn: "bg-yellow-500 hover:bg-yellow-600" },
+            { label: "KYC Verification Queue", count: liveStats.kycPending !== null ? liveStats.kycPending : 3, action: "Review",   path: "/admin/providers", color: "bg-yellow-50 border-yellow-200", btn: "bg-yellow-500 hover:bg-yellow-600" },
             { label: "Withdrawal Requests",     count: 8,  action: "Process",  path: "/admin/financials", color: "bg-blue-50 border-blue-200",    btn: "bg-blue-600 hover:bg-blue-700" },
             { label: "Listing Reports",          count: 5,  action: "Moderate", path: "/admin/listings",   color: "bg-red-50 border-red-200",      btn: "bg-red-600 hover:bg-red-700" },
           ].map(({ label, count, action, path, color, btn }) => (
