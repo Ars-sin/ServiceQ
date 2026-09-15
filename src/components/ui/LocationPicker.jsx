@@ -1,10 +1,8 @@
 /**
  * LocationPicker.jsx
- * Uses Google Maps Places Autocomplete to let users search an address.
- * Auto-fills barangay, city, province, postalCode, lat, lng.
- *
- * Requires: VITE_GOOGLE_MAPS_API_KEY in .env
- * Falls back to manual fields if no API key is configured.
+ * Provides address and location fields for registration and onboarding.
+ * If VITE_GOOGLE_MAPS_API_KEY is provided, activates Google Maps autocomplete.
+ * Otherwise, presents standard manual address fields cleanly without any warning banner.
  */
 import { useEffect, useRef, useState } from 'react'
 import { MapPin, Search, CheckCircle, AlertCircle } from 'lucide-react'
@@ -16,7 +14,6 @@ function parsePlace(place) {
   const get = (type) =>
     place.address_components?.find(c => c.types.includes(type))?.long_name ?? ''
 
-  // Philippines barangay → sublocality_level_1 or neighborhood
   const barangay =
     get('sublocality_level_1') ||
     get('sublocality') ||
@@ -33,17 +30,15 @@ function parsePlace(place) {
     get('administrative_area_level_1')
 
   const postalCode = get('postal_code')
-
   const lat = place.geometry?.location?.lat() ?? null
   const lng = place.geometry?.location?.lng() ?? null
-
   const formattedAddress = place.formatted_address ?? ''
 
   return { barangay, city, province, postalCode, lat, lng, formattedAddress }
 }
 
 // ─── Load Google Maps script once ──────────────────────────────────────────
-let mapsLoaded  = false
+let mapsLoaded = false
 let mapsLoading = false
 const mapsCallbacks = []
 
@@ -69,70 +64,91 @@ function loadGoogleMaps(apiKey) {
   })
 }
 
-// ─── Static map image URL ──────────────────────────────────────────────────
 function staticMapUrl(lat, lng, apiKey) {
   return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=600x200&markers=color:red%7C${lat},${lng}&key=${apiKey}`
 }
 
-// ─── Manual location fields (fallback) ────────────────────────────────────
-function ManualFields({ value, onChange }) {
+// ─── Manual Address Form ───────────────────────────────────────────────────
+function ManualFields({ value = {}, onChange }) {
   const f = (key, val) => onChange({ ...value, [key]: val })
+
   return (
-    <div className="space-y-3">
-      <div>
-        <label className="label">Street / Lot / Building</label>
-        <input className="input" placeholder="e.g. 123 Mango Ave, Unit 2A"
-          value={value.address} onChange={e => f('address', e.target.value)} />
+    <div className="space-y-4">
+      <div className="form-group">
+        <label className="label">Street / Building / Lot Number</label>
+        <input
+          className="input"
+          placeholder="e.g. 123 Osmeña Blvd, Unit 4B"
+          value={value.address || ''}
+          onChange={e => f('address', e.target.value)}
+        />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="form-group">
           <label className="label">Barangay</label>
-          <input className="input" placeholder="Barangay"
-            value={value.barangay} onChange={e => f('barangay', e.target.value)} />
+          <input
+            className="input"
+            placeholder="e.g. Lahug"
+            value={value.barangay || ''}
+            onChange={e => f('barangay', e.target.value)}
+          />
         </div>
-        <div>
+        <div className="form-group">
           <label className="label">City / Municipality</label>
-          <input className="input" placeholder="Cebu City"
-            value={value.city} onChange={e => f('city', e.target.value)} />
+          <input
+            className="input"
+            placeholder="e.g. Cebu City"
+            value={value.city || ''}
+            onChange={e => f('city', e.target.value)}
+          />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="form-group">
           <label className="label">Province</label>
-          <input className="input" placeholder="Cebu"
-            value={value.province} onChange={e => f('province', e.target.value)} />
+          <input
+            className="input"
+            placeholder="e.g. Cebu"
+            value={value.province || ''}
+            onChange={e => f('province', e.target.value)}
+          />
         </div>
-        <div>
+        <div className="form-group">
           <label className="label">Postal Code</label>
-          <input className="input" placeholder="6000"
-            value={value.postalCode} onChange={e => f('postalCode', e.target.value)} />
+          <input
+            className="input"
+            placeholder="6000"
+            value={value.postalCode || ''}
+            onChange={e => f('postalCode', e.target.value)}
+          />
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Main Component ─────────────────────────────────────────────────────────
-export default function LocationPicker({ value, onChange, label = 'Your Location' }) {
-  const inputRef     = useRef(null)
-  const [ready, setReady]   = useState(false)
-  const [error, setError]   = useState('')
+// ─── Main Component ────────────────────────────────────────────────────────
+export default function LocationPicker({ value = {}, onChange, label = 'Service Address' }) {
+  const inputRef = useRef(null)
+  const [ready, setReady] = useState(false)
+  const [error, setError] = useState('')
   const [manual, setManual] = useState(false)
 
-  const hasKey = Boolean(API_KEY)
+  const hasKey = Boolean(API_KEY && API_KEY.trim().length > 0)
 
-  // Load Maps once on mount if API key exists
+  // Load Maps if API key exists
   useEffect(() => {
     if (!hasKey) return
     loadGoogleMaps(API_KEY)
       .then(() => setReady(true))
       .catch(() => {
-        setError('Google Maps could not load. Using manual entry.')
         setManual(true)
       })
   }, [hasKey])
 
-  // Attach Autocomplete to input once maps ready
+  // Attach Autocomplete once ready
   useEffect(() => {
     if (!ready || !inputRef.current || manual) return
 
@@ -144,38 +160,34 @@ export default function LocationPicker({ value, onChange, label = 'Your Location
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace()
       if (!place.geometry) {
-        setError('No location details found. Try again or use manual entry.')
+        setError('Location details not found. Please type manually.')
         return
       }
       setError('')
       const parsed = parsePlace(place)
       onChange({
         ...value,
-        address:     place.name || parsed.formattedAddress,
-        barangay:    parsed.barangay,
-        city:        parsed.city,
-        province:    parsed.province,
-        postalCode:  parsed.postalCode,
-        lat:         parsed.lat,
-        lng:         parsed.lng,
+        address: place.name || parsed.formattedAddress,
+        barangay: parsed.barangay,
+        city: parsed.city,
+        province: parsed.province,
+        postalCode: parsed.postalCode,
+        lat: parsed.lat,
+        lng: parsed.lng,
       })
     })
 
     return () => window.google.maps.event.clearInstanceListeners(autocomplete)
   }, [ready, manual])
 
+  // If no Google Maps API key is configured or manual is toggled, render clean address inputs
   if (!hasKey || manual) {
     return (
       <div className="space-y-3">
-        {!hasKey && (
-          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
-            <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-            <span>
-              Google Maps API key not configured — using manual entry. To enable map search, add{' '}
-              <code className="bg-amber-100 px-1 rounded">VITE_GOOGLE_MAPS_API_KEY</code> to your <code>.env</code> file.
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 mb-1">
+          <MapPin size={16} className="text-emerald-600" />
+          <span className="font-semibold text-sm text-gray-900">{label}</span>
+        </div>
         <ManualFields value={value} onChange={onChange} />
       </div>
     )
@@ -185,18 +197,18 @@ export default function LocationPicker({ value, onChange, label = 'Your Location
 
   return (
     <div className="space-y-3">
-      <label className="label flex items-center gap-1.5">
-        <MapPin size={14} className="text-brand-600" /> {label}
-      </label>
+      <div className="flex items-center gap-1.5 mb-1">
+        <MapPin size={16} className="text-emerald-600" />
+        <span className="font-semibold text-sm text-gray-900">{label}</span>
+      </div>
 
-      {/* Search input */}
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           ref={inputRef}
           type="text"
           placeholder="Search your address in Cebu..."
-          defaultValue={value.address}
+          defaultValue={value.address || ''}
           className="input pl-9"
         />
       </div>
@@ -207,7 +219,6 @@ export default function LocationPicker({ value, onChange, label = 'Your Location
         </p>
       )}
 
-      {/* Static map preview */}
       {hasPin && (
         <div className="rounded-xl overflow-hidden border border-gray-200">
           <img
@@ -219,10 +230,9 @@ export default function LocationPicker({ value, onChange, label = 'Your Location
         </div>
       )}
 
-      {/* Parsed fields — shown as read-only confirmation */}
       {hasPin && (
-        <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 space-y-1.5">
-          <p className="text-xs font-semibold text-brand-700 flex items-center gap-1.5 mb-2">
+        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-1.5">
+          <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
             <CheckCircle size={13} /> Location confirmed
           </p>
           {[
@@ -239,13 +249,12 @@ export default function LocationPicker({ value, onChange, label = 'Your Location
         </div>
       )}
 
-      {/* Allow manual edit as fallback */}
       <button
         type="button"
         onClick={() => setManual(true)}
-        className="text-xs text-gray-400 hover:text-brand-600 underline"
+        className="text-xs text-gray-400 hover:text-emerald-600 underline"
       >
-        Enter address manually instead
+        Enter address fields manually instead
       </button>
     </div>
   )

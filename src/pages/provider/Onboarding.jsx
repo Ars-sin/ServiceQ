@@ -237,7 +237,7 @@ export default function ProviderOnboarding() {
                 <LocationPicker
                   value={locationData}
                   onChange={setLocationData}
-                  label="Search your service address in Cebu"
+                  label="Service Address / Operating Location in Cebu"
                 />
               </>}
 
