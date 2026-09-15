@@ -1,26 +1,84 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { MapPin, Star, Shield, Zap, Clock, MessageCircle, ChevronRight } from 'lucide-react'
+import {
+  MapPin, Star, Shield, Zap, Clock, MessageCircle,
+  Search, Calendar, CheckCircle2, ChevronRight, ArrowRight,
+  Sparkles, Award, Users
+} from 'lucide-react'
 
 const FEATURES = [
-  { icon: Zap,            title: 'Book in Minutes',        desc: 'Find and book services or rentals instantly without back-and-forth.' },
-  { icon: Shield,         title: 'Verified Providers',     desc: 'All providers go through KYC identity verification before going live.' },
-  { icon: Star,           title: 'Reviews & Ratings',      desc: 'Make confident choices with honest reviews from real customers.' },
-  { icon: Clock,          title: 'Real-time Availability', desc: 'Live calendar availability so you always book confirmed time slots.' },
-  { icon: MapPin,         title: 'Location-Based',         desc: 'Discover services and rentals near you using your city or GPS.' },
-  { icon: MessageCircle,  title: 'Direct Chat',            desc: 'Message providers directly through the platform before and after booking.' },
+  { icon: Zap,            title: 'Book in Minutes',        desc: 'Find and book services or rentals instantly without unnecessary back-and-forth.' },
+  { icon: Shield,         title: 'Verified Providers',     desc: 'All providers go through KYC identity verification before going live on the platform.' },
+  { icon: Star,           title: 'Reviews & Ratings',      desc: 'Make confident choices with genuine ratings from verified customers in Cebu.' },
+  { icon: Clock,          title: 'Real-time Availability', desc: 'Live availability schedules so you always book confirmed, active time slots.' },
+  { icon: MapPin,         title: 'Location-Based',         desc: 'Discover services, equipment, and rentals within your exact Cebu neighborhood.' },
+  { icon: MessageCircle,  title: 'Direct Provider Chat',   desc: 'Communicate directly with providers before booking and receive updates in real-time.' },
+]
+
+const FEATURED_CATEGORIES = [
+  {
+    title: 'Cleaning & Home Care',
+    desc: 'Deep cleaning, aircon maintenance, house sanitization',
+    count: '42+ providers',
+    tag: 'Popular in Cebu',
+  },
+  {
+    title: 'Gadgets & Electronics',
+    desc: 'Cameras, drones, audio systems, gaming rentals',
+    count: '28+ items',
+    tag: 'Trending',
+  },
+  {
+    title: 'Rental Properties & Spaces',
+    desc: 'Event venues, studio spaces, short-stay units',
+    count: '35+ listings',
+    tag: 'High Demand',
+  },
+  {
+    title: 'Events & Party Equipment',
+    desc: 'Lighting, projectors, sound systems, tents & chairs',
+    count: '19+ providers',
+    tag: 'Events',
+  },
+  {
+    title: 'Tutoring & Academic Lessons',
+    desc: 'Math, language tutors, music and tech lessons',
+    count: '24+ tutors',
+    tag: 'Education',
+  },
+  {
+    title: 'Vehicle & Transport Rentals',
+    desc: 'Cars, vans, scooters, moving transport in Cebu',
+    count: '31+ rentals',
+    tag: 'Transport',
+  },
 ]
 
 const STEPS = [
-  { n: '1', title: 'Search Near You',        desc: 'Browse services and rentals in your area by category or keyword.' },
-  { n: '2', title: 'Book with Confidence',   desc: 'Check reviews, availability, pricing, and provider details — then book.' },
-  { n: '3', title: 'Pay Securely & Enjoy',   desc: 'Pay via GCash, Maya, or bank transfer and get a digital receipt.' },
+  {
+    n: '1',
+    title: '1. Discover Nearby',
+    desc: 'Browse local properties, equipment, and everyday services tailored to your area in Cebu.',
+    icon: Search,
+  },
+  {
+    n: '2',
+    title: '2. Book & Schedule',
+    desc: 'Choose your dates or service time, review details, and reserve instantly with real-time confirmation.',
+    icon: Calendar,
+  },
+  {
+    n: '3',
+    title: '3. Get It Done',
+    desc: 'Pick up your rental or receive your requested service smoothly and hassle-free.',
+    icon: CheckCircle2,
+  },
 ]
 
 function AnimFade({ children, delay = 0 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 28 }}
+      initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5, delay }}
@@ -32,93 +90,212 @@ function AnimFade({ children, delay = 0 }) {
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white font-sans">
-      {/* NAV */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur border-b border-gray-100">
-        <div className="page-container flex items-center justify-between py-4">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="ServiceQ" className="h-10 w-auto object-contain" />
-            <span className="font-extrabold text-2xl tracking-tight text-gray-900">ServiceQ</span>
+    <div className="min-h-screen bg-brand-950 font-sans text-gray-800">
+
+      {/* ── TOP NAVBAR ────────────────────────────────────────────── */}
+      <nav className="sticky top-0 z-50 bg-brand-950/90 backdrop-blur-md border-b border-brand-800/60 shadow-lg">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between py-3.5">
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2.5">
+            <img
+              src="/logoword(white).png"
+              alt="ServiceQ"
+              className="h-8 w-auto object-contain"
+              onError={(e) => {
+                e.target.onerror = null
+                e.target.src = '/logo.png'
+              }}
+            />
+          </Link>
+
+          {/* Nav Links */}
+          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-brand-100">
+            <a href="#hero" className="hover:text-white transition">Home</a>
+            <a href="#explore" className="hover:text-white transition">Explore</a>
+            <a href="#features" className="hover:text-white transition">Features</a>
+            <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
           </div>
+
+          {/* Action Buttons with strong visibility */}
           <div className="flex items-center gap-3">
-            <Link to="/login"    className="btn-ghost text-sm">Sign In</Link>
-            <Link to="/register" className="btn-primary text-sm">Get Started</Link>
+            <Link
+              to="/login"
+              className="px-4 py-2 text-sm font-bold text-white hover:text-brand-100 border border-white/40 hover:border-white rounded-xl transition bg-white/5"
+            >
+              Sign In
+            </Link>
+            <Link
+              to="/register"
+              className="px-4 py-2 text-sm font-bold text-brand-950 bg-white hover:bg-brand-50 rounded-xl shadow-md transition hover:scale-105 active:scale-95"
+            >
+              Get Started
+            </Link>
           </div>
         </div>
       </nav>
 
-      {/* HERO */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-50 via-white to-accent-50 pt-20 pb-28">
-        {/* Background blobs */}
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-brand-200 rounded-full opacity-20 blur-3xl" />
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-accent-200 rounded-full opacity-20 blur-3xl" />
+      {/* ── HERO SECTION (Shades of Blue + High Contrast) ───────── */}
+      <section id="hero" className="relative overflow-hidden bg-gradient-to-b from-brand-950 via-brand-900 to-brand-850 pt-16 pb-24 text-white">
+        {/* Subtle decorative glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-brand-500/15 blur-[120px] rounded-full pointer-events-none" />
 
-        <div className="page-container relative">
-          <div className="max-w-2xl mx-auto text-center">
-            <AnimFade>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-100 text-brand-700 text-sm font-medium mb-6">
-                <MapPin size={14} /> Now available in Cebu
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 relative z-10 text-center">
+          <AnimFade>
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-800/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-semibold mb-6 shadow-sm">
+              <MapPin size={14} className="text-brand-300" /> Serving Cebu City & surrounding areas
+            </div>
+          </AnimFade>
+
+          <AnimFade delay={0.1}>
+            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight mb-6">
+              ServiceQ : One search.<br />
+              <span className="text-brand-300">Endless possibilities, locally</span>
+            </h1>
+          </AnimFade>
+
+          <AnimFade delay={0.2}>
+            <p className="text-base sm:text-lg text-brand-100 leading-relaxed mb-10 max-w-2xl mx-auto">
+              We connect you to our trusted local providers for rental space, gear, and daily services. Compare options, check live availability, and book what you need in seconds.
+            </p>
+          </AnimFade>
+
+          {/* High-visibility Action Buttons */}
+          <AnimFade delay={0.3}>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <Link
+                to="/register"
+                className="w-full sm:w-auto px-8 py-4 bg-white text-brand-950 hover:bg-brand-50 font-extrabold text-base rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
+              >
+                Create Free Account <ChevronRight size={18} />
+              </Link>
+              <Link
+                to="/login"
+                className="w-full sm:w-auto px-8 py-4 bg-brand-800/80 hover:bg-brand-700 text-white font-bold text-base rounded-2xl border-2 border-brand-400/70 shadow-lg transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
+              >
+                Sign In to Dashboard <ArrowRight size={18} />
+              </Link>
+            </div>
+          </AnimFade>
+
+          {/* 3 Floating White Cards on Blue (Matching User Mockup) */}
+          <AnimFade delay={0.4}>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-14 text-left">
+              <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                  <Zap size={22} />
+                </div>
+                <h3 className="font-bold text-gray-900 text-base mb-1">Fast Service Booking</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Book cleaners, AC technicians, makeup artists, and tutors with verified pricing.</p>
               </div>
-            </AnimFade>
 
-            <AnimFade delay={0.1}>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-gray-900 leading-tight mb-6 text-balance">
-                Find Services &{' '}
-                <span className="text-brand-700">Rentals Near You</span>
-              </h1>
-            </AnimFade>
+              <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200 sm:-translate-y-2 ring-2 ring-brand-300">
+                <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-3">
+                  <Sparkles size={22} />
+                </div>
+                <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Top Rated</span>
+                <h3 className="font-bold text-gray-900 text-base mb-1">Gear & Space Rentals</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Rent cameras, event equipment, party needs, and rental spaces without friction.</p>
+              </div>
 
-            <AnimFade delay={0.2}>
-              <p className="text-lg text-gray-500 leading-relaxed mb-8 max-w-xl mx-auto">
-                ServiceQ is your one-stop marketplace for booking trusted local services and rentals across the Philippines — from home cleaning to gadgets, tutors to event equipment.
+              <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                  <Award size={22} />
+                </div>
+                <h3 className="font-bold text-gray-900 text-base mb-1">Verified Local Providers</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">Government ID-checked providers in Cebu with authentic ratings and secure payouts.</p>
+              </div>
+            </div>
+          </AnimFade>
+        </div>
+      </section>
+
+      {/* ── EXPLORE SERVICES (Deep Blue Background) ─────────────── */}
+      <section id="explore" className="py-20 bg-gradient-to-b from-brand-900 via-brand-800 to-brand-900 text-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <AnimFade>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">Explore ServiceQ</h2>
+              <p className="text-brand-100 text-sm max-w-md mx-auto">
+                Find exactly what you need across Cebu's trusted local marketplace.
               </p>
-            </AnimFade>
+            </div>
+          </AnimFade>
 
-            <AnimFade delay={0.3}>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link to="/login" className="btn-primary btn-lg gap-2">
-                  Sign In <ChevronRight size={18} />
-                </Link>
-                <Link to="/register" className="btn-secondary btn-lg">
-                  Create Account
-                </Link>
-              </div>
-            </AnimFade>
-
-            {/* Mock stat pills */}
-            <AnimFade delay={0.4}>
-              <div className="flex flex-wrap justify-center gap-4 mt-10">
-                {[['500+', 'Listings'], ['200+', 'Providers'], ['1,000+', 'Happy Customers'], ['4.8★', 'Avg Rating']].map(([val, label]) => (
-                  <div key={label} className="bg-white rounded-2xl shadow-card px-5 py-3 text-center">
-                    <div className="text-lg font-black gradient-brand-text">{val}</div>
-                    <div className="text-xs text-gray-500">{label}</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURED_CATEGORIES.map((cat, idx) => (
+              <AnimFade key={cat.title} delay={idx * 0.08}>
+                <div className="bg-white rounded-2xl p-6 shadow-xl border border-white/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between h-full">
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700">
+                        {cat.tag}
+                      </span>
+                      <span className="text-xs text-gray-400 font-medium">{cat.count}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-gray-900 mb-1">{cat.title}</h3>
+                    <p className="text-xs text-gray-500 leading-relaxed mb-4">{cat.desc}</p>
                   </div>
-                ))}
-              </div>
-            </AnimFade>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-brand-800 mt-2"
+                  >
+                    Browse Listings <ChevronRight size={14} />
+                  </Link>
+                </div>
+              </AnimFade>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* FEATURES */}
-      <section className="py-24 bg-white">
-        <div className="page-container">
+      {/* ── HOW IT WORKS (White Section with High-Contrast Blue Borders) ─── */}
+      <section id="how-it-works" className="py-20 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <AnimFade>
             <div className="text-center mb-14">
-              <h2 className="text-3xl font-black text-gray-900 mb-3">Everything You Need in One Place</h2>
-              <p className="text-gray-500 max-w-lg mx-auto">Built for Filipino customers and local providers — simple, safe, and fast.</p>
+              <h2 className="text-3xl sm:text-4xl font-black text-gray-900 mb-2">How ServiceQ Works</h2>
+              <p className="text-gray-500 text-sm max-w-lg mx-auto">
+                A seamless process from browsing to booking local rentals and services.
+              </p>
+            </div>
+          </AnimFade>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {STEPS.map((s, i) => (
+              <AnimFade key={s.n} delay={i * 0.1}>
+                <div className="flex flex-col items-center text-center p-6 rounded-2xl bg-gray-50 border border-gray-100 hover:border-brand-300 hover:shadow-lg transition-all duration-200">
+                  {/* Rounded blue outline icon container (matching user mockup) */}
+                  <div className="w-20 h-20 rounded-2xl border-2 border-brand-500 bg-brand-50 flex items-center justify-center text-brand-600 mb-5 shadow-sm">
+                    <s.icon size={34} className="text-brand-600" />
+                  </div>
+                  <h3 className="font-extrabold text-gray-900 text-base mb-2">{s.title}</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed max-w-xs">{s.desc}</p>
+                </div>
+              </AnimFade>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FEATURES GRID ─────────────────────────────────────────── */}
+      <section id="features" className="py-20 bg-brand-900 text-white">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <AnimFade>
+            <div className="text-center mb-12">
+              <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">Why Choose ServiceQ</h2>
+              <p className="text-brand-100 text-sm max-w-md mx-auto">Built specifically for Filipino service consumers and verified local providers.</p>
             </div>
           </AnimFade>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {FEATURES.map((f, i) => (
               <AnimFade key={f.title} delay={i * 0.08}>
-                <div className="card hover:shadow-lg transition-shadow duration-200">
-                  <div className="w-12 h-12 rounded-2xl bg-brand-50 flex items-center justify-center mb-4">
-                    <f.icon size={22} className="text-brand-600" />
+                <div className="bg-brand-850/80 border border-brand-700/60 rounded-2xl p-6 hover:bg-brand-800 transition duration-200 shadow-md">
+                  <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-4 shadow-sm">
+                    <f.icon size={22} />
                   </div>
-                  <h3 className="font-bold text-gray-900 mb-2">{f.title}</h3>
-                  <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+                  <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
+                  <p className="text-xs text-brand-100 leading-relaxed">{f.desc}</p>
                 </div>
               </AnimFade>
             ))}
@@ -126,70 +303,59 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="py-24 bg-gray-50">
-        <div className="page-container">
+      {/* ── READY TO GET STARTED (Vibrant CTA) ────────────────────── */}
+      <section className="py-16 bg-gradient-to-r from-brand-800 via-brand-700 to-brand-800 text-white text-center border-t border-b border-brand-700">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <AnimFade>
-            <div className="text-center mb-14">
-              <h2 className="text-3xl font-black text-gray-900 mb-3">How It Works</h2>
-              <p className="text-gray-500">Book in 3 simple steps</p>
-            </div>
-          </AnimFade>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto">
-            {STEPS.map((s, i) => (
-              <AnimFade key={s.n} delay={i * 0.1}>
-                <div className="flex flex-col items-center text-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl gradient-brand flex items-center justify-center shadow-brand-glow">
-                    <span className="text-white font-black text-xl">{s.n}</span>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 mb-1">{s.title}</h3>
-                    <p className="text-sm text-gray-500">{s.desc}</p>
-                  </div>
-                </div>
-              </AnimFade>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA BANNER */}
-      <section className="py-24 bg-brand-600">
-        <div className="page-container text-center">
-          <AnimFade>
-            <h2 className="text-3xl font-black text-white mb-4">Ready to Get Started?</h2>
-            <p className="text-brand-100 mb-8 max-w-md mx-auto">
-              Join customers and providers already using ServiceQ in Cebu.
+            <h2 className="text-3xl font-black text-white mb-3">Ready to Experience ServiceQ?</h2>
+            <p className="text-brand-100 text-sm mb-8 max-w-md mx-auto">
+              Join Cebu's growing network of customers and service providers today.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link to="/login" className="bg-white text-brand-600 font-bold px-8 py-3 rounded-2xl hover:bg-brand-50 transition-colors">
-                Sign In
-              </Link>
-              <Link to="/register" className="bg-white/20 text-white font-bold px-8 py-3 rounded-2xl hover:bg-white/30 transition-colors border border-white/30">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+              <Link
+                to="/register"
+                className="w-full sm:w-auto px-8 py-3.5 bg-white text-brand-900 hover:bg-brand-50 font-extrabold text-sm rounded-xl shadow-lg transition hover:scale-105"
+              >
                 Create Account
               </Link>
+              <Link
+                to="/login"
+                className="w-full sm:w-auto px-8 py-3.5 bg-brand-900/60 hover:bg-brand-900 text-white border-2 border-white/60 font-bold text-sm rounded-xl transition hover:scale-105"
+              >
+                Sign In
+              </Link>
             </div>
           </AnimFade>
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
-        <div className="page-container flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="ServiceQ" className="h-9 w-auto object-contain brightness-200" />
-            <span className="font-bold text-xl text-white">ServiceQ</span>
+      {/* ── FOOTER (Vibrant Rich Blue matching Mockup) ───────────── */}
+      <footer className="bg-brand-950 border-t border-brand-800/80 text-brand-200 py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-6 text-xs">
+          {/* Logo */}
+          <div className="flex items-center gap-2">
+            <img
+              src="/logoword(white).png"
+              alt="ServiceQ"
+              className="h-7 w-auto object-contain"
+              onError={(e) => {
+                e.target.onerror = null
+                e.target.src = '/logo.png'
+              }}
+            />
           </div>
-          <p className="text-sm">© 2026 ServiceQ. All rights reserved.</p>
-          <div className="flex gap-4 text-sm">
-            <button className="hover:text-white transition-colors">Privacy Policy</button>
-            <button className="hover:text-white transition-colors">Terms of Service</button>
+
+          {/* Contact Links from mockup */}
+          <div className="flex flex-wrap justify-center gap-6 text-brand-200">
+            <a href="mailto:partner@serviceq.com" className="hover:text-white transition">partner@serviceq.com</a>
+            <a href="mailto:support@serviceq.com" className="hover:text-white transition">support@serviceq.com</a>
+            <span className="text-brand-400 font-mono">+63 (032) 412-SERV (7378)</span>
           </div>
+
+          <p className="text-brand-400">© 2026 ServiceQ. All rights reserved.</p>
         </div>
       </footer>
+
     </div>
   )
 }
-
-
