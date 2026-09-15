@@ -139,6 +139,9 @@ export default function ForgotPasswordPage() {
                 <button type="submit" disabled={loading} className="btn-primary w-full">
                   {loading ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Reset Password'}
                 </button>
+                <button type="button" onClick={() => setStep(2)} className="btn-ghost w-full text-sm">
+                  <ArrowLeft size={14} /> Back
+                </button>
               </motion.form>
             )}
 
@@ -152,15 +155,15 @@ export default function ForgotPasswordPage() {
                   <h2 className="text-lg font-bold text-gray-900">Password Reset!</h2>
                   <p className="text-sm text-gray-500 mt-1">Your password has been updated successfully.</p>
                 </div>
-                <Link to="/login" className="btn-primary w-full">Back to Login</Link>
+                <Link to="/login" className="btn-primary w-full">Sign In</Link>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {step < 4 && (
+          {step === 1 && (
             <div className="mt-4 text-center">
-              <Link to="/login" className="text-sm text-gray-500 hover:text-brand-600 flex items-center justify-center gap-1">
-                <ArrowLeft size={14} /> Back to login
+              <Link to="/login" className="btn-ghost w-full text-sm inline-flex items-center justify-center gap-1.5">
+                <ArrowLeft size={14} /> Back
               </Link>
             </div>
           )}
