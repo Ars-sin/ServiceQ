@@ -68,6 +68,10 @@ export default function AdminFinancials() {
     setPage(1)
   }
 
+  const filtered = txnFilter === 'all'
+    ? TRANSACTIONS
+    : TRANSACTIONS.filter(t => t.status === txnFilter)
+
   const displayedTxns = isDefaultAll
     ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
     : filtered
