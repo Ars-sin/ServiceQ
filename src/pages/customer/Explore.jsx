@@ -2,45 +2,51 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  MapPin, Search, Star, ChevronRight, X, Sparkles,
+  MapPin, Search, Star, X, Sparkles,
   Home, Laptop, GraduationCap, Hammer, PartyPopper,
   Car, Package, Utensils, Wrench, SlidersHorizontal,
-  RotateCcw, Check
+  RotateCcw, LayoutGrid
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { CATEGORIES } from '@/lib/constants'
 import { formatPHP } from '@/lib/utils'
 
-const ALL_LISTINGS = [
-  { id: '1',  title: 'Professional Home Cleaning',              categoryId: 'cleaning',     category: 'Cleaning Services',    price: 500,  unit: 'per session', rating: 4.8, reviews: 42, distance: 0.8, provider: 'Maria Santos',        tag: 'Top Rated' },
-  { id: '2',  title: 'Studio Apartment near Cebu IT Park',       categoryId: 'rental_props', category: 'Rental Properties',    price: 4500, unit: 'per month',   rating: 4.5, reviews: 18, distance: 1.2, provider: 'Renzo Realty',        tag: 'Verified' },
-  { id: '3',  title: 'Laptop Rental (MacBook Pro M2)',           categoryId: 'gadgets',      category: 'Gadgets & Tech',       price: 800,  unit: 'per day',     rating: 4.9, reviews: 31, distance: 2.0, provider: 'TechRent Cebu',      tag: 'Fast Delivery' },
-  { id: '4',  title: 'High School Math & Science Tutoring',      categoryId: 'tutoring',     category: 'Tutoring & Lessons',   price: 300,  unit: 'per hour',    rating: 5.0, reviews: 57, distance: 0.5, provider: 'Engr. Cruz',          tag: 'Certified' },
-  { id: '5',  title: 'Split-Type AC Cleaning & Repair',          categoryId: 'repairs',      category: 'Repairs & Maintenance',price: 350,  unit: 'per visit',   rating: 4.7, reviews: 29, distance: 3.1, provider: 'Fix-It Crew Cebu',   tag: 'Same Day' },
-  { id: '6',  title: 'Full Sound System & Stage Lights',         categoryId: 'events',       category: 'Events & Equipment',   price: 3500, unit: 'per day',     rating: 4.6, reviews: 14, distance: 1.8, provider: 'Cebu Events Pro',    tag: 'Packages' },
-  { id: '7',  title: 'Honda Click 125i Scooter Rental',          categoryId: 'vehicles',     category: 'Vehicles',             price: 450,  unit: 'per day',     rating: 4.9, reviews: 36, distance: 1.5, provider: 'Cebu MotoRent',      tag: 'Helmet Included' },
-  { id: '8',  title: 'Deep Sofa & Carpet Steam Shampoo',         categoryId: 'cleaning',     category: 'Cleaning Services',    price: 650,  unit: 'per sofa',    rating: 4.8, reviews: 33, distance: 2.1, provider: 'CleanPro Cebu',      tag: 'Eco-friendly' },
-  { id: '9',  title: 'Sony Alpha A7 IV Camera & Lens Kit',       categoryId: 'gadgets',      category: 'Gadgets & Tech',       price: 950,  unit: 'per day',     rating: 4.9, reviews: 40, distance: 2.8, provider: 'PixelRent Cebu',     tag: '4K Ready' },
-  { id: '10', title: 'Packed Meals & Filipino Buffet Catering',  categoryId: 'services',     category: 'Services',             price: 250,  unit: 'per head',    rating: 4.9, reviews: 83, distance: 0.9, provider: 'Lutong Sugbo',       tag: 'Catering' },
-  { id: '11', title: 'Electric Generator (3500W Inverter)',       categoryId: 'rental_items', category: 'Rental Items',         price: 1200, unit: 'per day',     rating: 4.8, reviews: 19, distance: 3.4, provider: 'PowerRent Cebu',     tag: 'Heavy Duty' },
-  { id: '12', title: '1-Bedroom Furnished Condo in Lahug',       categoryId: 'rental_props', category: 'Rental Properties',    price: 8500, unit: 'per month',   rating: 4.6, reviews: 15, distance: 0.9, provider: 'Cebu Living Homes',  tag: 'Furnished' },
-  { id: '13', title: 'DSLR Gimbal & Drone Photography Kit',      categoryId: 'gadgets',      category: 'Gadgets & Tech',       price: 750,  unit: 'per day',     rating: 4.8, reviews: 26, distance: 1.7, provider: 'DroneHub Cebu',     tag: 'Popular' },
-  { id: '14', title: 'Plumbing & Water Leak Repair',             categoryId: 'repairs',      category: 'Repairs & Maintenance',price: 400,  unit: 'per service', rating: 4.7, reviews: 21, distance: 1.1, provider: 'QuickPlumb Cebu',   tag: 'Express' },
-  { id: '15', title: 'Toyota Innova Van with Driver',            categoryId: 'vehicles',     category: 'Vehicles',             price: 2800, unit: 'per day',     rating: 5.0, reviews: 64, distance: 2.4, provider: 'Sugbo Van Rentals',  tag: 'Tour Ready' },
+const TYPE_TABS = [
+  { id: 'all',      label: 'All Listings', icon: LayoutGrid },
+  { id: 'services', label: 'Services',     icon: Wrench },
+  { id: 'rentals',  label: 'Rentals',      icon: Package },
 ]
 
-function getCategoryIcon(catId) {
-  switch (catId) {
-    case 'cleaning':     return <Sparkles size={22} className="text-brand-600" />
-    case 'rental_props': return <Home size={22} className="text-brand-600" />
-    case 'gadgets':      return <Laptop size={22} className="text-brand-600" />
-    case 'tutoring':     return <GraduationCap size={22} className="text-brand-600" />
-    case 'repairs':      return <Hammer size={22} className="text-brand-600" />
-    case 'events':       return <PartyPopper size={22} className="text-brand-600" />
-    case 'vehicles':     return <Car size={22} className="text-brand-600" />
-    case 'rental_items': return <Package size={22} className="text-brand-600" />
-    case 'services':     return <Utensils size={22} className="text-brand-600" />
-    default:             return <Wrench size={22} className="text-brand-600" />
+const ALL_LISTINGS = [
+  { id: '1',  type: 'services', category: 'Services', subCategory: 'Cleaning',     title: 'Professional Home Cleaning',              price: 500,  unit: 'per session', rating: 4.8, reviews: 42, distance: 0.8, provider: 'Maria Santos',        tag: 'Top Rated' },
+  { id: '2',  type: 'rentals',  category: 'Rentals',  subCategory: 'Apartment',    title: 'Studio Apartment near Cebu IT Park',       price: 4500, unit: 'per month',   rating: 4.5, reviews: 18, distance: 1.2, provider: 'Renzo Realty',        tag: 'Verified' },
+  { id: '3',  type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'Laptop Rental (MacBook Pro M2)',           price: 800,  unit: 'per day',     rating: 4.9, reviews: 31, distance: 2.0, provider: 'TechRent Cebu',      tag: 'Fast Delivery' },
+  { id: '4',  type: 'services', category: 'Services', subCategory: 'Tutoring',     title: 'High School Math & Science Tutoring',      price: 300,  unit: 'per hour',    rating: 5.0, reviews: 57, distance: 0.5, provider: 'Engr. Cruz',          tag: 'Certified' },
+  { id: '5',  type: 'services', category: 'Services', subCategory: 'Repairs',      title: 'Split-Type AC Cleaning & Repair',          price: 350,  unit: 'per visit',   rating: 4.7, reviews: 29, distance: 3.1, provider: 'Fix-It Crew Cebu',   tag: 'Same Day' },
+  { id: '6',  type: 'rentals',  category: 'Rentals',  subCategory: 'Events',       title: 'Full Sound System & Stage Lights',         price: 3500, unit: 'per day',     rating: 4.6, reviews: 14, distance: 1.8, provider: 'Cebu Events Pro',    tag: 'Packages' },
+  { id: '7',  type: 'rentals',  category: 'Rentals',  subCategory: 'Vehicles',     title: 'Honda Click 125i Scooter Rental',          price: 450,  unit: 'per day',     rating: 4.9, reviews: 36, distance: 1.5, provider: 'Cebu MotoRent',      tag: 'Helmet Included' },
+  { id: '8',  type: 'services', category: 'Services', subCategory: 'Cleaning',     title: 'Deep Sofa & Carpet Steam Shampoo',         price: 650,  unit: 'per sofa',    rating: 4.8, reviews: 33, distance: 2.1, provider: 'CleanPro Cebu',      tag: 'Eco-friendly' },
+  { id: '9',  type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'Sony Alpha A7 IV Camera & Lens Kit',       price: 950,  unit: 'per day',     rating: 4.9, reviews: 40, distance: 2.8, provider: 'PixelRent Cebu',     tag: '4K Ready' },
+  { id: '10', type: 'services', category: 'Services', subCategory: 'Catering',     title: 'Packed Meals & Filipino Buffet Catering',  price: 250,  unit: 'per head',    rating: 4.9, reviews: 83, distance: 0.9, provider: 'Lutong Sugbo',       tag: 'Catering' },
+  { id: '11', type: 'rentals',  category: 'Rentals',  subCategory: 'Equipment',    title: 'Electric Generator (3500W Inverter)',       price: 1200, unit: 'per day',     rating: 4.8, reviews: 19, distance: 3.4, provider: 'PowerRent Cebu',     tag: 'Heavy Duty' },
+  { id: '12', type: 'rentals',  category: 'Rentals',  subCategory: 'Property',     title: '1-Bedroom Furnished Condo in Lahug',       price: 8500, unit: 'per month',   rating: 4.6, reviews: 15, distance: 0.9, provider: 'Cebu Living Homes',  tag: 'Furnished' },
+  { id: '13', type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'DSLR Gimbal & Drone Photography Kit',      price: 750,  unit: 'per day',     rating: 4.8, reviews: 26, distance: 1.7, provider: 'DroneHub Cebu',     tag: 'Popular' },
+  { id: '14', type: 'services', category: 'Services', subCategory: 'Repairs',      title: 'Plumbing & Water Leak Repair',             price: 400,  unit: 'per service', rating: 4.7, reviews: 21, distance: 1.1, provider: 'QuickPlumb Cebu',   tag: 'Express' },
+  { id: '15', type: 'rentals',  category: 'Rentals',  subCategory: 'Vehicles',     title: 'Toyota Innova Van with Driver',            price: 2800, unit: 'per day',     rating: 5.0, reviews: 64, distance: 2.4, provider: 'Sugbo Van Rentals',  tag: 'Tour Ready' },
+]
+
+function getListingIcon(subCategory) {
+  switch (subCategory) {
+    case 'Cleaning':  return <Sparkles size={22} className="text-brand-600" />
+    case 'Apartment':
+    case 'Property':  return <Home size={22} className="text-brand-600" />
+    case 'Gadgets':   return <Laptop size={22} className="text-brand-600" />
+    case 'Tutoring':  return <GraduationCap size={22} className="text-brand-600" />
+    case 'Repairs':   return <Hammer size={22} className="text-brand-600" />
+    case 'Events':    return <PartyPopper size={22} className="text-brand-600" />
+    case 'Vehicles':  return <Car size={22} className="text-brand-600" />
+    case 'Equipment': return <Package size={22} className="text-brand-600" />
+    case 'Catering':  return <Utensils size={22} className="text-brand-600" />
+    default:          return <Wrench size={22} className="text-brand-600" />
   }
 }
 
@@ -56,8 +62,8 @@ function ListingCard({ listing, onClick }) {
     >
       {/* Visual Header */}
       <div className="h-32 bg-brand-50/70 border-b border-gray-100 relative flex items-center justify-center">
-        <div className="w-13 h-13 rounded-2xl bg-white shadow-sm flex items-center justify-center p-3">
-          {getCategoryIcon(listing.categoryId)}
+        <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center p-2.5">
+          {getListingIcon(listing.subCategory)}
         </div>
 
         <button
@@ -73,11 +79,20 @@ function ListingCard({ listing, onClick }) {
         </button>
 
         <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 flex-wrap">
-          <span className="bg-brand-100 text-brand-700 font-semibold px-2 py-0.5 rounded-full text-[11px]">
-            {listing.category}
+          <span className={`font-bold px-2.5 py-0.5 rounded-full text-[11px] ${
+            listing.type === 'services'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-emerald-100 text-emerald-800'
+          }`}>
+            {listing.type === 'services' ? 'Service' : 'Rental'}
           </span>
+          {listing.subCategory && (
+            <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200">
+              {listing.subCategory}
+            </span>
+          )}
           {listing.tag && (
-            <span className="bg-white/90 text-gray-700 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-gray-200">
+            <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200">
               {listing.tag}
             </span>
           )}
@@ -118,7 +133,7 @@ function ListingCard({ listing, onClick }) {
 export default function CustomerExplore() {
   const navigate = useNavigate()
   const [search, setSearch]             = useState('')
-  const [selectedCat, setSelectedCat]   = useState('all')
+  const [selectedType, setSelectedType] = useState('all') // 'all' | 'services' | 'rentals'
   const [sort, setSort]                 = useState('recommended')
   const [maxPrice, setMaxPrice]         = useState(10000)
   const [minRating, setMinRating]       = useState(0)
@@ -132,13 +147,13 @@ export default function CustomerExplore() {
       if (search.trim()) {
         const q = search.toLowerCase()
         const matchTitle = item.title.toLowerCase().includes(q)
-        const matchCat   = item.category.toLowerCase().includes(q)
+        const matchSub   = item.subCategory?.toLowerCase().includes(q)
         const matchProv  = item.provider.toLowerCase().includes(q)
-        if (!matchTitle && !matchCat && !matchProv) return false
+        if (!matchTitle && !matchSub && !matchProv) return false
       }
 
-      // Category
-      if (selectedCat !== 'all' && item.categoryId !== selectedCat) {
+      // Type filter: All | Services | Rentals
+      if (selectedType !== 'all' && item.type !== selectedType) {
         return false
       }
 
@@ -165,7 +180,7 @@ export default function CustomerExplore() {
 
   const clearAllFilters = () => {
     setSearch('')
-    setSelectedCat('all')
+    setSelectedType('all')
     setSort('recommended')
     setMaxPrice(10000)
     setMinRating(0)
@@ -174,14 +189,14 @@ export default function CustomerExplore() {
 
   const hasActiveFilters =
     search.trim() !== '' ||
-    selectedCat !== 'all' ||
+    selectedType !== 'all' ||
     sort !== 'recommended' ||
     maxPrice < 10000 ||
     minRating > 0 ||
     quickFilter !== null
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 pb-12">
+    <div className="max-w-6xl mx-auto w-full flex flex-col gap-6 pb-12">
 
       {/* ── Top Header Bar ────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -200,7 +215,7 @@ export default function CustomerExplore() {
       </div>
 
       {/* ── Search & Filter Controls ──────────────────────────────── */}
-      <div className="card p-4 flex flex-col gap-3">
+      <div className="card p-4 flex flex-col gap-3.5 shadow-sm border border-gray-200/80">
         <div className="flex flex-col sm:flex-row gap-2.5">
           {/* Search bar */}
           <div className="relative flex-1">
@@ -225,7 +240,7 @@ export default function CustomerExplore() {
           <select
             value={sort}
             onChange={e => setSort(e.target.value)}
-            className="input w-full sm:w-48 text-xs font-medium cursor-pointer"
+            className="input w-full sm:w-44 text-xs font-medium cursor-pointer"
           >
             <option value="recommended">Sort: Recommended</option>
             <option value="price_asc">Price: Low to High</option>
@@ -303,37 +318,39 @@ export default function CustomerExplore() {
           )}
         </AnimatePresence>
 
-        {/* Category horizontal scroll bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 scrollbar-none">
-          <button
-            onClick={() => setSelectedCat('all')}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
-              selectedCat === 'all'
-                ? 'bg-brand-600 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            All Categories
-          </button>
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCat(cat.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition flex items-center gap-1.5 ${
-                selectedCat === cat.id
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <span>{cat.icon}</span>
-              <span>{cat.label}</span>
-            </button>
-          ))}
-        </div>
+        {/* Simplified Type Tabs: All Listings | Services | Rentals */}
+        <div className="flex items-center gap-2 pt-1 border-t border-gray-100 flex-wrap">
+          {TYPE_TABS.map(t => {
+            const Icon = t.icon
+            const active = selectedType === t.id
+            const count = t.id === 'all'
+              ? ALL_LISTINGS.length
+              : ALL_LISTINGS.filter(l => l.type === t.id).length
 
-        {/* Quick shortcut filters */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-gray-100 text-xs">
-          <span className="text-gray-400 font-medium">Quick Filters:</span>
+            return (
+              <button
+                key={t.id}
+                onClick={() => setSelectedType(t.id)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  active
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                <Icon size={14} />
+                <span>{t.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-semibold ${
+                  active ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+
+          <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block" />
+
+          {/* Quick shortcut filters */}
           {[
             { id: 'under500', label: '⚡ Under ₱500' },
             { id: 'toprated', label: '⭐ Top Rated (4.8★+)' },
@@ -367,12 +384,14 @@ export default function CustomerExplore() {
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-900">
-            {selectedCat === 'all'
+            {selectedType === 'all'
               ? 'All Listings'
-              : CATEGORIES.find(c => c.id === selectedCat)?.label || 'Filtered Listings'}
+              : selectedType === 'services'
+              ? 'Service Providers'
+              : 'Rentals & Spaces'}
           </span>
           <span className="text-xs bg-gray-100 text-gray-600 font-semibold px-2 py-0.5 rounded-full">
-            {filtered.length} found
+            {filtered.length} available
           </span>
         </div>
 
@@ -411,6 +430,6 @@ export default function CustomerExplore() {
           ))}
         </div>
       )}
-    </motion.div>
+    </div>
   )
 }
