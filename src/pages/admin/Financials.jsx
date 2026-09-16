@@ -5,16 +5,21 @@ import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import StatCard from '@/components/ui/StatCard'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 import toast from 'react-hot-toast'
 import { DollarSign, TrendingUp, AlertCircle, CheckCircle, XCircle, Clock } from 'lucide-react'
 
 const TRANSACTIONS = [
-  { id: 'TXN-001', customer: 'Ana Reyes',   provider: 'Maria Santos', service: 'Home Cleaning',  gross: 1100, fee: 110, net: 990,  date: '2026-09-05', status: 'successful' },
-  { id: 'TXN-002', customer: 'Marco Lopez', provider: 'TechRent PH',  service: 'Laptop Rental',  gross: 880,  fee: 88,  net: 792,  date: '2026-09-04', status: 'successful' },
-  { id: 'TXN-003', customer: 'Grace Tan',   provider: 'Events Pro',   service: 'Sound System',   gross: 3850, fee: 385, net: 3465, date: '2026-09-03', status: 'pending' },
-  { id: 'TXN-004', customer: 'Rico Santos', provider: 'LensHub PH',   service: 'Camera Rental',  gross: 660,  fee: 66,  net: 594,  date: '2026-09-02', status: 'refunded' },
-  { id: 'TXN-005', customer: 'Joy DC',      provider: 'Maria Santos', service: 'Deep Cleaning',  gross: 1320, fee: 132, net: 1188, date: '2026-09-01', status: 'successful' },
-  { id: 'TXN-006', customer: 'Ben Aguilar', provider: 'MotoRent',     service: 'Motorcycle',     gross: 800,  fee: 80,  net: 720,  date: '2026-08-31', status: 'failed' },
+  { id: 'TXN-001', customer: 'Ana Reyes',     provider: 'Maria Santos', service: 'Home Cleaning',    gross: 1100, fee: 110, net: 990,  date: '2026-09-05', status: 'successful' },
+  { id: 'TXN-002', customer: 'Marco Lopez',   provider: 'TechRent PH',  service: 'Laptop Rental',    gross: 880,  fee: 88,  net: 792,  date: '2026-09-04', status: 'successful' },
+  { id: 'TXN-003', customer: 'Grace Tan',     provider: 'Events Pro',   service: 'Sound System',     gross: 3850, fee: 385, net: 3465, date: '2026-09-03', status: 'pending' },
+  { id: 'TXN-004', customer: 'Rico Santos',   provider: 'LensHub PH',   service: 'Camera Rental',    gross: 660,  fee: 66,  net: 594,  date: '2026-09-02', status: 'refunded' },
+  { id: 'TXN-005', customer: 'Joy DC',        provider: 'Maria Santos', service: 'Deep Cleaning',    gross: 1320, fee: 132, net: 1188, date: '2026-09-01', status: 'successful' },
+  { id: 'TXN-006', customer: 'Ben Aguilar',   provider: 'MotoRent',     service: 'Motorcycle',       gross: 800,  fee: 80,  net: 720,  date: '2026-08-31', status: 'failed' },
+  { id: 'TXN-007', customer: 'Carlo Mendoza', provider: 'Fix-It Crew',  service: 'AC Repair',        gross: 750,  fee: 75,  net: 675,  date: '2026-08-30', status: 'successful' },
+  { id: 'TXN-008', customer: 'Elena Gomez',   provider: 'Lutong Sugbo', service: 'Catering Service', gross: 2500, fee: 250, net: 2250, date: '2026-08-29', status: 'successful' },
+  { id: 'TXN-009', customer: 'David Lim',     provider: 'PowerPro Cebu',service: 'Generator Rental',  gross: 1200, fee: 120, net: 1080, date: '2026-08-28', status: 'pending' },
+  { id: 'TXN-010', customer: 'Sophia Sy',     provider: 'SkyView PH',   service: 'Drone Kit',        gross: 1100, fee: 110, net: 990,  date: '2026-08-27', status: 'successful' },
 ]
 
 const WITHDRAWALS = [
@@ -32,10 +37,14 @@ const wdVariant = s => ({ pending_review: 'warning', verified: 'info', approved:
 
 export default function AdminFinancials() {
   const [tab, setTab] = useState('ledger')
+  const [page, setPage] = useState(1)
   const [withdrawals, setWithdrawals] = useState(WITHDRAWALS)
   const [txnFilter, setTxnFilter] = useState('all')
   const [rejectModal, setRejectModal] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
+
+  const PAGE_SIZE = 5
+  const isDefaultAll = txnFilter === 'all'
 
   const nextStatus = s => {
     const idx = WITHDRAWAL_FLOW.indexOf(s)
@@ -54,7 +63,14 @@ export default function AdminFinancials() {
     setRejectModal(null); setRejectNote('')
   }
 
-  const filtered = TRANSACTIONS.filter(t => txnFilter === 'all' || t.status === txnFilter)
+  const handleTxnFilterChange = (val) => {
+    setTxnFilter(val)
+    setPage(1)
+  }
+
+  const displayedTxns = isDefaultAll
+    ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : filtered
 
   const txnTabs = [
     { id: 'ledger',   label: 'Transaction Ledger' },
@@ -79,7 +95,7 @@ export default function AdminFinancials() {
       {tab === 'ledger' && (
         <div className="flex flex-col gap-4">
           <div className="flex justify-end">
-            <select value={txnFilter} onChange={e => setTxnFilter(e.target.value)} className="input w-auto">
+            <select value={txnFilter} onChange={e => handleTxnFilterChange(e.target.value)} className="input w-auto">
               <option value="all">All Transactions</option>
               <option value="successful">Successful</option>
               <option value="pending">Pending</option>
@@ -103,7 +119,7 @@ export default function AdminFinancials() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map(t => (
+                {displayedTxns.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50">
                     <td className="p-4 font-mono text-xs text-gray-500">{t.id}</td>
                     <td className="p-4 font-medium text-gray-900">{t.customer}</td>
@@ -120,6 +136,18 @@ export default function AdminFinancials() {
                 ))}
               </tbody>
             </table>
+
+            {/* Conditional Pagination: only when txnFilter === 'all' */}
+            {isDefaultAll && filtered.length > PAGE_SIZE && (
+              <div className="p-4 border-t border-gray-100">
+                <Pagination
+                  currentPage={page}
+                  totalItems={filtered.length}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

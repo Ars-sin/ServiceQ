@@ -3,19 +3,24 @@ import { motion } from 'framer-motion'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import toast from 'react-hot-toast'
 import { Flag } from 'lucide-react'
 
 const LISTINGS = [
-  { id: '1', title: 'Home Cleaning Service',   provider: 'Maria Santos', category: 'Cleaning',  price: 500,  status: 'active',   reports: 0 },
-  { id: '2', title: 'Laptop Rental (MacBook)', provider: 'TechRent PH',  category: 'Gadgets',   price: 800,  status: 'active',   reports: 0 },
-  { id: '3', title: 'Sound System Rental',     provider: 'Events Pro',   category: 'Events',    price: 3500, status: 'pending',  reports: 0 },
-  { id: '4', title: 'Motorcycle for Rent',     provider: 'MotoRent',     category: 'Vehicles',  price: 400,  status: 'active',   reports: 2 },
-  { id: '5', title: 'DSLR Camera Rental',      provider: 'LensHub PH',   category: 'Gadgets',   price: 600,  status: 'active',   reports: 1 },
-  { id: '6', title: 'Studio Unit for Rent',    provider: 'Urban Living', category: 'Properties',price: 7500, status: 'inactive', reports: 0 },
-  { id: '7', title: 'Catering Services',       provider: 'Lutong Pinoy', category: 'Services',  price: 250,  status: 'pending',  reports: 0 },
-  { id: '8', title: 'Suspicious Item Listing', provider: 'Unknown Shop', category: 'Rental',    price: 99,   status: 'active',   reports: 5 },
+  { id: '1',  title: 'Home Cleaning Service',   provider: 'Maria Santos', category: 'Cleaning',   price: 500,  status: 'active',   reports: 0 },
+  { id: '2',  title: 'Laptop Rental (MacBook)', provider: 'TechRent PH',  category: 'Gadgets',    price: 800,  status: 'active',   reports: 0 },
+  { id: '3',  title: 'Sound System Rental',     provider: 'Events Pro',   category: 'Events',     price: 3500, status: 'pending',  reports: 0 },
+  { id: '4',  title: 'Motorcycle for Rent',     provider: 'MotoRent',     category: 'Vehicles',   price: 400,  status: 'active',   reports: 2 },
+  { id: '5',  title: 'DSLR Camera Rental',      provider: 'LensHub PH',   category: 'Gadgets',    price: 600,  status: 'active',   reports: 1 },
+  { id: '6',  title: 'Studio Unit for Rent',    provider: 'Urban Living', category: 'Properties', price: 7500, status: 'inactive', reports: 0 },
+  { id: '7',  title: 'Catering Services',       provider: 'Lutong Pinoy', category: 'Services',   price: 250,  status: 'pending',  reports: 0 },
+  { id: '8',  title: 'Suspicious Item Listing', provider: 'Unknown Shop', category: 'Rental',     price: 99,   status: 'active',   reports: 5 },
+  { id: '9',  title: 'Aircon Cleaning & Repair',provider: 'CoolAir Cebu', category: 'Repairs',    price: 450,  status: 'active',   reports: 0 },
+  { id: '10', title: 'Generator 3500W Rental',  provider: 'PowerPro Cebu',category: 'Equipment',  price: 1200, status: 'active',   reports: 0 },
+  { id: '11', title: 'Deep Carpet Shampooing',  provider: 'CleanCare PH', category: 'Cleaning',   price: 700,  status: 'active',   reports: 0 },
+  { id: '12', title: 'Drone 4K Video Kit',      provider: 'SkyView PH',   category: 'Gadgets',    price: 1100, status: 'pending',  reports: 0 },
 ]
 
 const MOCK_REPORTS = [
@@ -33,14 +38,28 @@ const TABS = [
 
 export default function AdminListings() {
   const [tab, setTab]         = useState('all')
+  const [page, setPage]       = useState(1)
   const [listings, setListings] = useState(LISTINGS)
   const [reportsModal, setReportsModal] = useState(null)
+
+  const PAGE_SIZE = 5
+  const isDefaultAll = tab === 'all'
 
   const visible = listings.filter(l => {
     if (tab === 'all')      return true
     if (tab === 'reported') return l.reports > 0
     return l.status === tab
   })
+
+  // Paginate only when default 'all' is active
+  const displayed = isDefaultAll
+    ? visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : visible
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    setPage(1)
+  }
 
   const action = (id, newStatus) => {
     setListings(prev => prev.map(l => l.id === id ? { ...l, status: newStatus } : l))
@@ -61,7 +80,7 @@ export default function AdminListings() {
           ...t,
           count: t.id === 'all' ? listings.length : t.id === 'reported' ? listings.filter(l => l.reports > 0).length : listings.filter(l => l.status === t.id).length,
         }))}
-        active={tab} onChange={setTab}
+        active={tab} onChange={handleTabChange}
       />
 
       <div className="card overflow-x-auto p-0">
@@ -78,7 +97,7 @@ export default function AdminListings() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {visible.map(l => (
+            {displayed.map(l => (
               <tr key={l.id} className="hover:bg-gray-50">
                 <td className="p-4">
                   <div className="flex items-center gap-3">
@@ -118,6 +137,18 @@ export default function AdminListings() {
         {visible.length === 0 && (
           <div className="py-12 text-center text-gray-400">
             <p className="text-3xl mb-2">📭</p><p>No listings in this category</p>
+          </div>
+        )}
+
+        {/* Conditional Pagination: only when tab === 'all' */}
+        {isDefaultAll && visible.length > PAGE_SIZE && (
+          <div className="p-4 border-t border-gray-100">
+            <Pagination
+              currentPage={page}
+              totalItems={visible.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>

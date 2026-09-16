@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import Pagination from '@/components/ui/Pagination'
 import {
   MapPin, Search, Star, X, Sparkles,
   Home, Laptop, GraduationCap, Hammer, PartyPopper,
@@ -140,6 +141,22 @@ export default function CustomerExplore() {
   const [quickFilter, setQuickFilter]   = useState(null)
   const [showFilters, setShowFilters]   = useState(false)
 
+  const isDefaultAll =
+    selectedType === 'all' &&
+    !search.trim() &&
+    sort === 'recommended' &&
+    maxPrice >= 10000 &&
+    minRating === 0 &&
+    !quickFilter
+
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 6
+
+  // Reset pagination to page 1 whenever filters change
+  useEffect(() => {
+    setPage(1)
+  }, [search, selectedType, sort, maxPrice, minRating, quickFilter])
+
   // Filter and sort listings
   const filtered = ALL_LISTINGS
     .filter(item => {
@@ -178,6 +195,11 @@ export default function CustomerExplore() {
       return 0 // recommended default
     })
 
+  // Paginate only when default all (no filters on)
+  const displayedListings = isDefaultAll
+    ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : filtered
+
   const clearAllFilters = () => {
     setSearch('')
     setSelectedType('all')
@@ -185,6 +207,7 @@ export default function CustomerExplore() {
     setMaxPrice(10000)
     setMinRating(0)
     setQuickFilter(null)
+    setPage(1)
   }
 
   const hasActiveFilters =
@@ -420,15 +443,27 @@ export default function CustomerExplore() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filtered.map(listing => (
-            <ListingCard
-              key={listing.id}
-              listing={listing}
-              onClick={() => navigate(`/customer/listings/${listing.id}`)}
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {displayedListings.map(listing => (
+              <ListingCard
+                key={listing.id}
+                listing={listing}
+                onClick={() => navigate(`/customer/listings/${listing.id}`)}
+              />
+            ))}
+          </div>
+
+          {/* Conditional Pagination: only paginate when default all (no active filters) */}
+          {isDefaultAll && filtered.length > PAGE_SIZE && (
+            <Pagination
+              currentPage={page}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
             />
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )

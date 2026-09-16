@@ -7,6 +7,7 @@ import { CANCELLATION_REASONS, BOOKING_STATUS } from '@/lib/constants'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 
 const MOCK_BOOKINGS = [
   { id: 'SQ-A1B2C', service: 'Professional Home Cleaning', provider: 'Maria Santos', date: '2026-09-10', amount: 1100, status: 'scheduled' },
@@ -14,9 +15,13 @@ const MOCK_BOOKINGS = [
   { id: 'SQ-G5H6I', service: 'DSLR Camera Rental',         provider: 'LensHub PH',   date: '2026-09-02', amount: 1320, status: 'completed' },
   { id: 'SQ-J7K8L', service: 'AC & Appliance Repair',      provider: 'Fix-It Crew',  date: '2026-08-29', amount: 385,  status: 'completed' },
   { id: 'SQ-M9N0O', service: 'Sound System Rental',        provider: 'Events Pro',   date: '2026-08-20', amount: 3850, status: 'cancelled' },
+  { id: 'SQ-P1Q2R', service: 'Motorcycle Scooter Rental',  provider: 'MotoRent Cebu',date: '2026-08-15', amount: 450,  status: 'completed' },
+  { id: 'SQ-S3T4U', service: 'Sofa Shampooing Service',    provider: 'CleanCare PH', date: '2026-08-10', amount: 650,  status: 'completed' },
+  { id: 'SQ-V5W6X', service: 'MacBook Rental for Work',    provider: 'TechRent PH',  date: '2026-08-05', amount: 800,  status: 'completed' },
 ]
 
 const TABS = [
+  { id: 'all',       label: 'All' },
   { id: 'scheduled', label: 'Scheduled' },
   { id: 'active',    label: 'Active' },
   { id: 'completed', label: 'Completed' },
@@ -24,7 +29,8 @@ const TABS = [
 ]
 
 export default function CustomerBookings() {
-  const [activeTab, setTab]         = useState('scheduled')
+  const [activeTab, setTab]           = useState('all')
+  const [page, setPage]               = useState(1)
   const [cancelModal, setCancelModal] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelNote, setCancelNote]  = useState('')
@@ -32,7 +38,19 @@ export default function CustomerBookings() {
   const [rating, setRating]          = useState(0)
   const [comment, setComment]        = useState('')
 
-  const bookings = MOCK_BOOKINGS.filter(b => b.status === activeTab)
+  const PAGE_SIZE = 4
+  const isDefaultAll = activeTab === 'all'
+
+  const bookings = MOCK_BOOKINGS.filter(b => activeTab === 'all' || b.status === activeTab)
+
+  const displayed = isDefaultAll
+    ? bookings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : bookings
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    setPage(1)
+  }
 
   const handleCancel = () => {
     if (!cancelReason) return toast.error('Please select a reason')
@@ -51,8 +69,8 @@ export default function CustomerBookings() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
 
-      <Tabs tabs={TABS.map(t => ({ ...t, count: MOCK_BOOKINGS.filter(b => b.status === t.id).length }))}
-        active={activeTab} onChange={setTab} />
+      <Tabs tabs={TABS.map(t => ({ ...t, count: t.id === 'all' ? MOCK_BOOKINGS.length : MOCK_BOOKINGS.filter(b => b.status === t.id).length }))}
+        active={activeTab} onChange={handleTabChange} />
 
       <div className="flex flex-col gap-4">
         {bookings.length === 0 ? (
@@ -60,7 +78,7 @@ export default function CustomerBookings() {
             <p className="text-4xl mb-2">📭</p>
             <p className="font-medium">No {activeTab} bookings</p>
           </div>
-        ) : bookings.map(b => (
+        ) : displayed.map(b => (
           <motion.div key={b.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
             className="card flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1">
@@ -92,6 +110,18 @@ export default function CustomerBookings() {
             </div>
           </motion.div>
         ))}
+
+        {/* Conditional Pagination: only when activeTab === 'all' */}
+        {isDefaultAll && bookings.length > PAGE_SIZE && (
+          <div className="card p-3">
+            <Pagination
+              currentPage={page}
+              totalItems={bookings.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </div>
+        )}
       </div>
 
       {/* Cancel Modal */}

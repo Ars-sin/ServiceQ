@@ -6,16 +6,21 @@ import { statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 import { supabase } from '@/lib/supabase'
 
 export default function AdminProviders() {
   const [tab, setTab]           = useState('all')
+  const [page, setPage]         = useState(1)
   const [reviewItem, setReview] = useState(null)
   const [rejectReason, setRR]   = useState('')
   const [showReject, setShowReject] = useState(false)
   const [loading, setLoading]   = useState(true)
   const [providers, setProviders] = useState([])
   const [queue, setQueue]       = useState([])
+
+  const PAGE_SIZE = 5
+  const isDefaultAll = tab === 'all'
 
   // ─── Fetch real providers from Supabase ──────────────────────────────────
   const fetchProviders = async () => {
@@ -129,6 +134,15 @@ export default function AdminProviders() {
     { id: 'kyc', label: `KYC Queue (${queue.length})` },
   ]
 
+  const displayed = isDefaultAll
+    ? providers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : providers
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    setPage(1)
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -145,7 +159,7 @@ export default function AdminProviders() {
         </button>
       </div>
 
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      <Tabs tabs={tabs} active={tab} onChange={handleTabChange} />
 
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-2">
@@ -175,7 +189,7 @@ export default function AdminProviders() {
                       </td>
                     </tr>
                   ) : (
-                    providers.map(p => (
+                    displayed.map(p => (
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="p-4">
                           <div className="font-semibold text-gray-900">{p.name}</div>
@@ -233,6 +247,18 @@ export default function AdminProviders() {
                   )}
                 </tbody>
               </table>
+
+              {/* Conditional Pagination: only when tab === 'all' */}
+              {isDefaultAll && providers.length > PAGE_SIZE && (
+                <div className="p-4 border-t border-gray-100">
+                  <Pagination
+                    currentPage={page}
+                    totalItems={providers.length}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setPage}
+                  />
+                </div>
+              )}
             </div>
           )}
 

@@ -5,14 +5,19 @@ import toast from 'react-hot-toast'
 import { statusVariant } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 import { supabase } from '@/lib/supabase'
 
 export default function AdminUsers() {
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('all')
+  const [page, setPage]         = useState(1)
   const [viewUser, setViewUser] = useState(null)
   const [users, setUsers]       = useState([])
   const [loading, setLoading]   = useState(true)
+
+  const PAGE_SIZE = 6
+  const isDefaultAll = filter === 'all' && !search.trim()
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -52,6 +57,14 @@ export default function AdminUsers() {
   const filtered = users
     .filter(u => !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()))
     .filter(u => filter === 'all' || u.status === filter || u.role === filter)
+
+  useEffect(() => {
+    setPage(1)
+  }, [filter, search])
+
+  const displayed = isDefaultAll
+    ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : filtered
 
   const action = async (id, newStatus) => {
     const isActive = newStatus === 'active'
@@ -134,7 +147,7 @@ export default function AdminUsers() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(u => (
+                displayed.map(u => (
                   <tr key={u.id} className="hover:bg-gray-50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
@@ -191,6 +204,18 @@ export default function AdminUsers() {
               )}
             </tbody>
           </table>
+
+          {/* Conditional Pagination: only when filter is all and no search query */}
+          {isDefaultAll && filtered.length > PAGE_SIZE && (
+            <div className="p-4 border-t border-gray-100">
+              <Pagination
+                currentPage={page}
+                totalItems={filtered.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </div>
       )}
 

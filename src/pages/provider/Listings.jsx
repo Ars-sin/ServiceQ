@@ -6,12 +6,18 @@ import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 
 const MOCK = [
   { id: '1', title: 'Home Cleaning Service',   type: 'Service', category: 'Cleaning', price: 500,  unit: 'per session', status: 'active',   bookings: 28, color: 'from-purple-400 to-pink-400' },
   { id: '2', title: 'Deep Cleaning Package',   type: 'Service', category: 'Cleaning', price: 1200, unit: 'per session', status: 'active',   bookings: 14, color: 'from-violet-400 to-purple-400' },
   { id: '3', title: 'Office Cleaning Service', type: 'Service', category: 'Cleaning', price: 800,  unit: 'per session', status: 'inactive', bookings: 5,  color: 'from-pink-400 to-rose-400' },
   { id: '4', title: 'Post-Event Cleanup',      type: 'Service', category: 'Cleaning', price: 1500, unit: 'per session', status: 'archived', bookings: 8,  color: 'from-fuchsia-400 to-pink-400' },
+  { id: '5', title: 'Sofa & Upholstery Care',  type: 'Service', category: 'Cleaning', price: 650,  unit: 'per session', status: 'active',   bookings: 19, color: 'from-blue-400 to-indigo-400' },
+  { id: '6', title: 'Window & Glass Cleaning', type: 'Service', category: 'Cleaning', price: 400,  unit: 'per session', status: 'active',   bookings: 11, color: 'from-cyan-400 to-blue-400' },
+  { id: '7', title: 'Commercial Kitchen Clean',type: 'Service', category: 'Cleaning', price: 2200, unit: 'per session', status: 'inactive', bookings: 3,  color: 'from-amber-400 to-orange-400' },
+  { id: '8', title: 'Move-in / Move-out Pack', type: 'Service', category: 'Cleaning', price: 1800, unit: 'per session', status: 'active',   bookings: 22, color: 'from-emerald-400 to-teal-400' },
+  { id: '9', title: 'Mattress Sanitization',   type: 'Service', category: 'Cleaning', price: 550,  unit: 'per session', status: 'active',   bookings: 9,  color: 'from-teal-400 to-cyan-400' },
 ]
 
 const TABS = [
@@ -25,11 +31,25 @@ const WIZARD_STEPS = ['Type & Category', 'Details & Photos', 'Pricing', 'Locatio
 
 export default function ProviderListings() {
   const [tab, setTab]               = useState('all')
+  const [page, setPage]             = useState(1)
   const [showAdd, setShowAdd]       = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
   const [listings, setListings]     = useState(MOCK)
 
+  const PAGE_SIZE = 4
+  const isDefaultAll = tab === 'all'
+
   const visible = listings.filter(l => tab === 'all' || l.status === tab)
+
+  // Paginate only when default 'all' is selected; otherwise show unpaginated filtered list
+  const displayed = isDefaultAll
+    ? visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : visible
+
+  const handleTabChange = (newTab) => {
+    setTab(newTab)
+    setPage(1)
+  }
 
   const toggleStatus = id => {
     setListings(prev => prev.map(l =>
@@ -49,7 +69,7 @@ export default function ProviderListings() {
       </div>
 
       <Tabs tabs={TABS.map(t => ({ ...t, count: listings.filter(l => t.id === 'all' || l.status === t.id).length }))}
-        active={tab} onChange={setTab} />
+        active={tab} onChange={handleTabChange} />
 
       <div className="card overflow-x-auto p-0">
         <table className="w-full text-sm">
@@ -64,7 +84,7 @@ export default function ProviderListings() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {visible.map(l => (
+            {displayed.map(l => (
               <tr key={l.id} className="hover:bg-gray-50 transition-colors">
                 <td className="p-4">
                   <div className="flex items-center gap-3">
@@ -96,6 +116,18 @@ export default function ProviderListings() {
           <div className="py-16 text-center text-gray-400">
             <p className="text-4xl mb-2">📋</p>
             <p>No listings in this category</p>
+          </div>
+        )}
+
+        {/* Conditional Pagination: only when tab === 'all' */}
+        {isDefaultAll && visible.length > PAGE_SIZE && (
+          <div className="p-4 border-t border-gray-100">
+            <Pagination
+              currentPage={page}
+              totalItems={visible.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>

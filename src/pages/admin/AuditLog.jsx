@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { ShieldCheck, AlertCircle } from 'lucide-react'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
+import Pagination from '@/components/ui/Pagination'
 import { relativeTime } from '@/lib/utils'
 
 const LOGS = [
@@ -30,6 +31,14 @@ const roleLabel = r => ({ superadmin: 'Super Admin', financial_staff: 'Financial
 export default function AdminAuditLog() {
   const [diffModal, setDiff] = useState(null)
   const [search, setSearch]  = useState('')
+  const [page, setPage]      = useState(1)
+
+  const PAGE_SIZE = 5
+  const isDefaultAll = !search.trim()
+
+  useEffect(() => {
+    setPage(1)
+  }, [search])
 
   const filtered = LOGS.filter(l =>
     !search ||
@@ -37,6 +46,10 @@ export default function AdminAuditLog() {
     l.action.toLowerCase().includes(search.toLowerCase()) ||
     l.target.toLowerCase().includes(search.toLowerCase())
   )
+
+  const displayed = isDefaultAll
+    ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : filtered
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
@@ -68,7 +81,7 @@ export default function AdminAuditLog() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {filtered.map(log => (
+            {displayed.map(log => (
               <tr key={log.id} className="hover:bg-gray-50">
                 <td className="p-4 text-gray-400 text-xs whitespace-nowrap">
                   {new Date(log.ts).toLocaleString('en-PH')}
@@ -104,6 +117,18 @@ export default function AdminAuditLog() {
           <div className="py-12 text-center text-gray-400">
             <AlertCircle size={40} className="mx-auto mb-2 opacity-30" />
             <p>No log entries found</p>
+          </div>
+        )}
+
+        {/* Conditional Pagination: only when search is empty */}
+        {isDefaultAll && filtered.length > PAGE_SIZE && (
+          <div className="p-4 border-t border-gray-100">
+            <Pagination
+              currentPage={page}
+              totalItems={filtered.length}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>
