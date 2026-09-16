@@ -119,7 +119,7 @@ export default function RegisterPage() {
       }
 
       toast.success('Account created! Welcome to ServiceQ 🎉')
-      navigate(role === 'provider' ? '/provider/onboarding' : '/customer/dashboard')
+      navigate(role === 'provider' ? '/provider/onboarding' : '/customer/explore')
 
     } catch (err) {
       console.error('Registration error:', err)

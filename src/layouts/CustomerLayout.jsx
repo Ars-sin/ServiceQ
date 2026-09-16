@@ -1,15 +1,14 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
-  LayoutDashboard, Search, Heart, CalendarCheck,
+  Compass, Heart, CalendarCheck,
   User, LogOut, Bell, Menu,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 const NAV = [
-  { to: '/customer/dashboard', label: 'Discover',  icon: LayoutDashboard },
-  { to: '/customer/listings',  label: 'Browse',    icon: Search },
+  { to: '/customer/explore',   label: 'Explore',   icon: Compass },
   { to: '/customer/bookings',  label: 'Bookings',  icon: CalendarCheck },
   { to: '/customer/favorites', label: 'Favorites', icon: Heart },
   { to: '/customer/profile',   label: 'Profile',   icon: User },

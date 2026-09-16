@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
 const ROLE_REDIRECT = {
-  customer: '/customer/dashboard',
+  customer: '/customer/explore',
   provider: '/provider/dashboard',
   admin:    '/admin/dashboard',
 }
@@ -36,7 +36,7 @@ export default function LoginPage() {
         .eq('id', data.user.id)
         .single()
 
-      const destination = ROLE_REDIRECT[profile?.role] ?? '/customer/dashboard'
+      const destination = ROLE_REDIRECT[profile?.role] ?? '/customer/explore'
       toast.success('Welcome back!')
       navigate(destination, { replace: true })
     } catch (err) {

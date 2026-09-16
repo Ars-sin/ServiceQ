@@ -8,6 +8,7 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
 
 // Customer portal
 import CustomerLayout       from '@/layouts/CustomerLayout'
+import CustomerExplore      from '@/pages/customer/Explore'
 import CustomerDashboard    from '@/pages/customer/Dashboard'
 import CustomerListings     from '@/pages/customer/Listings'
 import CustomerListingDetail from '@/pages/customer/ListingDetail'
@@ -128,9 +129,10 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index               element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard"    element={<CustomerDashboard />} />
-        <Route path="listings"     element={<CustomerListings />} />
+        <Route index               element={<Navigate to="explore" replace />} />
+        <Route path="explore"      element={<CustomerExplore />} />
+        <Route path="dashboard"    element={<Navigate to="/customer/explore" replace />} />
+        <Route path="listings"     element={<Navigate to="/customer/explore" replace />} />
         <Route path="listings/:id" element={<CustomerListingDetail />} />
         <Route path="checkout/:id" element={<CustomerCheckout />} />
         <Route path="bookings"     element={<CustomerBookings />} />
