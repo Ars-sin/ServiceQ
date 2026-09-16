@@ -101,6 +101,22 @@ export default function ProviderOnboarding() {
           city: locationData.city || form.city,
           province: locationData.province || form.province,
           postal_code: locationData.postalCode || form.postalCode,
+          avatar_url: JSON.stringify({
+            status: 'under_verification',
+            business_name: form.businessName || form.fullName,
+            description: form.description,
+            gov_id_type: form.idType || 'PhilSys (National ID)',
+            gov_id_number: form.idNumber || '',
+            years_experience: parseInt(form.yearsExp) || 0,
+            hours_from: form.hoursFrom || '08:00',
+            hours_to: form.hoursTo || '17:00',
+            service_area: form.serviceArea || locationData.city || 'Cebu',
+            payout_method: payoutMethodEnum,
+            payout_account_name: form.accountName || form.fullName,
+            payout_account_number: payoutAccountNum || form.phone,
+            payout_bank_name: payoutBank,
+            submitted_at: new Date().toISOString()
+          })
         }).eq('id', user.id)
 
         // Save extended provider details into auth user_metadata for bulletproof backup

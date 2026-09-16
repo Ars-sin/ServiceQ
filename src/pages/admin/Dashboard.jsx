@@ -70,14 +70,25 @@ export default function Dashboard() {
   useEffect(() => {
     async function loadStats() {
       try {
-        const { data: profs } = await supabase.from('profiles').select('id, role')
+        const { data: profs } = await supabase.from('profiles').select('id, role, avatar_url, is_active')
         if (profs) {
           const uCount = profs.length
-          const pCount = profs.filter(p => p.role === 'provider').length
+          const pList = profs.filter(p => p.role === 'provider')
+          const pCount = pList.length
+          const pendingKYC = pList.filter(p => {
+            let meta = null
+            try {
+              if (p.avatar_url && p.avatar_url.startsWith('{')) meta = JSON.parse(p.avatar_url)
+            } catch {}
+            const localApproved = localStorage.getItem(`provider_verified_${p.id}`) === 'true'
+            if (localApproved) return false
+            return meta?.status === 'under_verification' || (!meta?.status && p.is_active !== false)
+          }).length
+
           setLiveStats({
             users: uCount,
             providers: pCount,
-            kycPending: pCount,
+            kycPending: pendingKYC,
           })
         }
       } catch (e) {

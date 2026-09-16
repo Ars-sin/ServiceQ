@@ -100,6 +100,18 @@ export default function ProviderProfile() {
       const effectivePhone = profData?.phone || meta.phone || localCache.phone || ''
       const effectiveCity = profData?.city || localCache.city || 'Cebu City'
 
+      let profileMeta = null
+      try {
+        if (profData?.avatar_url && profData.avatar_url.startsWith('{')) {
+          profileMeta = JSON.parse(profData.avatar_url)
+        }
+      } catch {}
+
+      const effectiveStatus = provData?.status ||
+        profileMeta?.status ||
+        (localStorage.getItem(`provider_verified_${user.id}`) === 'true' ? 'approved' :
+        (profData?.is_active === false ? 'suspended' : 'under_verification'))
+
       setForm({
         fullName: effectiveName,
         email: profData?.email || user.email || '',
@@ -110,24 +122,24 @@ export default function ProviderProfile() {
         province: profData?.province || localCache.province || 'Cebu',
         postalCode: profData?.postal_code || localCache.postalCode || '6000',
 
-        businessName: provData?.business_name || meta.business_name || localCache.businessName || (effectiveName ? `${effectiveName}'s Services` : 'Service Provider'),
-        description: provData?.business_description || meta.business_description || localCache.description || '',
-        providerType: (Array.isArray(provData?.provider_type) && provData?.provider_type[0]) || meta.provider_type || localCache.providerType || 'service',
-        yearsExp: String(provData?.years_experience ?? meta.years_experience ?? localCache.yearsExp ?? '2'),
-        hoursFrom: provData?.operating_hours_from || meta.operating_hours_from || localCache.hoursFrom || '08:00',
-        hoursTo: provData?.operating_hours_to || meta.operating_hours_to || localCache.hoursTo || '17:00',
-        serviceArea: provData?.service_area || meta.service_area || localCache.serviceArea || `${effectiveCity}, Metro Cebu`,
-        facebookUrl: provData?.facebook_url || meta.facebook_url || localCache.facebookUrl || '',
-        instagramUrl: provData?.instagram_url || meta.instagram_url || localCache.instagramUrl || '',
+        businessName: provData?.business_name || profileMeta?.business_name || meta.business_name || localCache.businessName || (effectiveName ? `${effectiveName}'s Services` : 'Service Provider'),
+        description: provData?.business_description || profileMeta?.description || meta.business_description || localCache.description || '',
+        providerType: (Array.isArray(provData?.provider_type) && provData?.provider_type[0]) || profileMeta?.provider_type || meta.provider_type || localCache.providerType || 'service',
+        yearsExp: String(provData?.years_experience ?? profileMeta?.years_experience ?? meta.years_experience ?? localCache.yearsExp ?? '2'),
+        hoursFrom: provData?.operating_hours_from || profileMeta?.hours_from || meta.operating_hours_from || localCache.hoursFrom || '08:00',
+        hoursTo: provData?.operating_hours_to || profileMeta?.hours_to || meta.operating_hours_to || localCache.hoursTo || '17:00',
+        serviceArea: provData?.service_area || profileMeta?.service_area || meta.service_area || localCache.serviceArea || `${effectiveCity}, Metro Cebu`,
+        facebookUrl: provData?.facebook_url || profileMeta?.facebook_url || meta.facebook_url || localCache.facebookUrl || '',
+        instagramUrl: provData?.instagram_url || profileMeta?.instagram_url || meta.instagram_url || localCache.instagramUrl || '',
 
-        idType: provData?.gov_id_type || meta.gov_id_type || localCache.idType || 'PhilSys (National ID)',
-        idNumber: provData?.gov_id_number || meta.gov_id_number || localCache.idNumber || '',
-        status: provData?.status || (profData?.is_active ? 'approved' : 'under_verification'),
+        idType: provData?.gov_id_type || profileMeta?.gov_id_type || meta.gov_id_type || localCache.idType || 'PhilSys (National ID)',
+        idNumber: provData?.gov_id_number || profileMeta?.gov_id_number || meta.gov_id_number || localCache.idNumber || '',
+        status: effectiveStatus,
 
-        payoutMethod: provData?.payout_method || meta.payout_method || localCache.payoutMethod || 'gcash',
-        payoutAccountName: provData?.payout_account_name || meta.payout_account_name || localCache.payoutAccountName || effectiveName,
-        payoutAccountNumber: provData?.payout_account_number || meta.payout_account_number || meta.payout_number || localCache.payoutAccountNumber || effectivePhone,
-        payoutBankName: provData?.payout_bank_name || meta.payout_bank_name || localCache.payoutBankName || '',
+        payoutMethod: provData?.payout_method || profileMeta?.payout_method || meta.payout_method || localCache.payoutMethod || 'gcash',
+        payoutAccountName: provData?.payout_account_name || profileMeta?.payout_account_name || meta.payout_account_name || localCache.payoutAccountName || effectiveName,
+        payoutAccountNumber: provData?.payout_account_number || profileMeta?.payout_account_number || meta.payout_account_number || meta.payout_number || localCache.payoutAccountNumber || effectivePhone,
+        payoutBankName: provData?.payout_bank_name || profileMeta?.payout_bank_name || meta.payout_bank_name || localCache.payoutBankName || '',
       })
     } catch (err) {
       console.error('Error fetching provider profile:', err)
@@ -148,7 +160,40 @@ export default function ProviderProfile() {
 
     setSaving(true)
     try {
-      // 1. Update profiles table
+      // 1. Fetch current profile to retain status in avatar_url
+      const { data: currentProf } = await supabase
+        .from('profiles')
+        .select('avatar_url')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      let currentMeta = {}
+      try {
+        if (currentProf?.avatar_url && currentProf.avatar_url.startsWith('{')) {
+          currentMeta = JSON.parse(currentProf.avatar_url)
+        }
+      } catch {}
+
+      const updatedMeta = {
+        ...currentMeta,
+        business_name: form.businessName,
+        description: form.description,
+        years_experience: form.yearsExp,
+        hours_from: form.hoursFrom,
+        hours_to: form.hoursTo,
+        service_area: form.serviceArea,
+        gov_id_type: form.idType,
+        gov_id_number: form.idNumber,
+        payout_method: form.payoutMethod,
+        payout_account_name: form.payoutAccountName,
+        payout_account_number: form.payoutAccountNumber,
+        payout_bank_name: form.payoutBankName,
+        facebook_url: form.facebookUrl,
+        instagram_url: form.instagramUrl,
+        status: currentMeta.status || form.status || 'under_verification',
+      }
+
+      // Update profiles table
       const { error: profErr } = await supabase
         .from('profiles')
         .update({
@@ -159,6 +204,7 @@ export default function ProviderProfile() {
           city: form.city,
           province: form.province,
           postal_code: form.postalCode,
+          avatar_url: JSON.stringify(updatedMeta),
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id)
@@ -239,7 +285,10 @@ export default function ProviderProfile() {
     }
   }
 
-  const isVerified = form.status === 'approved' || profile?.is_active === true || localStorage.getItem('serviceq_kyc_approved') === 'true'
+  const isVerified = form.status === 'approved' ||
+                     profile?.avatar_url?.includes('"status":"approved"') ||
+                     localStorage.getItem(`provider_verified_${user?.id}`) === 'true' ||
+                     localStorage.getItem('serviceq_kyc_approved') === 'true'
 
   if (loading) {
     return (

@@ -25,19 +25,57 @@ export default function ProviderDashboard() {
 
   useEffect(() => {
     async function checkVerification() {
-      if (profile?.is_active) {
+      if (!user?.id) return
+
+      // 1. Check profile avatar_url metadata (persisted in profiles table)
+      let meta = null
+      try {
+        if (profile?.avatar_url && profile.avatar_url.startsWith('{')) {
+          meta = JSON.parse(profile.avatar_url)
+        }
+      } catch {}
+
+      if (!meta) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('avatar_url, is_active')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (prof?.avatar_url && prof.avatar_url.startsWith('{')) {
+          try { meta = JSON.parse(prof.avatar_url) } catch {}
+        }
+      }
+
+      if (meta?.status === 'approved') {
         setIsVerified(true)
         return
       }
-      if (user?.id) {
-        const { data } = await supabase.from('providers').select('status').eq('user_id', user.id).maybeSingle()
-        if (data?.status === 'approved') {
-          setIsVerified(true)
-          return
-        }
+      if (meta?.status === 'rejected' || meta?.status === 'suspended') {
+        setIsVerified(false)
+        return
       }
-      const approved = localStorage.getItem('serviceq_kyc_approved') === 'true'
-      setIsVerified(approved)
+
+      // 2. Check providers table if populated
+      const { data: prov } = await supabase
+        .from('providers')
+        .select('status')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (prov?.status === 'approved') {
+        setIsVerified(true)
+        return
+      }
+      if (prov?.status === 'rejected' || prov?.status === 'suspended') {
+        setIsVerified(false)
+        return
+      }
+
+      // 3. Local storage fallback
+      const localApproved = localStorage.getItem(`provider_verified_${user.id}`) === 'true' ||
+                            localStorage.getItem('serviceq_kyc_approved') === 'true'
+      setIsVerified(localApproved)
     }
     checkVerification()
   }, [profile, user?.id])
