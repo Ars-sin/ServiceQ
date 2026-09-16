@@ -6,6 +6,7 @@ import { formatPHP, statusVariant } from '@/lib/utils'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 const BOOKINGS = [
   { id: 'SQ-A1B2', customer: 'Ana Reyes',    service: 'Home Cleaning',    date: '2026-09-10', amount: 1100, status: 'scheduled' },
@@ -19,14 +20,27 @@ const STATUS_COUNTS = { pending: 3, scheduled: 5, active: 2, completed: 28, canc
 
 export default function ProviderDashboard() {
   const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
   const [isVerified, setIsVerified] = useState(false)
 
   useEffect(() => {
-    // Check if approved in admin portal
-    const approved = localStorage.getItem('serviceq_kyc_approved') === 'true'
-    setIsVerified(approved)
-  }, [])
+    async function checkVerification() {
+      if (profile?.is_active) {
+        setIsVerified(true)
+        return
+      }
+      if (user?.id) {
+        const { data } = await supabase.from('providers').select('status').eq('user_id', user.id).maybeSingle()
+        if (data?.status === 'approved') {
+          setIsVerified(true)
+          return
+        }
+      }
+      const approved = localStorage.getItem('serviceq_kyc_approved') === 'true'
+      setIsVerified(approved)
+    }
+    checkVerification()
+  }, [profile, user?.id])
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">

@@ -86,6 +86,12 @@ export default function ProviderOnboarding() {
 
     if (user?.id) {
       try {
+        const payoutMethodEnum = ['gcash', 'maya', 'bdo', 'bpi', 'metrobank'].includes(form.payoutMethod?.toLowerCase())
+          ? form.payoutMethod.toLowerCase()
+          : 'gcash'
+        const payoutAccountNum = form.payoutMethod === 'gcash' ? form.gcashNum : form.payoutMethod === 'maya' ? form.mayaNum : form.accountNum
+        const payoutBank = form.payoutMethod === 'bank' ? form.bankName : null
+
         await supabase.from('profiles').update({
           full_name: form.fullName,
           phone: form.phone,
@@ -97,22 +103,43 @@ export default function ProviderOnboarding() {
           postal_code: locationData.postalCode || form.postalCode,
         }).eq('id', user.id)
 
+        // Save extended provider details into auth user_metadata for bulletproof backup
+        await supabase.auth.updateUser({
+          data: {
+            business_name: form.businessName || form.fullName,
+            business_description: form.description,
+            provider_type: ['service'],
+            years_experience: parseInt(form.yearsExp) || 0,
+            operating_hours_from: form.hoursFrom || '08:00',
+            operating_hours_to: form.hoursTo || '17:00',
+            service_area: form.serviceArea || locationData.city || 'Cebu',
+            gov_id_type: form.idType || 'PhilSys (National ID)',
+            gov_id_number: form.idNumber || '',
+            payout_method: payoutMethodEnum,
+            payout_account_name: form.accountName || form.fullName,
+            payout_account_number: payoutAccountNum || form.phone,
+            payout_bank_name: payoutBank,
+            status: 'under_verification',
+          }
+        })
+
         const { data: provResult, error: provErr } = await supabase.from('providers').upsert({
           user_id: user.id,
           business_name: form.businessName || form.fullName,
           business_description: form.description,
-          provider_type: form.providerType || 'individual',
+          provider_type: ['service'],
           years_experience: parseInt(form.yearsExp) || 0,
           operating_hours_from: form.hoursFrom || '08:00',
           operating_hours_to: form.hoursTo || '17:00',
           service_area: form.serviceArea || locationData.city || 'Cebu',
           gov_id_type: form.idType || 'PhilSys (National ID)',
           gov_id_number: form.idNumber || '',
-          gcash_number: form.gcashNum || form.phone,
-          maya_number: form.mayaNum || '',
-          bank_name: form.bankName || '',
-          bank_account_name: form.accountName || form.fullName,
-          bank_account_number: form.accountNum || '',
+          payout_method: payoutMethodEnum,
+          payout_account_name: form.accountName || form.fullName,
+          payout_account_number: payoutAccountNum || form.phone,
+          payout_bank_name: payoutBank,
+          facebook_url: form.facebook || '',
+          instagram_url: form.instagram || '',
           status: 'under_verification',
         }, { onConflict: 'user_id' })
 
@@ -121,6 +148,28 @@ export default function ProviderOnboarding() {
         } else {
           console.log('Provider application saved to database!')
         }
+
+        // Cache locally for immediate synchronization
+        try {
+          localStorage.setItem(`provider_profile_${user.id}`, JSON.stringify({
+            businessName: form.businessName || form.fullName,
+            description: form.description,
+            yearsExp: form.yearsExp || '1',
+            hoursFrom: form.hoursFrom || '08:00',
+            hoursTo: form.hoursTo || '17:00',
+            serviceArea: form.serviceArea || locationData.city || 'Cebu',
+            idType: form.idType || 'PhilSys (National ID)',
+            idNumber: form.idNumber || '',
+            payoutMethod: payoutMethodEnum,
+            payoutAccountName: form.accountName || form.fullName,
+            payoutAccountNumber: payoutAccountNum || form.phone,
+            payoutBankName: payoutBank || '',
+            facebookUrl: form.facebook || '',
+            instagramUrl: form.instagram || '',
+            status: 'under_verification',
+          }))
+          localStorage.setItem('provider_verified', 'false')
+        } catch {}
       } catch (err) {
         console.error('Provider save error:', err)
       }
