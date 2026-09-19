@@ -14,17 +14,40 @@ const ROLE_REDIRECT = {
 export default function LoginPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
-  const [showPw, setShowPw] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [showPw, setShowPw]           = useState(false)
+  const [loading, setLoading]         = useState(false)
+  const [unconfirmed, setUnconfirmed] = useState(false)
+  const [resending, setResending]     = useState(false)
 
-  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+  const handleChange = e => {
+    setForm(f => ({ ...f, [e.target.name]: e.target.value }))
+    if (unconfirmed) setUnconfirmed(false)
+  }
+
+  const handleResendVerification = async () => {
+    if (!form.email.trim()) return toast.error('Please enter your email')
+    setResending(true)
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: form.email.trim(),
+      })
+      if (error) throw error
+      toast.success(`Verification email sent to ${form.email.trim()}! Check your inbox.`)
+    } catch (err) {
+      toast.error(err.message || 'Failed to resend verification email')
+    } finally {
+      setResending(false)
+    }
+  }
 
   const handleSubmit = async e => {
     e.preventDefault()
     setLoading(true)
+    setUnconfirmed(false)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: form.email,
+        email: form.email.trim(),
         password: form.password,
       })
       if (error) throw error
@@ -40,7 +63,12 @@ export default function LoginPage() {
       toast.success('Welcome back!')
       navigate(destination, { replace: true })
     } catch (err) {
-      toast.error(err.message ?? 'Login failed. Please try again.')
+      if (err.message?.toLowerCase().includes('email not confirmed')) {
+        setUnconfirmed(true)
+        toast.error('Your email is not verified yet. Please check your inbox.')
+      } else {
+        toast.error(err.message ?? 'Login failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -100,6 +128,25 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
+
+            {unconfirmed && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex flex-col gap-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                  <span>⚠️</span> Email Not Verified
+                </div>
+                <p className="text-amber-800 leading-relaxed">
+                  Your email address has not been verified yet. Please check your inbox for the verification code or confirmation link.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resending}
+                  className="text-left font-bold text-brand-700 hover:text-brand-800 hover:underline pt-0.5"
+                >
+                  {resending ? 'Sending verification email...' : 'Resend Verification Email →'}
+                </button>
+              </div>
+            )}
 
             <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
               {loading
