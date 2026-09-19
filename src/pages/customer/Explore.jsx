@@ -17,7 +17,7 @@ const TYPE_TABS = [
   { id: 'rentals',  label: 'Rentals',      icon: Package },
 ]
 
-const ALL_LISTINGS = [
+export const ALL_LISTINGS = [
   { id: '1',  type: 'services', category: 'Services', subCategory: 'Cleaning',     title: 'Professional Home Cleaning',              price: 500,  unit: 'per session', rating: 4.8, reviews: 42, distance: 0.8, provider: 'Maria Santos',        tag: 'Top Rated' },
   { id: '2',  type: 'rentals',  category: 'Rentals',  subCategory: 'Apartment',    title: 'Studio Apartment near Cebu IT Park',       price: 4500, unit: 'per month',   rating: 4.5, reviews: 18, distance: 1.2, provider: 'Renzo Realty',        tag: 'Verified' },
   { id: '3',  type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'Laptop Rental (MacBook Pro M2)',           price: 800,  unit: 'per day',     rating: 4.9, reviews: 31, distance: 2.0, provider: 'TechRent Cebu',      tag: 'Fast Delivery' },
