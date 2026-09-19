@@ -5,6 +5,7 @@ import { Star, MapPin, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Ca
 import toast from 'react-hot-toast'
 import { formatPHP, calcFees } from '@/lib/utils'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
+import { isFavorite, toggleFavorite } from '@/lib/favorites'
 
 const DEFAULT_MOCK = {
   id: '1',
@@ -29,9 +30,21 @@ export default function ListingDetail() {
   const navigate = useNavigate()
   const { id } = useParams()
   const [selectedPhoto, setSelectedPhoto] = useState(0)
-  const [fav, setFav] = useState(false)
+  const [fav, setFav] = useState(() => isFavorite(id))
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
   const [sessions, setSessions] = useState(1)
+
+  // Sync favorites state
+  useEffect(() => {
+    setFav(isFavorite(id))
+    const handler = () => setFav(isFavorite(id))
+    window.addEventListener('serviceq_favorites_updated', handler)
+    window.addEventListener('storage', handler)
+    return () => {
+      window.removeEventListener('serviceq_favorites_updated', handler)
+      window.removeEventListener('storage', handler)
+    }
+  }, [id])
 
   // Dynamically resolve listing from ALL_LISTINGS by id
   const listing = useMemo(() => {
@@ -222,8 +235,14 @@ export default function ListingDetail() {
               Book Now
             </button>
 
-            <button onClick={() => { setFav(v => !v); toast(fav ? 'Removed from favorites' : 'Added to favorites!') }}
-              className={`btn-secondary w-full gap-2 ${fav ? 'text-red-500 border-red-200 bg-red-50' : ''}`}>
+            <button
+              onClick={() => {
+                const isAdded = toggleFavorite(listing.id)
+                setFav(isAdded)
+                toast(isAdded ? 'Saved to favorites!' : 'Removed from favorites')
+              }}
+              className={`btn-secondary w-full gap-2 ${fav ? 'text-red-500 border-red-200 bg-red-50' : ''}`}
+            >
               <Heart size={16} className={fav ? 'fill-red-500' : ''} />
               {fav ? 'Saved to Favorites' : 'Add to Favorites'}
             </button>

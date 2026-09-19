@@ -38,7 +38,17 @@ const wdVariant = s => ({ pending_review: 'warning', verified: 'info', approved:
 export default function AdminFinancials() {
   const [tab, setTab] = useState('ledger')
   const [page, setPage] = useState(1)
-  const [withdrawals, setWithdrawals] = useState(WITHDRAWALS)
+  const [withdrawals, setWithdrawals] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
+      if (Array.isArray(stored) && stored.length > 0) {
+        const storedIds = new Set(stored.map(w => w.id))
+        const remaining = WITHDRAWALS.filter(w => !storedIds.has(w.id))
+        return [...stored, ...remaining]
+      }
+    } catch {}
+    return WITHDRAWALS
+  })
   const [txnFilter, setTxnFilter] = useState('all')
   const [rejectModal, setRejectModal] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
@@ -52,15 +62,30 @@ export default function AdminFinancials() {
   }
 
   const advanceWd = (id, status) => {
-    setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status } : w))
+    setWithdrawals(prev => {
+      const updated = prev.map(w => w.id === id ? { ...w, status } : w)
+      try {
+        localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+      } catch {}
+      return updated
+    })
     toast.success(`Status updated to: ${status.replace('_', ' ')}`)
   }
 
   const rejectWd = () => {
     if (!rejectNote.trim()) return toast.error('Enter rejection reason')
-    setWithdrawals(prev => prev.map(w => w.id === rejectModal.id ? { ...w, status: 'rejected' } : w))
+    setWithdrawals(prev => {
+      const updated = prev.map(w => w.id === rejectModal.id ? { ...w, status: 'rejected', rejectNote } : w)
+      try {
+        localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+      } catch {}
+      return updated
+    })
     toast.error('Withdrawal rejected')
-    setRejectModal(null); setRejectNote('')
+    setRejectModal(null)
+    setRejectNote('')
   }
 
   const handleTxnFilterChange = (val) => {

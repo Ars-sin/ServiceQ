@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
+import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
 
 const TYPE_TABS = [
   { id: 'all',      label: 'All Listings', icon: LayoutGrid },
@@ -35,7 +36,7 @@ export const ALL_LISTINGS = [
   { id: '15', type: 'rentals',  category: 'Rentals',  subCategory: 'Vehicles',     title: 'Toyota Innova Van with Driver',            price: 2800, unit: 'per day',     rating: 5.0, reviews: 64, distance: 2.4, provider: 'Sugbo Van Rentals',  tag: 'Tour Ready' },
 ]
 
-function getListingIcon(subCategory) {
+export function getListingIcon(subCategory) {
   switch (subCategory) {
     case 'Cleaning':  return <Sparkles size={22} className="text-brand-600" />
     case 'Apartment':
@@ -51,9 +52,7 @@ function getListingIcon(subCategory) {
   }
 }
 
-function ListingCard({ listing, onClick }) {
-  const [fav, setFav] = useState(false)
-
+function ListingCard({ listing, onClick, isFav, onToggleFav }) {
   return (
     <motion.div
       whileHover={{ y: -4 }}
@@ -70,13 +69,12 @@ function ListingCard({ listing, onClick }) {
         <button
           onClick={e => {
             e.stopPropagation()
-            setFav(v => !v)
-            toast(fav ? 'Removed from favorites' : 'Added to favorites!')
+            onToggleFav?.(listing.id)
           }}
           className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition-colors"
-          title="Favorite"
+          title={isFav ? "Remove from favorites" : "Add to favorites"}
         >
-          <span className={fav ? 'text-red-500 font-bold' : 'text-gray-400'}>♥</span>
+          <span className={isFav ? 'text-red-500 font-bold' : 'text-gray-400'}>♥</span>
         </button>
 
         <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 flex-wrap">
@@ -140,6 +138,23 @@ export default function CustomerExplore() {
   const [minRating, setMinRating]       = useState(0)
   const [quickFilter, setQuickFilter]   = useState(null)
   const [showFilters, setShowFilters]   = useState(false)
+  const [favoriteIds, setFavoriteIds]   = useState(getFavoriteIds)
+
+  useEffect(() => {
+    const handler = () => setFavoriteIds(getFavoriteIds())
+    window.addEventListener('serviceq_favorites_updated', handler)
+    window.addEventListener('storage', handler)
+    return () => {
+      window.removeEventListener('serviceq_favorites_updated', handler)
+      window.removeEventListener('storage', handler)
+    }
+  }, [])
+
+  const handleToggleFav = (id) => {
+    const isAdded = toggleFavorite(id)
+    setFavoriteIds(getFavoriteIds())
+    toast(isAdded ? 'Added to favorites!' : 'Removed from favorites')
+  }
 
   const isDefaultAll =
     selectedType === 'all' &&
@@ -449,6 +464,8 @@ export default function CustomerExplore() {
               <ListingCard
                 key={listing.id}
                 listing={listing}
+                isFav={favoriteIds.includes(String(listing.id))}
+                onToggleFav={handleToggleFav}
                 onClick={() => navigate(`/customer/listings/${listing.id}`)}
               />
             ))}
