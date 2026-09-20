@@ -134,113 +134,117 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* ── HERO SECTION (Shades of Blue + High Contrast) ───────── */}
-      <section id="hero" className="relative overflow-hidden bg-gradient-to-b from-brand-950 via-brand-900 to-brand-850 pt-16 pb-24 text-white">
-        {/* Subtle decorative glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-brand-500/15 blur-[120px] rounded-full pointer-events-none" />
+      {/* ── HERO & EXPLORE (Seamless Gradient Blend) ────────────── */}
+      <div className="relative overflow-hidden bg-gradient-to-b from-brand-950 via-brand-900 to-brand-950 text-white">
+        {/* Subtle ambient decorative glows */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-brand-500/15 blur-[140px] rounded-full pointer-events-none" />
+        <div className="absolute top-[45%] left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-brand-400/10 blur-[150px] rounded-full pointer-events-none" />
 
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 relative z-10 text-center">
-          <AnimFade>
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-800/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-semibold mb-6 shadow-sm">
-              <MapPin size={14} className="text-brand-300" /> Serving Cebu City & surrounding areas
-            </div>
-          </AnimFade>
-
-          <AnimFade delay={0.1}>
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight mb-6">
-              ServiceQ : One search.<br />
-              <span className="text-brand-300">Endless possibilities, locally</span>
-            </h1>
-          </AnimFade>
-
-          <AnimFade delay={0.2}>
-            <p className="text-base sm:text-lg text-brand-100 leading-relaxed mb-10 max-w-2xl mx-auto">
-              We connect you to our trusted local providers for rental space, gear, and daily services. Compare options, check live availability, and book what you need in seconds.
-            </p>
-          </AnimFade>
-
-          {/* High-visibility Action Buttons */}
-          <AnimFade delay={0.3}>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-              <Link
-                to="/register"
-                className="w-full sm:w-auto px-8 py-4 bg-white text-brand-950 hover:bg-brand-50 font-extrabold text-base rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
-              >
-                Create Free Account <ChevronRight size={18} />
-              </Link>
-              <Link
-                to="/login"
-                className="w-full sm:w-auto px-8 py-4 bg-brand-800/80 hover:bg-brand-700 text-white font-bold text-base rounded-2xl border-2 border-brand-400/70 shadow-lg transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
-              >
-                Sign In to Dashboard <ArrowRight size={18} />
-              </Link>
-            </div>
-          </AnimFade>
-
-          {/* 3 Floating White Cards on Blue (Matching User Mockup) */}
-          <AnimFade delay={0.4}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-14 text-left">
-              <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
-                <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
-                  <Zap size={22} />
-                </div>
-                <h3 className="font-bold text-gray-900 text-base mb-1">Fast Service Booking</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Book cleaners, AC technicians, makeup artists, and tutors with verified pricing.</p>
+        {/* ── HERO SECTION ── */}
+        <section id="hero" className="relative z-10 pt-16 pb-12">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
+            <AnimFade>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-800/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-semibold mb-6 shadow-sm">
+                <MapPin size={14} className="text-brand-300" /> Serving Cebu City & surrounding areas
               </div>
+            </AnimFade>
 
-              <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200 sm:-translate-y-2 ring-2 ring-brand-300">
-                <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-3">
-                  <Sparkles size={22} />
-                </div>
-                <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Top Rated</span>
-                <h3 className="font-bold text-gray-900 text-base mb-1">Gear & Space Rentals</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Rent cameras, event equipment, party needs, and rental spaces without friction.</p>
-              </div>
+            <AnimFade delay={0.1}>
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight mb-6">
+                ServiceQ : One search.<br />
+                <span className="text-brand-300">Endless possibilities, locally</span>
+              </h1>
+            </AnimFade>
 
-              <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
-                <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
-                  <Award size={22} />
-                </div>
-                <h3 className="font-bold text-gray-900 text-base mb-1">Verified Local Providers</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">Government ID-checked providers in Cebu with authentic ratings and secure payouts.</p>
-              </div>
-            </div>
-          </AnimFade>
-        </div>
-      </section>
-
-      {/* ── EXPLORE SERVICES (Deep Blue Background) ─────────────── */}
-      <section id="explore" className="py-20 bg-gradient-to-b from-brand-900 via-brand-800 to-brand-900 text-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <AnimFade>
-            <div className="text-center mb-12">
-              <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">Explore ServiceQ</h2>
-              <p className="text-brand-100 text-sm max-w-md mx-auto">
-                Find exactly what you need across Cebu's trusted local marketplace.
+            <AnimFade delay={0.2}>
+              <p className="text-base sm:text-lg text-brand-100 leading-relaxed mb-10 max-w-2xl mx-auto">
+                We connect you to our trusted local providers for rental space, gear, and daily services. Compare options, check live availability, and book what you need in seconds.
               </p>
-            </div>
-          </AnimFade>
+            </AnimFade>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {FEATURED_CATEGORIES.map((cat, idx) => (
-              <AnimFade key={cat.title} delay={idx * 0.08}>
-                <div className="bg-white rounded-2xl p-6 shadow-xl border border-white/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between h-full">
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700">
-                        {cat.tag}
-                      </span>
-                      <span className="text-xs text-gray-400 font-medium">{cat.count}</span>
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900 mb-1">{cat.title}</h3>
-                    <p className="text-xs text-gray-500 leading-relaxed">{cat.desc}</p>
+            {/* High-visibility Action Buttons */}
+            <AnimFade delay={0.3}>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <Link
+                  to="/register"
+                  className="w-full sm:w-auto px-8 py-4 bg-white text-brand-950 hover:bg-brand-50 font-extrabold text-base rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
+                >
+                  Create Free Account <ChevronRight size={18} />
+                </Link>
+                <Link
+                  to="/login"
+                  className="w-full sm:w-auto px-8 py-4 bg-brand-800/80 hover:bg-brand-700 text-white font-bold text-base rounded-2xl border-2 border-brand-400/70 shadow-lg transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
+                >
+                  Sign In to Dashboard <ArrowRight size={18} />
+                </Link>
+              </div>
+            </AnimFade>
+
+            {/* 3 Floating White Cards on Blue (Matching User Mockup) */}
+            <AnimFade delay={0.4}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-14 text-left">
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
+                  <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                    <Zap size={22} />
                   </div>
+                  <h3 className="font-bold text-gray-900 text-base mb-1">Fast Service Booking</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">Book cleaners, AC technicians, makeup artists, and tutors with verified pricing.</p>
                 </div>
-              </AnimFade>
-            ))}
+
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200 sm:-translate-y-2 ring-2 ring-brand-300">
+                  <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-3">
+                    <Sparkles size={22} />
+                  </div>
+                  <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Top Rated</span>
+                  <h3 className="font-bold text-gray-900 text-base mb-1">Gear & Space Rentals</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">Rent cameras, event equipment, party needs, and rental spaces without friction.</p>
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
+                  <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                    <Award size={22} />
+                  </div>
+                  <h3 className="font-bold text-gray-900 text-base mb-1">Verified Local Providers</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">Government ID-checked providers in Cebu with authentic ratings and secure payouts.</p>
+                </div>
+              </div>
+            </AnimFade>
           </div>
-        </div>
-      </section>
+        </section>
+
+        {/* ── EXPLORE SERVICES ── */}
+        <section id="explore" className="relative z-10 pt-10 pb-20">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <AnimFade>
+              <div className="text-center mb-12">
+                <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">Explore ServiceQ</h2>
+                <p className="text-brand-100 text-sm max-w-md mx-auto">
+                  Find exactly what you need across Cebu's trusted local marketplace.
+                </p>
+              </div>
+            </AnimFade>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {FEATURED_CATEGORIES.map((cat, idx) => (
+                <AnimFade key={cat.title} delay={idx * 0.08}>
+                  <div className="bg-white rounded-2xl p-6 shadow-xl border border-white/50 hover:shadow-2xl hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between h-full">
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700">
+                          {cat.tag}
+                        </span>
+                        <span className="text-xs text-gray-400 font-medium">{cat.count}</span>
+                      </div>
+                      <h3 className="text-base font-bold text-gray-900 mb-1">{cat.title}</h3>
+                      <p className="text-xs text-gray-500 leading-relaxed">{cat.desc}</p>
+                    </div>
+                  </div>
+                </AnimFade>
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
 
       {/* ── FEATURES GRID ─────────────────────────────────────────── */}
       <section id="features" className="py-20 bg-brand-950 text-white border-t border-brand-800/60">

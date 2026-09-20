@@ -244,6 +244,14 @@ export default function RegisterPage() {
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }} className="w-full max-w-md">
 
+        {/* Back to Home */}
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-brand-600 transition-colors mb-4 px-3 py-1.5 rounded-xl hover:bg-white/80 border border-transparent hover:border-gray-200 group w-fit"
+        >
+          <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" /> Back to Home
+        </Link>
+
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <img src="/logo.png" alt="ServiceQ" className="h-20 w-auto object-contain mb-3" />
@@ -325,10 +333,18 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                <button type="button" onClick={nextStep}
-                  className="btn-primary btn-lg w-full flex items-center justify-center gap-2">
-                  Next: Set Location <ChevronRight size={16} />
-                </button>
+                <div className="flex gap-3">
+                  <Link
+                    to="/"
+                    className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold"
+                  >
+                    <ArrowLeft size={14} /> Back
+                  </Link>
+                  <button type="button" onClick={nextStep}
+                    className="btn-primary btn-lg flex-1 flex items-center justify-center gap-2">
+                    Next: Location <ChevronRight size={16} />
+                  </button>
+                </div>
               </motion.div>
             )}
 

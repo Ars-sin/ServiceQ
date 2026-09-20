@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -82,6 +82,14 @@ export default function LoginPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md"
       >
+        {/* Back to Home */}
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-brand-600 transition-colors mb-4 px-3 py-1.5 rounded-xl hover:bg-white/80 border border-transparent hover:border-gray-200 group w-fit"
+        >
+          <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" /> Back to Home
+        </Link>
+
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <img src="/logo.png" alt="ServiceQ" className="h-20 w-auto object-contain mb-3" />
