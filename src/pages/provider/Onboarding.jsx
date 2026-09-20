@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, ChevronRight, ChevronLeft, Upload } from 'lucide-react'
+import { CheckCircle, ChevronRight, ChevronLeft, Upload, ArrowLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { PROVIDER_TYPES, GOV_ID_TYPES, PAYMENT_METHODS, PH_REGIONS } from '@/lib/constants'
@@ -213,12 +213,32 @@ export default function ProviderOnboarding() {
             </div>
           </div>
         ))}
+
+        {/* Sidebar Exit */}
+        <div className="mt-auto pt-6 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors py-2 px-2.5 rounded-lg hover:bg-gray-50 w-full"
+          >
+            <ArrowLeft size={14} /> Back to Home
+          </button>
+        </div>
       </aside>
 
       {/* Main */}
       <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl">
         {/* Mobile step */}
         <div className="md:hidden mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900"
+            >
+              <ArrowLeft size={14} /> Back to Home
+            </button>
+          </div>
           <div className="flex items-center gap-2 mb-2">
             <div className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">{step + 1}</div>
             <span className="font-semibold text-sm">{STEPS[step]}</span>

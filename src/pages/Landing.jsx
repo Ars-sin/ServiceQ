@@ -114,6 +114,12 @@ export default function LandingPage() {
             <a href="#explore" className="hover:text-white transition">Explore</a>
             <a href="#features" className="hover:text-white transition">Features</a>
             <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
+            <Link
+              to="/register?role=provider"
+              className="text-emerald-300 hover:text-white font-semibold flex items-center gap-1 transition"
+            >
+              💼 Offer Services
+            </Link>
           </div>
 
           {/* Action Buttons with strong visibility */}
@@ -176,6 +182,17 @@ export default function LandingPage() {
                   className="w-full sm:w-auto px-8 py-4 bg-brand-800/80 hover:bg-brand-700 text-white font-bold text-base rounded-2xl border-2 border-brand-400/70 shadow-lg transition-all duration-200 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:scale-95"
                 >
                   Sign In to Dashboard <ArrowRight size={18} />
+                </Link>
+              </div>
+
+              {/* Dedicated Provider Onboarding Link */}
+              <div className="mt-4 text-xs sm:text-sm text-brand-200">
+                Are you a local service or rental provider?{' '}
+                <Link
+                  to="/register?role=provider"
+                  className="text-emerald-300 font-bold underline hover:text-emerald-200 transition"
+                >
+                  Register your business on ServiceQ →
                 </Link>
               </div>
             </AnimFade>
@@ -312,13 +329,19 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <Link
                 to="/register"
-                className="w-full sm:w-auto px-8 py-3.5 bg-white text-brand-900 hover:bg-brand-50 font-extrabold text-sm rounded-xl shadow-lg transition hover:scale-105"
+                className="w-full sm:w-auto px-7 py-3.5 bg-white text-brand-900 hover:bg-brand-50 font-extrabold text-sm rounded-xl shadow-lg transition hover:scale-105"
               >
                 Create Account
               </Link>
               <Link
+                to="/register?role=provider"
+                className="w-full sm:w-auto px-7 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm rounded-xl shadow-lg transition hover:scale-105 flex items-center justify-center gap-1.5"
+              >
+                💼 Become a Provider
+              </Link>
+              <Link
                 to="/login"
-                className="w-full sm:w-auto px-8 py-3.5 bg-brand-900/60 hover:bg-brand-900 text-white border-2 border-white/60 font-bold text-sm rounded-xl transition hover:scale-105"
+                className="w-full sm:w-auto px-7 py-3.5 bg-brand-900/60 hover:bg-brand-900 text-white border-2 border-white/60 font-bold text-sm rounded-xl transition hover:scale-105"
               >
                 Sign In
               </Link>

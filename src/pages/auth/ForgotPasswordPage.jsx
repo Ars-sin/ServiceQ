@@ -151,7 +151,18 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative py-12">
+      {/* ── Prominent Fixed/Floating Top Back Button ── */}
+      <div className="fixed top-4 left-4 z-50">
+        <Link
+          to="/login"
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:text-brand-600 hover:border-brand-300 font-semibold text-xs sm:text-sm shadow-sm transition-all hover:-translate-x-0.5 active:scale-95 group"
+        >
+          <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
+          <span>Back to Sign In</span>
+        </Link>
+      </div>
+
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md">
         {/* Logo */}
@@ -161,7 +172,7 @@ export default function ForgotPasswordPage() {
           <p className="text-gray-500 text-xs mt-0.5">Secure email verification with one-time code</p>
         </div>
 
-        <div className="card shadow-modal">
+        <div className="card shadow-modal border border-gray-100">
           {/* Step indicator */}
           {step < 4 && (
             <div className="flex items-center gap-2 mb-6">
@@ -206,11 +217,19 @@ export default function ForgotPasswordPage() {
                   </div>
                 </div>
 
-                <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
-                  {loading
-                    ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : 'Send 6-Digit OTP'}
-                </button>
+                <div className="flex gap-3 mt-1">
+                  <Link
+                    to="/login"
+                    className="btn-secondary flex-1 py-3 flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
+                  >
+                    <ArrowLeft size={16} /> Back
+                  </Link>
+                  <button type="submit" disabled={loading} className="btn-primary btn-lg flex-1 font-bold shadow-sm">
+                    {loading
+                      ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : 'Send 6-Digit OTP'}
+                  </button>
+                </div>
               </motion.form>
             )}
 
