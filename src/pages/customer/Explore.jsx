@@ -234,7 +234,7 @@ export default function CustomerExplore() {
     quickFilter !== null
 
   return (
-    <div className="max-w-6xl mx-auto w-full flex flex-col gap-6 pb-12">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 pb-12">
 
       {/* ── Top Header Bar ────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -482,6 +482,6 @@ export default function CustomerExplore() {
           )}
         </>
       )}
-    </div>
+    </motion.div>
   )
 }
