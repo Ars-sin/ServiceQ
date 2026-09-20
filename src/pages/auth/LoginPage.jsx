@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff, ArrowLeft, Briefcase, UserCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
 
 const ROLE_REDIRECT = {
   customer: '/customer/explore',
@@ -13,6 +15,7 @@ const ROLE_REDIRECT = {
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const { loginWithProfile } = useAuth()
   const [searchParams] = useSearchParams()
   const initialRole = searchParams.get('role') === 'provider' ? 'provider' : 'customer'
   const [loginRole, setLoginRole] = useState(initialRole)
@@ -22,6 +25,31 @@ export default function LoginPage() {
   const [loading, setLoading]         = useState(false)
   const [unconfirmed, setUnconfirmed] = useState(false)
   const [resending, setResending]     = useState(false)
+  const [showGoogleModal, setShowGoogleModal] = useState(false)
+
+  // Listen for active OAuth session (e.g. if redirected from Google OAuth)
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user?.email) {
+        // Query profiles to see if this email exists in the system
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', session.user.email)
+          .maybeSingle()
+
+        if (profile?.role) {
+          loginWithProfile(profile)
+          const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
+          toast.success(`Welcome back, ${profile.full_name || profile.email}!`)
+          navigate(destination, { replace: true })
+        } else {
+          toast('Google verified! Please choose your account type to complete registration.', { icon: '✨' })
+          navigate(`/register?email=${encodeURIComponent(session.user.email)}&name=${encodeURIComponent(session.user.user_metadata?.full_name || '')}&from=google`, { replace: true })
+        }
+      }
+    })
+  }, [navigate, loginWithProfile])
 
   const handleChange = e => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -233,8 +261,9 @@ export default function LoginPage() {
           {/* Social */}
           <div className="grid grid-cols-2 gap-3">
             <button
-              onClick={() => toast('Google login coming soon!')}
-              className="btn-secondary py-3 flex items-center justify-center"
+              type="button"
+              onClick={() => setShowGoogleModal(true)}
+              className="btn-secondary py-3 flex items-center justify-center hover:bg-gray-100 transition-colors"
               title="Sign in with Google"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
@@ -245,8 +274,9 @@ export default function LoginPage() {
               </svg>
             </button>
             <button
+              type="button"
               onClick={() => toast('Facebook login coming soon!')}
-              className="btn-secondary py-3 flex items-center justify-center"
+              className="btn-secondary py-3 flex items-center justify-center hover:bg-gray-100 transition-colors"
               title="Sign in with Facebook"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2" xmlns="http://www.w3.org/2000/svg">
@@ -273,6 +303,20 @@ export default function LoginPage() {
           )}
         </div>
       </motion.div>
+
+      {/* Google Sign-In & Verification Modal */}
+      <GoogleSignInModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSuccessLogin={(profile) => {
+          loginWithProfile(profile)
+          const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
+          navigate(destination, { replace: true })
+        }}
+        onProceedRegister={({ email, role }) => {
+          navigate(`/register?role=${role || 'customer'}&email=${encodeURIComponent(email)}&from=google`, { replace: true })
+        }}
+      />
     </div>
   )
 }
