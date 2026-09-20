@@ -654,7 +654,7 @@ export default function RegisterPage() {
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
-                    <span>Next: Location</span>
+                    <span>Next</span>
                     <ChevronRight size={16} />
                   </button>
                 </div>
@@ -743,7 +743,7 @@ export default function RegisterPage() {
                     onClick={() => setStep(0)}
                     className="btn-secondary flex-1 py-3 flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
                   >
-                    <ChevronLeft size={16} /> Back to Info
+                    <ChevronLeft size={16} /> Back
                   </button>
                   <button
                     type="button"
@@ -752,7 +752,7 @@ export default function RegisterPage() {
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
-                    <span>Next: Password</span>
+                    <span>Next</span>
                     <ChevronRight size={16} />
                   </button>
                 </div>
