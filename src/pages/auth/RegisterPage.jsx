@@ -671,25 +671,16 @@ export default function RegisterPage() {
                   </>
                 )}
 
-                {/* Prominent Action Buttons on Step 0 */}
-                <div className="flex gap-3 mt-2">
-                  <Link
-                    to="/"
-                    className="btn-secondary flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold hover:bg-gray-100"
-                  >
-                    <ArrowLeft size={16} /> Back to Home
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={nextStep}
-                    className={`btn-primary btn-lg flex-1 flex items-center justify-center gap-2 font-bold shadow-sm ${
-                      role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
-                    }`}
-                  >
-                    <span>Next</span>
-                    <ChevronRight size={16} />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className={`btn-primary btn-lg w-full flex items-center justify-center gap-2 font-bold shadow-sm mt-2 ${
+                    role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
+                  }`}
+                >
+                  <span>Next</span>
+                  <ChevronRight size={16} />
+                </button>
               </motion.div>
             )}
 
