@@ -95,6 +95,38 @@ export default function RegisterPage() {
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
+  const handleRoleChange = (newRole) => {
+    if (newRole === role) return
+    setRole(newRole)
+    setStep(0)
+    setForm({
+      fullName: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirmPassword: '',
+    })
+    setProviderDetails({
+      businessName: '',
+      providerType: 'service',
+      category: 'Cleaning & Home Care',
+      yearsExp: '1',
+      serviceCoverage: ['Cebu City', 'Mandaue City', 'Lapu-Lapu City'],
+    })
+    setLocation({
+      address: '',
+      barangay: '',
+      city: '',
+      province: '',
+      postalCode: '',
+      lat: null,
+      lng: null,
+    })
+    setAgreed(false)
+    setShowPw(false)
+    setOtp(['', '', '', '', '', ''])
+  }
+
   const handleProviderDetailChange = (key, val) => {
     setProviderDetails(prev => ({ ...prev, [key]: val }))
   }
@@ -384,7 +416,7 @@ export default function RegisterPage() {
             <div className="grid grid-cols-2 gap-3 mb-6">
               <button
                 type="button"
-                onClick={() => setRole('customer')}
+                onClick={() => handleRoleChange('customer')}
                 className={`p-3.5 rounded-xl border-2 text-left transition-all ${
                   role === 'customer'
                     ? 'border-brand-500 bg-brand-50/80 text-brand-800 shadow-sm ring-1 ring-brand-400'
@@ -399,7 +431,7 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                onClick={() => setRole('provider')}
+                onClick={() => handleRoleChange('provider')}
                 className={`p-3.5 rounded-xl border-2 text-left transition-all ${
                   role === 'provider'
                     ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm ring-1 ring-emerald-400'
