@@ -208,29 +208,19 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Action Buttons: Prominent Back Button & Submit Button Side-by-Side */}
-            <div className="flex gap-3 mt-1">
-              <Link
-                to="/"
-                className="btn-secondary flex-1 py-3 flex items-center justify-center gap-2 font-semibold text-sm hover:bg-gray-100"
-              >
-                <ArrowLeft size={16} /> Back to Home
-              </Link>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className={`btn-primary btn-lg flex-1 font-bold shadow-sm ${
-                  loginRole === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
-                }`}
-              >
-                {loading ? (
-                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  loginRole === 'provider' ? 'Sign In as Provider' : 'Sign In'
-                )}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`btn-primary btn-lg w-full font-bold shadow-sm mt-1 ${
+                loginRole === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
+              }`}
+            >
+              {loading ? (
+                <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'Sign In'
+              )}
+            </button>
           </form>
 
           {/* Divider */}
