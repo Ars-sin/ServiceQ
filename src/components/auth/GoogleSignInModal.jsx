@@ -9,6 +9,7 @@ export default function GoogleSignInModal({
   onClose,
   onSuccessLogin,
   onProceedRegister,
+  loginRole = 'customer',
 }) {
   const [email, setEmail]               = useState('')
   const [checking, setChecking]         = useState(false)
@@ -57,7 +58,17 @@ export default function GoogleSignInModal({
       }
 
       if (profile && profile.id) {
-        // Exists in system -> Direct log in!
+        // Enforce strict role boundary: Provider cannot log in via Customer, Customer cannot log in via Provider
+        if (loginRole === 'customer' && profile.role === 'provider') {
+          toast.error('This account is registered as a Provider. You cannot log in through the Customer portal. Please switch to the Provider tab.')
+          return
+        }
+        if (loginRole === 'provider' && profile.role === 'customer') {
+          toast.error('This account is registered as a Customer. You cannot log in through the Provider portal. Please switch to the Customer tab.')
+          return
+        }
+
+        // Exists in system and matches portal -> Direct log in!
         toast.success(`Google verification successful! Welcome back, ${profile.full_name || profile.email}!`)
         onSuccessLogin?.(profile)
         onClose()

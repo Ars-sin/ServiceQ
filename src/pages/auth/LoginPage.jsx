@@ -39,6 +39,20 @@ export default function LoginPage() {
           .maybeSingle()
 
         if (profile?.role) {
+          // Prevent cross-portal login
+          if (loginRole === 'customer' && profile.role === 'provider') {
+            await supabase.auth.signOut()
+            toast.error('This account is registered as a Provider. You cannot log in through the Customer portal. Please switch to the Provider tab.')
+            setLoginRole('provider')
+            return
+          }
+          if (loginRole === 'provider' && profile.role === 'customer') {
+            await supabase.auth.signOut()
+            toast.error('This account is registered as a Customer. You cannot log in through the Provider portal. Please switch to the Customer tab.')
+            setLoginRole('customer')
+            return
+          }
+
           loginWithProfile(profile)
           const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
           toast.success(`Welcome back, ${profile.full_name || profile.email}!`)
@@ -49,7 +63,7 @@ export default function LoginPage() {
         }
       }
     })
-  }, [navigate, loginWithProfile])
+  }, [navigate, loginWithProfile, loginRole])
 
   const handleChange = e => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -92,6 +106,22 @@ export default function LoginPage() {
         .single()
 
       const userRole = profile?.role || 'customer'
+
+      // Enforce strict role boundary: Provider cannot log in via Customer, Customer cannot log in via Provider
+      if (loginRole === 'customer' && userRole === 'provider') {
+        await supabase.auth.signOut()
+        toast.error('This account is registered as a Provider. You cannot log in through the Customer portal. Please switch to the Provider tab.')
+        setLoginRole('provider')
+        return
+      }
+
+      if (loginRole === 'provider' && userRole === 'customer') {
+        await supabase.auth.signOut()
+        toast.error('This account is registered as a Customer. You cannot log in through the Provider portal. Please switch to the Customer tab.')
+        setLoginRole('customer')
+        return
+      }
+
       const destination = ROLE_REDIRECT[userRole] ?? '/customer/explore'
       toast.success('Welcome back!')
       navigate(destination, { replace: true })
@@ -308,13 +338,14 @@ export default function LoginPage() {
       <GoogleSignInModal
         isOpen={showGoogleModal}
         onClose={() => setShowGoogleModal(false)}
+        loginRole={loginRole}
         onSuccessLogin={(profile) => {
           loginWithProfile(profile)
           const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
           navigate(destination, { replace: true })
         }}
         onProceedRegister={({ email, role }) => {
-          navigate(`/register?role=${role || 'customer'}&email=${encodeURIComponent(email)}&from=google`, { replace: true })
+          navigate(`/register?role=${role || loginRole || 'customer'}&email=${encodeURIComponent(email)}&from=google`, { replace: true })
         }}
       />
     </div>
