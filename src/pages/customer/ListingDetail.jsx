@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Star, MapPin, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar } from 'lucide-react'

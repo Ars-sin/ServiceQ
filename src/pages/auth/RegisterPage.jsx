@@ -3,17 +3,20 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   User, Mail, Phone, Lock, Eye, EyeOff, MapPin, ChevronRight, ChevronLeft,
-  ShieldCheck, ArrowLeft, Briefcase, Building2, Wrench, Package, Sparkles
+  ShieldCheck, ArrowLeft, Briefcase, Building2, Wrench, Package, Sparkles, Home, Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import LocationPicker from '@/components/ui/LocationPicker'
+import Modal from '@/components/ui/Modal'
 
 const STEPS = ['Account Info', 'Location', 'Password', 'Verify Email']
 
 const CEBU_COVERAGE_AREAS = [
   'Cebu City', 'Mandaue City', 'Lapu-Lapu City', 'Talisay City',
-  'Consolacion', 'Liloan', 'Minglanilla', 'Cordova'
+  'Consolacion', 'Liloan', 'Minglanilla', 'Cordova', 'Toledo City',
+  'Danao City', 'Carcar City', 'Naga City', 'Compostela', 'Balamban',
+  'Other Location in Cebu'
 ]
 
 const PROVIDER_CATEGORIES = [
@@ -46,14 +49,24 @@ export default function RegisterPage() {
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [resendCooldown, setCooldown]     = useState(0)
   const [resending, setResending]         = useState(false)
+  const [isFreelancer, setIsFreelancer]   = useState(false)
+  const [customCategory, setCustomCategory] = useState('')
+  const [otherCoverageText, setOtherCoverageText] = useState('')
+  const [showTermsModal, setShowTermsModal] = useState(false)
+  const [showUnderReviewModal, setShowUnderReviewModal] = useState(false)
 
   const [otp, setOtp]       = useState(['', '', '', '', '', ''])
   const inputRefs           = useRef([])
 
-  // Basic form
+  // Basic form with separated name fields
   const [form, setForm] = useState({
-    fullName: initialName, email: initialEmail, phone: '',
-    password: '', confirmPassword: '',
+    firstName: initialName.split(' ')[0] || '',
+    lastName: initialName.split(' ').slice(1).join(' ') || '',
+    middleInitial: '',
+    email: initialEmail,
+    phone: '',
+    password: '',
+    confirmPassword: '',
   })
 
   // Provider-specific details
@@ -98,17 +111,29 @@ export default function RegisterPage() {
 
   const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
+  const getFullName = () => {
+    const parts = [form.firstName.trim()]
+    if (form.middleInitial.trim()) parts.push(`${form.middleInitial.trim().replace(/\./g, '')}.`)
+    if (form.lastName.trim()) parts.push(form.lastName.trim())
+    return parts.join(' ')
+  }
+
   const handleRoleChange = (newRole) => {
     if (newRole === role) return
     setRole(newRole)
     setStep(0)
     setForm(prev => ({
-      fullName: fromGoogle ? (prev.fullName || initialName) : '',
+      firstName: fromGoogle ? prev.firstName : '',
+      lastName: fromGoogle ? prev.lastName : '',
+      middleInitial: fromGoogle ? prev.middleInitial : '',
       email: fromGoogle ? (prev.email || initialEmail) : '',
       phone: '',
       password: '',
       confirmPassword: '',
     }))
+    setIsFreelancer(false)
+    setCustomCategory('')
+    setOtherCoverageText('')
     setProviderDetails({
       businessName: '',
       providerType: 'service',
@@ -178,25 +203,67 @@ export default function RegisterPage() {
     inputRefs.current[nextFocusIndex]?.focus()
   }
 
-  // ── Step validation ────────────────────────────────────────────────────
+  // ── Step validation (strict feedback on the exact step) ───────────────
   const validateStep0 = () => {
-    if (role === 'provider' && !providerDetails.businessName.trim()) {
-      return toast.error('Please enter your business or trade name') || false
+    if (role === 'provider' && !isFreelancer && !providerDetails.businessName.trim()) {
+      toast.error('Please enter your business or trade name (or check freelancer if individual)')
+      return false
     }
-    if (!form.fullName.trim()) return toast.error('Please enter your full name') || false
-    if (!form.email.trim())    return toast.error('Please enter your email address') || false
-    if (!form.phone.trim())    return toast.error('Please enter your contact phone number') || false
+    if (role === 'provider' && providerDetails.category === 'Other Local Service / Rental' && !customCategory.trim()) {
+      toast.error('Please specify your other service or rental type')
+      return false
+    }
+    if (!form.firstName.trim()) {
+      toast.error('Please enter your first name')
+      return false
+    }
+    if (form.firstName.trim().length < 2) {
+      toast.error('First name must be at least 2 characters')
+      return false
+    }
+    if (!form.lastName.trim()) {
+      toast.error('Please enter your last name')
+      return false
+    }
+    if (form.lastName.trim().length < 2) {
+      toast.error('Last name must be at least 2 characters')
+      return false
+    }
+    const cleanEmail = form.email.trim()
+    if (!cleanEmail) {
+      toast.error('Please enter your email address')
+      return false
+    }
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      toast.error('Please enter a valid email address')
+      return false
+    }
+    const digitsOnly = form.phone.replace(/\D/g, '')
+    if (!digitsOnly) {
+      toast.error('Please enter your contact number')
+      return false
+    }
+    if (digitsOnly.length < 10 || digitsOnly.length > 11) {
+      toast.error('Contact number must be 10 to 11 digits (e.g. 09123456789)')
+      return false
+    }
     return true
   }
 
   const validateStep1 = () => {
-    if (!location.city.trim()) {
+    if (!location.city.trim() && !location.address.trim()) {
       toast.error('Please search and select your base location')
       return false
     }
-    if (role === 'provider' && providerDetails.serviceCoverage.length === 0) {
-      toast.error('Please select at least one Cebu service coverage area')
-      return false
+    if (role === 'provider') {
+      if (providerDetails.serviceCoverage.length === 0) {
+        toast.error('Please select at least one Cebu service coverage area')
+        return false
+      }
+      if (providerDetails.serviceCoverage.includes('Other Location in Cebu') && !otherCoverageText.trim()) {
+        toast.error('Please specify your other coverage location in Cebu')
+        return false
+      }
     }
     return true
   }
@@ -219,6 +286,19 @@ export default function RegisterPage() {
       )
     }
 
+    const resolvedFullName = getFullName()
+    const resolvedBusinessName = role === 'provider'
+      ? (isFreelancer ? resolvedFullName : (providerDetails.businessName.trim() || resolvedFullName))
+      : null
+    const resolvedCategory = role === 'provider'
+      ? (providerDetails.category === 'Other Local Service / Rental' && customCategory.trim()
+          ? `Other: ${customCategory.trim()}`
+          : providerDetails.category)
+      : null
+    const coverageList = providerDetails.serviceCoverage.map(c =>
+      c === 'Other Location in Cebu' && otherCoverageText.trim() ? otherCoverageText.trim() : c
+    )
+
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -226,13 +306,17 @@ export default function RegisterPage() {
         password: form.password,
         options: {
           data: {
-            full_name: form.fullName,
-            phone: form.phone,
+            full_name: resolvedFullName,
+            first_name: form.firstName.trim(),
+            last_name: form.lastName.trim(),
+            middle_initial: form.middleInitial.trim(),
+            phone: form.phone.replace(/\D/g, ''),
             role,
-            business_name: role === 'provider' ? (providerDetails.businessName || form.fullName) : null,
+            is_freelancer: isFreelancer,
+            business_name: resolvedBusinessName,
             provider_type: role === 'provider' ? [providerDetails.providerType] : null,
-            category: role === 'provider' ? providerDetails.category : null,
-            service_area: role === 'provider' ? providerDetails.serviceCoverage.join(', ') : null,
+            category: resolvedCategory,
+            service_area: role === 'provider' ? coverageList.join(', ') : null,
           }
         },
       })
@@ -246,8 +330,8 @@ export default function RegisterPage() {
           .upsert({
             id:          data.user.id,
             email:       form.email.trim(),
-            full_name:   form.fullName,
-            phone:       form.phone,
+            full_name:   resolvedFullName,
+            phone:       form.phone.replace(/\D/g, ''),
             role:        role || 'customer',
             address:     location.address,
             barangay:    location.barangay,
@@ -261,11 +345,11 @@ export default function RegisterPage() {
           try {
             await supabase.from('providers').upsert({
               user_id: data.user.id,
-              business_name: providerDetails.businessName || form.fullName,
-              business_description: `Category: ${providerDetails.category} | ${providerDetails.yearsExp} year(s) experience`,
+              business_name: resolvedBusinessName,
+              business_description: `Category: ${resolvedCategory} | ${providerDetails.yearsExp} year(s) experience`,
               provider_type: [providerDetails.providerType],
               years_experience: parseInt(providerDetails.yearsExp) || 1,
-              service_area: providerDetails.serviceCoverage.join(', ') || location.city || 'Cebu',
+              service_area: coverageList.join(', ') || location.city || 'Cebu',
               kyc_status: 'under_verification',
               provider_status: 'active',
             }, { onConflict: 'user_id' })
@@ -274,26 +358,6 @@ export default function RegisterPage() {
           }
         }
       }
-
-      // Cache registration data for onboarding
-      try {
-        sessionStorage.setItem('serviceq_reg_data', JSON.stringify({
-          fullName: form.fullName,
-          email: form.email.trim(),
-          phone: form.phone,
-          role,
-          businessName: providerDetails.businessName,
-          providerType: providerDetails.providerType,
-          category: providerDetails.category,
-          yearsExp: providerDetails.yearsExp,
-          serviceCoverage: providerDetails.serviceCoverage,
-          address: location.address,
-          barangay: location.barangay,
-          city: location.city,
-          province: location.province,
-          postalCode: location.postalCode,
-        }))
-      } catch {}
 
       toast.success(`Verification code sent to ${form.email}!`)
       setStep(3)
@@ -318,14 +382,12 @@ export default function RegisterPage() {
     try {
       const cleanEmail = form.email.trim()
 
-      // 1. Try verify with type: 'signup'
       let verifyResult = await supabase.auth.verifyOtp({
         email: cleanEmail,
         token,
         type: 'signup',
       })
 
-      // 2. Fallback to type: 'email'
       if (verifyResult.error) {
         verifyResult = await supabase.auth.verifyOtp({
           email: cleanEmail,
@@ -337,7 +399,12 @@ export default function RegisterPage() {
       if (verifyResult.error) throw verifyResult.error
 
       toast.success('Email verified successfully! Welcome to ServiceQ 🎉')
-      navigate(role === 'provider' ? '/provider/onboarding' : '/customer/explore', { replace: true })
+
+      if (role === 'provider') {
+        setShowUnderReviewModal(true)
+      } else {
+        navigate('/customer/explore', { replace: true })
+      }
 
     } catch (err) {
       console.error('Email verification error:', err)
@@ -373,14 +440,15 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 py-12 relative">
-      {/* ── Prominent Fixed/Floating Top Back Button ── */}
+      {/* ── Fixed/Floating Top Home Button ── */}
       <div className="fixed top-4 left-4 z-50">
         <Link
           to="/"
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:text-brand-600 hover:border-brand-300 font-semibold text-xs sm:text-sm shadow-sm transition-all hover:-translate-x-0.5 active:scale-95 group"
+          title="Back to Home"
+          aria-label="Back to Home"
+          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-gray-200 text-gray-700 hover:text-brand-600 hover:border-brand-300 shadow-sm transition-all hover:scale-105 active:scale-95 group"
         >
-          <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back to Home</span>
+          <Home size={18} className="text-gray-600 group-hover:text-brand-600 transition-colors" />
         </Link>
       </div>
 
@@ -404,11 +472,7 @@ export default function RegisterPage() {
             </div>
           ) : (
             <div className="text-center">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-brand-50 text-brand-700 border border-brand-200 mb-2">
-                <User size={13} /> Customer Account
-              </span>
               <h1 className="text-2xl font-black text-brand-700">Create your account</h1>
-              <p className="text-gray-500 text-xs mt-1">Join Cebu's verified local service and rental community</p>
             </div>
           )}
         </div>
@@ -516,24 +580,43 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Business / Trade Name */}
-                    <div className="form-group">
-                      <label className="label flex items-center justify-between">
-                        <span>Business or Trade Name</span>
-                        <span className="text-[10px] text-gray-400 font-normal">Personal name if freelancer</span>
-                      </label>
-                      <div className="relative">
-                        <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          name="businessName"
-                          required
-                          value={providerDetails.businessName}
-                          onChange={e => handleProviderDetailChange('businessName', e.target.value)}
-                          placeholder="e.g. Cebu Pro Cleaning Services or Juan's AC Repair"
-                          className="input pl-9 border-emerald-200 focus:border-emerald-500"
-                        />
+                    {/* Individual Freelancer Checkbox */}
+                    <label className="flex items-center gap-2.5 p-3 bg-emerald-50/50 border border-emerald-200/80 rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={isFreelancer}
+                        onChange={e => setIsFreelancer(e.target.checked)}
+                        className="accent-emerald-600 w-4 h-4 rounded"
+                      />
+                      <span className="text-xs font-semibold text-emerald-900">
+                        I am an individual freelancer / sole proprietor
+                      </span>
+                    </label>
+
+                    {/* Business / Trade Name or Freelancer Indicator */}
+                    {!isFreelancer ? (
+                      <div className="form-group">
+                        <label className="label flex items-center justify-between">
+                          <span>Business or Trade Name</span>
+                        </label>
+                        <div className="relative">
+                          <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            name="businessName"
+                            required={!isFreelancer}
+                            value={providerDetails.businessName}
+                            onChange={e => handleProviderDetailChange('businessName', e.target.value)}
+                            placeholder="e.g. Cebu Pro Cleaning Services or Queen City Rentals"
+                            className="input pl-9 border-emerald-200 focus:border-emerald-500"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="text-xs text-emerald-800 bg-emerald-50/60 border border-emerald-200 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
+                        <span>👤</span>
+                        <span>Operating under personal name: <strong>{getFullName() || 'Your Name'}</strong></span>
+                      </div>
+                    )}
 
                     {/* Provider Offering Type (Service, Rental, or Both) */}
                     <div className="form-group">
@@ -561,7 +644,7 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Primary Industry / Category */}
+                    {/* Primary Industry / Category & Experience */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="form-group">
                         <label className="label">Primary Category</label>
@@ -591,23 +674,61 @@ export default function RegisterPage() {
                       </div>
                     </div>
 
-                    {/* Owner / Contact Name */}
-                    <div className="form-group">
-                      <label className="label">Owner / Contact Representative Full Name</label>
-                      <div className="relative">
-                        <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    {/* Conditional Custom Category Input */}
+                    {providerDetails.category === 'Other Local Service / Rental' && (
+                      <div className="form-group">
+                        <label className="label">Specify Service / Rental Type</label>
                         <input
-                          name="fullName"
+                          value={customCategory}
+                          onChange={e => setCustomCategory(e.target.value)}
+                          placeholder="e.g. Pet Grooming, Solar Installation, Sound System Setup..."
+                          className="input border-emerald-200 focus:border-emerald-500"
                           required
-                          value={form.fullName}
-                          onChange={handleChange}
-                          placeholder="e.g. Juan dela Cruz"
-                          className="input pl-9"
                         />
+                      </div>
+                    )}
+
+                    {/* Owner / Contact Representative Name (First, MI, Last) */}
+                    <div>
+                      <label className="label mb-1.5">Owner / Representative Name</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                        <div className="form-group sm:col-span-2">
+                          <div className="relative">
+                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                              name="firstName"
+                              required
+                              value={form.firstName}
+                              onChange={handleChange}
+                              placeholder="First Name"
+                              className="input pl-9"
+                            />
+                          </div>
+                        </div>
+                        <div className="form-group sm:col-span-1">
+                          <input
+                            name="middleInitial"
+                            maxLength={2}
+                            value={form.middleInitial}
+                            onChange={handleChange}
+                            placeholder="M.I."
+                            className="input text-center px-1"
+                          />
+                        </div>
+                        <div className="form-group sm:col-span-2">
+                          <input
+                            name="lastName"
+                            required
+                            value={form.lastName}
+                            onChange={handleChange}
+                            placeholder="Last Name"
+                            className="input"
+                          />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Email & Phone side by side */}
+                    {/* Email & Contact Number side by side */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="form-group">
                         <label className="label">Business / Contact Email</label>
@@ -626,7 +747,7 @@ export default function RegisterPage() {
                       </div>
 
                       <div className="form-group">
-                        <label className="label">GCash / Contact Mobile</label>
+                        <label className="label">Contact Number</label>
                         <div className="relative">
                           <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                           <input
@@ -646,17 +767,41 @@ export default function RegisterPage() {
                   /* ── Customer Account Fields ── */
                   <>
                     <div className="form-group">
-                      <label className="label">Full Name</label>
-                      <div className="relative">
-                        <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          name="fullName"
-                          required
-                          value={form.fullName}
-                          onChange={handleChange}
-                          placeholder="Juan dela Cruz"
-                          className="input pl-9"
-                        />
+                      <label className="label mb-1.5">Full Name</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                        <div className="form-group sm:col-span-2">
+                          <div className="relative">
+                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                            <input
+                              name="firstName"
+                              required
+                              value={form.firstName}
+                              onChange={handleChange}
+                              placeholder="First Name"
+                              className="input pl-9"
+                            />
+                          </div>
+                        </div>
+                        <div className="form-group sm:col-span-1">
+                          <input
+                            name="middleInitial"
+                            maxLength={2}
+                            value={form.middleInitial}
+                            onChange={handleChange}
+                            placeholder="M.I."
+                            className="input text-center px-1"
+                          />
+                        </div>
+                        <div className="form-group sm:col-span-2">
+                          <input
+                            name="lastName"
+                            required
+                            value={form.lastName}
+                            onChange={handleChange}
+                            placeholder="Last Name"
+                            className="input"
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -677,7 +822,7 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="form-group">
-                      <label className="label">Contact Mobile Number</label>
+                      <label className="label">Contact Number</label>
                       <div className="relative">
                         <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -763,6 +908,24 @@ export default function RegisterPage() {
                             </button>
                           )
                         })}
+                      </div>
+
+                      {/* Conditional Other Coverage Input */}
+                      {providerDetails.serviceCoverage.includes('Other Location in Cebu') && (
+                        <div className="form-group mt-2">
+                          <label className="label">Specify Other Cebu Area / Municipality</label>
+                          <input
+                            value={otherCoverageText}
+                            onChange={e => setOtherCoverageText(e.target.value)}
+                            placeholder="e.g. Moalboal, Bantayan, Bogo, Oslob..."
+                            className="input border-emerald-200 focus:border-emerald-500"
+                            required
+                          />
+                        </div>
+                      )}
+
+                      <div className="text-[11px] text-emerald-800 bg-emerald-50/70 border border-emerald-200 rounded-xl px-3 py-2 font-medium mt-2">
+                        📍 <strong>Notice:</strong> ServiceQ currently operates exclusively within Cebu Province.
                       </div>
                     </div>
                   </>
@@ -864,7 +1027,15 @@ export default function RegisterPage() {
                         className="mt-1 accent-emerald-600 w-4 h-4 rounded"
                       />
                       <span className="text-xs text-emerald-950 leading-relaxed">
-                        I agree to the <strong>ServiceQ Provider Partnership Terms</strong>: 10% platform commission on completed bookings, ID verification requirement, and commitment to punctual, honest service standards.
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowTermsModal(true)}
+                          className="text-emerald-700 font-bold underline hover:text-emerald-800"
+                        >
+                          ServiceQ Provider Partnership Terms
+                        </button>
+                        : 10% platform commission on completed bookings, ID verification requirement, and commitment to punctual, honest service standards.
                       </span>
                     </label>
                   </div>
@@ -878,7 +1049,13 @@ export default function RegisterPage() {
                     />
                     <span className="text-sm text-gray-600">
                       I agree to the{' '}
-                      <button type="button" className="text-brand-600 hover:underline font-semibold">Terms & Conditions</button>
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="text-brand-600 hover:underline font-semibold"
+                      >
+                        Terms & Conditions
+                      </button>
                     </span>
                   </label>
                 )}
@@ -991,7 +1168,7 @@ export default function RegisterPage() {
 
           {/* Footer Navigation */}
           {step < 3 && (
-            <div className="text-center text-xs sm:text-sm text-gray-500 mt-5 pt-3 border-t border-gray-100 flex flex-col items-center gap-2">
+            <div className="text-center text-xs sm:text-sm text-gray-500 mt-5 pt-3 border-t border-gray-100">
               <p>
                 Already have an account?{' '}
                 <Link
@@ -1001,13 +1178,92 @@ export default function RegisterPage() {
                   Sign in
                 </Link>
               </p>
-              <Link to="/" className="text-xs text-gray-400 hover:text-gray-700 inline-flex items-center gap-1">
-                <ArrowLeft size={12} /> Return to ServiceQ Homepage
-              </Link>
             </div>
           )}
         </div>
       </motion.div>
+
+      {/* ── Terms & Conditions Modal ── */}
+      <Modal
+        open={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        title={role === 'provider' ? 'ServiceQ Provider Partnership Terms' : 'ServiceQ Terms of Service'}
+        size="lg"
+      >
+        <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-4 text-xs text-gray-600 leading-relaxed">
+          <div>
+            <h4 className="font-bold text-gray-900 text-sm mb-1">1. Scope of Service & Platform Role</h4>
+            <p>ServiceQ operates as a hyperlocal service marketplace connecting verified customers and independent service providers and equipment renters across Cebu Province. ServiceQ is not an employer or principal contractor.</p>
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-900 text-sm mb-1">2. Provider Verification (KYC)</h4>
+            <p>To uphold safety and credibility, all provider partners must submit valid government identification before publishing listings. ServiceQ reserves the right to suspend accounts with unverified or fraudulent documentation.</p>
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-900 text-sm mb-1">3. Platform Fees & Commission</h4>
+            <p>Provider accounts agree to a standard 10% platform commission on completed service and rental transactions processed through the ServiceQ platform.</p>
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-900 text-sm mb-1">4. Scheduling & Cancellation Standards</h4>
+            <p>Bookings are scheduled based on provider availability. Providers must commit to punctual arrival. Cancellations with less than 4 hours notice may incur account penalties.</p>
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-900 text-sm mb-1">5. Data Privacy</h4>
+            <p>User contact information and location data are stored securely and used solely for fulfilling bookings and platform notifications in accordance with Philippine Data Privacy laws.</p>
+          </div>
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setAgreed(true)
+                setShowTermsModal(false)
+              }}
+              className="btn-primary w-full py-2.5 font-bold"
+            >
+              I Understand & Agree
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Provider Under Review Modal ── */}
+      <Modal
+        open={showUnderReviewModal}
+        onClose={() => {
+          setShowUnderReviewModal(false)
+          navigate('/provider/dashboard', { replace: true })
+        }}
+        title="Application Submitted for Review 🎉"
+        size="md"
+      >
+        <div className="flex flex-col items-center text-center p-2">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-4">
+            <Sparkles size={32} />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Welcome to the ServiceQ Provider Network!</h3>
+          <p className="text-xs text-gray-600 leading-relaxed mb-4">
+            Your email has been verified. To maintain trust and high service quality for Cebu customers, provider partner profiles undergo a brief onboarding review.
+          </p>
+          <div className="w-full bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-left text-xs text-emerald-900 mb-5 space-y-1.5">
+            <p className="font-bold flex items-center gap-1.5">
+              <ShieldCheck size={14} className="text-emerald-600" /> Next Steps:
+            </p>
+            <p>• You can access your Provider Dashboard right away.</p>
+            <p>• Complete your ID verification (KYC) in your profile to publish active listings.</p>
+            <p>• Our team reviews accounts within 24–48 hours.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowUnderReviewModal(false)
+              navigate('/provider/dashboard', { replace: true })
+            }}
+            className="btn-primary w-full py-3 !bg-emerald-600 hover:!bg-emerald-700 text-white font-bold rounded-xl shadow-sm"
+          >
+            Go to Provider Dashboard →
+          </button>
+        </div>
+      </Modal>
     </div>
   )
 }

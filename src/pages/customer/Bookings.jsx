@@ -153,7 +153,16 @@ export default function CustomerBookings() {
               <div className="flex sm:flex-col items-end justify-between w-full sm:w-auto gap-2">
                 <span className="font-extrabold text-brand-700 text-base">{formatPHP(b.amount)}</span>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {(b.status === 'scheduled' || b.status === 'active') && (
+                    <button
+                      onClick={() => toast.success(`Opening chat with ${b.provider}...`)}
+                      className="btn-secondary btn-sm text-xs gap-1.5 font-semibold text-brand-700 border-brand-200 hover:bg-brand-50"
+                    >
+                      <MessageCircle size={13} /> Contact Provider
+                    </button>
+                  )}
+
                   {b.status === 'scheduled' && (
                     <button
                       onClick={() => setCancelModal(b)}
@@ -177,13 +186,6 @@ export default function CustomerBookings() {
                       <CheckCircle2 size={12} /> Reviewed ({b.userRating}★)
                     </span>
                   )}
-
-                  <button
-                    onClick={() => toast.success(`Connecting to ${b.provider}...`)}
-                    className="btn-ghost btn-sm text-xs text-gray-500 gap-1"
-                  >
-                    <MessageCircle size={14} /> Contact
-                  </button>
                 </div>
               </div>
             </motion.div>

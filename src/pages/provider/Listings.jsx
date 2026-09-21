@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Archive, Eye, ToggleLeft, ToggleRight, Check } from 'lucide-react'
+import { Plus, Edit2, Archive, Eye, ToggleLeft, ToggleRight, Check, ShieldAlert, CheckCircle2, MapPin, Calendar, Clock, DollarSign, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 const BASE_MOCK = [
   { id: '1', title: 'Home Cleaning Service',   type: 'Service', category: 'Cleaning', price: 500,  unit: 'per session', status: 'active',   bookings: 28, color: 'from-purple-400 to-pink-400' },
@@ -46,10 +49,52 @@ const INITIAL_FORM = {
 }
 
 export default function ProviderListings() {
+  const navigate = useNavigate()
+  const { user, profile } = useAuth()
   const [tab, setTab]               = useState('all')
   const [page, setPage]             = useState(1)
   const [showAdd, setShowAdd]       = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
+  const [viewingListing, setViewingListing] = useState(null)
+  const [showKycModal, setShowKycModal] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
+
+  useEffect(() => {
+    async function checkVerification() {
+      if (!user?.id) return
+      let meta = null
+      try {
+        if (profile?.avatar_url && profile.avatar_url.startsWith('{')) {
+          meta = JSON.parse(profile.avatar_url)
+        }
+      } catch {}
+
+      if (meta?.status === 'approved') {
+        setIsVerified(true)
+        return
+      }
+
+      const { data: prov } = await supabase
+        .from('providers')
+        .select('kyc_status')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (prov?.kyc_status === 'verified') {
+        setIsVerified(true)
+      }
+    }
+    checkVerification()
+  }, [user, profile])
+
+  const handleOpenAdd = () => {
+    if (!isVerified) {
+      setShowKycModal(true)
+      return
+    }
+    setShowAdd(true)
+    setWizardStep(0)
+  }
 
   // Initialize listings from local storage merged with base mock
   const [listings, setListings]     = useState(() => {
@@ -131,7 +176,7 @@ export default function ProviderListings() {
           <p className="text-xs text-gray-500 mt-0.5">Manage your active offerings and services</p>
         </div>
         <button
-          onClick={() => { setShowAdd(true); setWizardStep(0) }}
+          onClick={handleOpenAdd}
           className="btn-primary gap-2"
           style={{ background: '#059669' }}
         >
@@ -156,14 +201,18 @@ export default function ProviderListings() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {displayed.map(l => (
-              <tr key={l.id} className="hover:bg-gray-50 transition-colors">
+              <tr
+                key={l.id}
+                onClick={() => setViewingListing(l)}
+                className="hover:bg-emerald-50/40 cursor-pointer transition-colors group"
+              >
                 <td className="p-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${l.color} flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
                       ✓
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900 text-sm">{l.title}</div>
+                      <div className="font-semibold text-gray-900 text-sm group-hover:text-emerald-700 transition-colors">{l.title}</div>
                       <div className="text-xs text-gray-400">{l.category}</div>
                     </div>
                   </div>
@@ -172,8 +221,15 @@ export default function ProviderListings() {
                 <td className="p-4 font-bold text-brand-600">{formatPHP(l.price)}<span className="text-xs text-gray-400 font-normal"> {l.unit}</span></td>
                 <td className="p-4 text-gray-600 text-xs font-semibold">{l.bookings}</td>
                 <td className="p-4"><Badge variant={statusVariant(l.status)} className="capitalize">{l.status}</Badge></td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
+                <td className="p-4" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setViewingListing(l)}
+                      title="View Details"
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-emerald-700 transition-colors"
+                    >
+                      <Eye size={16} />
+                    </button>
                     <button
                       onClick={() => toggleStatus(l.id)}
                       title={l.status === 'active' ? 'Disable Listing' : 'Activate Listing'}
@@ -433,6 +489,123 @@ export default function ProviderListings() {
               Next Step →
             </button>
           )}
+        </div>
+      </Modal>
+
+      {/* ── View Listing Details Modal ── */}
+      <Modal
+        open={Boolean(viewingListing)}
+        onClose={() => setViewingListing(null)}
+        title={viewingListing?.title || 'Listing Details'}
+        size="md"
+      >
+        {viewingListing && (
+          <div className="flex flex-col gap-4">
+            <div className={`w-full h-28 rounded-2xl bg-gradient-to-br ${viewingListing.color || 'from-emerald-400 to-teal-500'} flex items-center justify-center text-white font-extrabold text-xl shadow-inner p-4 text-center`}>
+              {viewingListing.title}
+            </div>
+
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <span className="text-xs text-gray-400 font-medium">Category & Type</span>
+                <p className="font-semibold text-gray-800 text-sm">{viewingListing.category} · {viewingListing.type}</p>
+              </div>
+              <Badge variant={statusVariant(viewingListing.status)} className="capitalize text-xs">
+                {viewingListing.status}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <span className="text-xs text-gray-400 font-medium block">Rate / Price</span>
+                <span className="text-lg font-bold text-brand-600">{formatPHP(viewingListing.price)}</span>
+                <span className="text-xs text-gray-400 ml-1">{viewingListing.unit}</span>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                <span className="text-xs text-gray-400 font-medium block">Total Bookings</span>
+                <span className="text-lg font-bold text-gray-900">{viewingListing.bookings}</span>
+                <span className="text-xs text-emerald-600 font-semibold ml-1">completed</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs text-gray-600 bg-emerald-50/50 border border-emerald-100 rounded-xl p-3.5">
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-emerald-700 flex-shrink-0" />
+                <span>Service Area: <strong>Metro Cebu & Surrounding Cities</strong></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-emerald-700 flex-shrink-0" />
+                <span>Operating Hours: <strong>8:00 AM – 5:00 PM</strong> (Mon - Sat)</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleStatus(viewingListing.id)
+                  setViewingListing(v => ({ ...v, status: v.status === 'active' ? 'inactive' : 'active' }))
+                }}
+                className="btn-secondary flex-1 py-2.5 text-xs font-semibold"
+              >
+                {viewingListing.status === 'active' ? 'Deactivate Listing' : 'Activate Listing'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewingListing(null)}
+                className="btn-primary flex-1 py-2.5 text-xs font-bold"
+                style={{ background: '#059669' }}
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── KYC Verification Guard Modal ── */}
+      <Modal
+        open={showKycModal}
+        onClose={() => setShowKycModal(false)}
+        title="ID Verification Required"
+        size="md"
+      >
+        <div className="flex flex-col items-center text-center p-2">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mb-4 shadow-sm">
+            <ShieldAlert size={32} />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Verify Your Identity to Add Listings</h3>
+          <p className="text-xs text-gray-600 leading-relaxed mb-5 max-w-sm">
+            To keep ServiceQ safe and maintain genuine trust across Cebu, service providers must submit valid government ID verification before publishing active listings.
+          </p>
+          <div className="w-full bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-left text-xs text-amber-900 mb-6 space-y-1">
+            <p className="font-bold">Required to unlock:</p>
+            <p>• Publish and accept bookings from Cebu clients</p>
+            <p>• Verified Partner badge on your public listings</p>
+          </div>
+          <div className="flex flex-col gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => {
+                setShowKycModal(false)
+                navigate('/provider/profile')
+              }}
+              className="btn-primary w-full py-3 !bg-emerald-600 hover:!bg-emerald-700 text-white font-bold rounded-xl shadow-sm"
+            >
+              Go to Profile to Verify ID →
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowKycModal(false)
+                setShowAdd(true)
+                setWizardStep(0)
+              }}
+              className="text-xs text-gray-400 hover:text-gray-600 py-1 underline"
+            >
+              Bypass for now (Demo / Testing)
+            </button>
+          </div>
         </div>
       </Modal>
     </motion.div>

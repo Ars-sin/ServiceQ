@@ -8,7 +8,7 @@ import Badge from '@/components/ui/Badge'
 import Pagination from '@/components/ui/Pagination'
 
 const MOCK = [
-  { id: 'SQ-A1', customer: 'Ana Reyes',     service: 'Home Cleaning',     date: '2026-09-10', time: '9:00 AM', duration: '1 session', amount: 1100, status: 'pending',   payout: null },
+  { id: 'SQ-A1', customer: 'Ana Reyes',     service: 'Home Cleaning',     date: '2026-09-10', time: '9:00 AM', duration: '1 session', amount: 1100, status: 'scheduled', payout: null },
   { id: 'SQ-B2', customer: 'Marco Lopez',   service: 'Home Cleaning',     date: '2026-09-08', time: '2:00 PM', duration: '1 session', amount: 550,  status: 'scheduled', payout: null },
   { id: 'SQ-C3', customer: 'Grace Tan',     service: 'Deep Cleaning',     date: '2026-09-07', time: '10:00 AM',duration: '1 session', amount: 1320, status: 'active',    payout: null },
   { id: 'SQ-D4', customer: 'Rico Santos',   service: 'Home Cleaning',     date: '2026-09-03', time: '8:00 AM', duration: '1 session', amount: 880,  status: 'completed', payout: 'released' },
@@ -20,7 +20,7 @@ const MOCK = [
 
 const TABS = [
   { id: 'all', label: 'All' },
-  ...['pending','scheduled','active','completed','cancelled'].map(id => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }))
+  ...['scheduled','active','completed','cancelled'].map(id => ({ id, label: id.charAt(0).toUpperCase() + id.slice(1) }))
 ]
 
 export default function ProviderBookings() {
@@ -81,21 +81,13 @@ export default function ProviderBookings() {
               {b.payout && <Badge variant="success" className="mt-1">Payout {b.payout}</Badge>}
             </div>
             <div className="flex gap-2 flex-wrap">
-              {b.status === 'pending' && <>
-                <button onClick={() => updateStatus(b.id, 'scheduled')} className="btn-primary btn-sm gap-1" style={{ background: '#059669' }}>
-                  <CheckCircle size={13} /> Accept
-                </button>
-                <button onClick={() => updateStatus(b.id, 'cancelled')} className="btn-danger btn-sm gap-1">
-                  <XCircle size={13} /> Decline
-                </button>
-              </>}
               {b.status === 'scheduled' && <>
                 <button onClick={() => updateStatus(b.id, 'active')} className="btn-primary btn-sm" style={{ background: '#059669' }}>Mark Active</button>
-                <button onClick={() => toast('Messenger...')} className="btn-secondary btn-sm gap-1"><MessageCircle size={13} /> Contact</button>
+                <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1"><MessageCircle size={13} /> Contact</button>
               </>}
               {b.status === 'active' && <>
                 <button onClick={() => updateStatus(b.id, 'completed')} className="btn-primary btn-sm" style={{ background: '#059669' }}>Mark Complete</button>
-                <button onClick={() => toast('Messenger...')} className="btn-secondary btn-sm gap-1"><MessageCircle size={13} /> Contact</button>
+                <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1"><MessageCircle size={13} /> Contact</button>
               </>}
             </div>
           </motion.div>

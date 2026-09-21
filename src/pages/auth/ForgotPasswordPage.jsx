@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, ArrowLeft, CheckCircle, ShieldCheck, RefreshCw, KeyRound } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, ShieldCheck, RefreshCw, KeyRound, Home } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -152,14 +152,14 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative py-12">
-      {/* ── Prominent Fixed/Floating Top Back Button ── */}
+      {/* ── Fixed/Floating Top Home Button ── */}
       <div className="fixed top-4 left-4 z-50">
         <Link
-          to="/login"
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:text-brand-600 hover:border-brand-300 font-semibold text-xs sm:text-sm shadow-sm transition-all hover:-translate-x-0.5 active:scale-95 group"
+          to="/"
+          title="Back to Home"
+          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-gray-200 text-gray-700 hover:text-brand-600 hover:border-brand-300 shadow-sm transition-all hover:scale-105 active:scale-95 group"
         >
-          <ArrowLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-          <span>Back to Sign In</span>
+          <Home size={18} className="text-gray-600 group-hover:text-brand-600 transition-colors" />
         </Link>
       </div>
 
@@ -352,14 +352,6 @@ export default function ForgotPasswordPage() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {step === 1 && (
-            <div className="mt-4 text-center">
-              <Link to="/login" className="btn-ghost w-full text-xs inline-flex items-center justify-center gap-1.5 text-gray-500">
-                <ArrowLeft size={14} /> Back to Sign In
-              </Link>
-            </div>
-          )}
         </div>
       </motion.div>
     </div>

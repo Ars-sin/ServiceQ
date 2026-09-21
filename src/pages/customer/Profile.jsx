@@ -145,8 +145,8 @@ export default function CustomerProfile() {
   const labelClass = 'text-xs font-medium text-gray-600 block mb-1.5'
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-gray-50 py-6 sm:py-8 px-2 sm:px-6 lg:px-8">
+      <div className="w-full">
         <div className="flex flex-col md:flex-row gap-8">
 
           {/* ── Left Sidebar ─────────────────────────────────────── */}

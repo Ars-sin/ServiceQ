@@ -12,7 +12,12 @@ const FEATURES = [
   { icon: Star,           title: 'Reviews & Ratings',      desc: 'Make confident choices with genuine ratings from verified customers in Cebu.' },
   { icon: Clock,          title: 'Real-time Availability', desc: 'Live availability schedules so you always book confirmed, active time slots.' },
   { icon: MapPin,         title: 'Location-Based',         desc: 'Discover services, equipment, and rentals within your exact Cebu neighborhood.' },
-  { icon: MessageCircle,  title: 'Direct Provider Chat',   desc: 'Communicate directly with providers before booking and receive updates in real-time.' },
+  {
+    icon: MessageCircle,
+    title: 'Direct Provider Chat',
+    desc: 'Communicate directly with providers. (Unavailable as of the moment – coming soon)',
+    unavailable: true,
+  },
 ]
 
 const FEATURED_CATEGORIES = [
@@ -93,14 +98,14 @@ export default function LandingPage() {
     <div className="min-h-screen bg-brand-950 font-sans text-gray-800">
 
       {/* ── TOP NAVBAR ────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 bg-brand-950/90 backdrop-blur-md border-b border-brand-800/60 shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between py-3.5">
+      <nav className="sticky top-0 z-50 bg-brand-950/95 backdrop-blur-md border-b border-brand-800/60 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center justify-between py-4 sm:py-5">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-3">
             <img
               src="/logoword(white).png"
               alt="ServiceQ"
-              className="h-8 w-auto object-contain"
+              className="h-8 sm:h-9 w-auto object-contain"
               onError={(e) => {
                 e.target.onerror = null
                 e.target.src = '/logo.png'
@@ -109,24 +114,24 @@ export default function LandingPage() {
           </Link>
 
           {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-brand-100">
-            <a href="#hero" className="hover:text-white transition">Home</a>
-            <a href="#explore" className="hover:text-white transition">Explore</a>
-            <a href="#features" className="hover:text-white transition">Features</a>
-            <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
+          <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-brand-100">
+            <a href="#hero" className="hover:text-white transition py-1">Home</a>
+            <a href="#explore" className="hover:text-white transition py-1">Explore</a>
+            <a href="#features" className="hover:text-white transition py-1">Features</a>
+            <a href="#how-it-works" className="hover:text-white transition py-1">How It Works</a>
           </div>
 
           {/* Action Buttons with strong visibility */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <Link
               to="/login"
-              className="px-4 py-2 text-sm font-bold text-white hover:text-brand-100 border border-white/40 hover:border-white rounded-xl transition bg-white/5"
+              className="px-4.5 py-2 text-sm font-bold text-white hover:text-brand-100 border border-white/40 hover:border-white rounded-xl transition bg-white/5"
             >
               Sign In
             </Link>
             <Link
               to="/register"
-              className="px-4 py-2 text-sm font-bold text-brand-950 bg-white hover:bg-brand-50 rounded-xl shadow-md transition hover:scale-105 active:scale-95"
+              className="px-5 py-2 text-sm font-bold text-brand-950 bg-white hover:bg-brand-50 rounded-xl shadow-md transition hover:scale-105 active:scale-95"
             >
               Get Started
             </Link>
@@ -141,7 +146,7 @@ export default function LandingPage() {
         <div className="absolute top-[45%] left-1/2 -translate-x-1/2 w-full max-w-5xl h-96 bg-brand-400/10 blur-[150px] rounded-full pointer-events-none" />
 
         {/* ── HERO SECTION ── */}
-        <section id="hero" className="relative z-10 pt-16 pb-12">
+        <section id="hero" className="relative z-10 pt-16 pb-12 scroll-mt-24">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
             <AnimFade>
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-800/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-semibold mb-6 shadow-sm">
@@ -180,19 +185,21 @@ export default function LandingPage() {
               </div>
             </AnimFade>
 
-            {/* 3 Floating White Cards on Blue (Matching User Mockup) */}
+            {/* 3 Floating White Cards on Blue (Matching User Mockup with Interactive Transitions) */}
             <AnimFade delay={0.4}>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-14 text-left">
-                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
-                  <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                {/* Card 1 */}
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-2 hover:ring-2 hover:ring-brand-300 hover:shadow-brand-500/20 transition-all duration-300 cursor-pointer group">
+                  <div className="w-10 h-10 rounded-xl bg-brand-50 group-hover:bg-brand-600 text-brand-600 group-hover:text-white flex items-center justify-center mb-3 transition-colors duration-200 shadow-sm">
                     <Zap size={22} />
                   </div>
                   <h3 className="font-bold text-gray-900 text-base mb-1">Fast Service Booking</h3>
                   <p className="text-xs text-gray-500 leading-relaxed">Book cleaners, AC technicians, makeup artists, and tutors with verified pricing.</p>
                 </div>
 
-                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200 sm:-translate-y-2 ring-2 ring-brand-300">
-                  <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-3">
+                {/* Card 2 (Top Rated) */}
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 sm:-translate-y-2 ring-2 ring-brand-300 hover:-translate-y-3 hover:ring-brand-400 hover:shadow-brand-500/30 transition-all duration-300 cursor-pointer group">
+                  <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-3 shadow-sm">
                     <Sparkles size={22} />
                   </div>
                   <span className="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Top Rated</span>
@@ -200,8 +207,9 @@ export default function LandingPage() {
                   <p className="text-xs text-gray-500 leading-relaxed">Rent cameras, event equipment, party needs, and rental spaces without friction.</p>
                 </div>
 
-                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-1 transition duration-200">
-                  <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center mb-3">
+                {/* Card 3 */}
+                <div className="bg-white rounded-2xl p-6 shadow-2xl border border-white/60 hover:-translate-y-2 hover:ring-2 hover:ring-brand-300 hover:shadow-brand-500/20 transition-all duration-300 cursor-pointer group">
+                  <div className="w-10 h-10 rounded-xl bg-brand-50 group-hover:bg-brand-600 text-brand-600 group-hover:text-white flex items-center justify-center mb-3 transition-colors duration-200 shadow-sm">
                     <Award size={22} />
                   </div>
                   <h3 className="font-bold text-gray-900 text-base mb-1">Verified Local Providers</h3>
@@ -213,7 +221,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── EXPLORE SERVICES ── */}
-        <section id="explore" className="relative z-10 pt-10 pb-20">
+        <section id="explore" className="relative z-10 pt-10 pb-20 scroll-mt-24">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
             <AnimFade>
               <div className="text-center mb-12">
@@ -247,7 +255,7 @@ export default function LandingPage() {
       </div>
 
       {/* ── FEATURES GRID ─────────────────────────────────────────── */}
-      <section id="features" className="py-20 bg-brand-950 text-white border-t border-brand-800/60">
+      <section id="features" className="py-20 bg-brand-950 text-white border-t border-brand-800/60 scroll-mt-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <AnimFade>
             <div className="text-center mb-12">
@@ -260,8 +268,15 @@ export default function LandingPage() {
             {FEATURES.map((f, i) => (
               <AnimFade key={f.title} delay={i * 0.08}>
                 <div className="bg-brand-900/80 border border-brand-800 rounded-2xl p-6 hover:bg-brand-850 transition duration-200 shadow-md">
-                  <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center mb-4 shadow-sm">
-                    <f.icon size={22} />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-sm">
+                      <f.icon size={22} />
+                    </div>
+                    {f.unavailable && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                        Unavailable at the moment
+                      </span>
+                    )}
                   </div>
                   <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
                   <p className="text-xs text-brand-100 leading-relaxed">{f.desc}</p>
@@ -273,7 +288,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── HOW IT WORKS (White Section with High-Contrast Blue Borders) ─── */}
-      <section id="how-it-works" className="py-20 bg-white">
+      <section id="how-it-works" className="py-20 bg-white scroll-mt-24">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <AnimFade>
             <div className="text-center mb-14">

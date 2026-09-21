@@ -300,7 +300,7 @@ export default function ProviderProfile() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 max-w-3xl pb-16">
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 w-full pb-16">
       
       {/* ── Top Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
