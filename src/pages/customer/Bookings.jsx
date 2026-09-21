@@ -18,10 +18,12 @@ const BASE_MOCK_BOOKINGS = [
   { id: 'SQ-P1Q2R', service: 'Motorcycle Scooter Rental',  provider: 'MotoRent Cebu',date: '2026-08-15', amount: 450,  status: 'completed' },
   { id: 'SQ-S3T4U', service: 'Sofa Shampooing Service',    provider: 'CleanCare PH', date: '2026-08-10', amount: 650,  status: 'completed' },
   { id: 'SQ-V5W6X', service: 'MacBook Rental for Work',    provider: 'TechRent PH',  date: '2026-08-05', amount: 800,  status: 'completed' },
+  { id: 'SQ-Y7Z8A', service: 'Event Photography Session',  provider: 'Pixel Cebu',   date: '2026-09-25', amount: 2500, status: 'pending' },
 ]
 
 const TABS = [
   { id: 'all',       label: 'All' },
+  { id: 'pending',   label: 'Pending' },
   { id: 'scheduled', label: 'Scheduled' },
   { id: 'active',    label: 'Active' },
   { id: 'completed', label: 'Completed' },
@@ -154,7 +156,7 @@ export default function CustomerBookings() {
                 <span className="font-extrabold text-brand-700 text-base">{formatPHP(b.amount)}</span>
 
                 <div className="flex items-center gap-2 flex-wrap justify-end">
-                  {(b.status === 'scheduled' || b.status === 'active') && (
+                  {(b.status === 'pending' || b.status === 'scheduled' || b.status === 'active') && (
                     <button
                       onClick={() => toast.success(`Opening chat with ${b.provider}...`)}
                       className="btn-secondary btn-sm text-xs gap-1.5 font-semibold text-brand-700 border-brand-200 hover:bg-brand-50"
@@ -163,7 +165,7 @@ export default function CustomerBookings() {
                     </button>
                   )}
 
-                  {b.status === 'scheduled' && (
+                  {(b.status === 'pending' || b.status === 'scheduled') && (
                     <button
                       onClick={() => setCancelModal(b)}
                       className="btn-danger btn-sm text-xs"
