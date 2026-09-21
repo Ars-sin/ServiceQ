@@ -39,16 +39,17 @@ export default function LoginPage() {
           .maybeSingle()
 
         if (profile?.role) {
-          // Prevent cross-portal login
+          // Admin can log in through either portal
+          // Only block strict customer <-> provider cross-login
           if (loginRole === 'customer' && profile.role === 'provider') {
             await supabase.auth.signOut()
-            toast.error('This account is registered as a Provider. You cannot log in through the Customer portal. Please switch to the Provider tab.')
+            toast.error('This account is registered as a Provider. Please switch to the Provider tab to sign in.')
             setLoginRole('provider')
             return
           }
           if (loginRole === 'provider' && profile.role === 'customer') {
             await supabase.auth.signOut()
-            toast.error('This account is registered as a Customer. You cannot log in through the Provider portal. Please switch to the Customer tab.')
+            toast.error('This account is registered as a Customer. Please switch to the Customer tab to sign in.')
             setLoginRole('customer')
             return
           }
@@ -107,17 +108,18 @@ export default function LoginPage() {
 
       const userRole = profile?.role || 'customer'
 
-      // Enforce strict role boundary: Provider cannot log in via Customer, Customer cannot log in via Provider
+      // Admin can log in through either portal
+      // Only block strict customer <-> provider cross-login
       if (loginRole === 'customer' && userRole === 'provider') {
         await supabase.auth.signOut()
-        toast.error('This account is registered as a Provider. You cannot log in through the Customer portal. Please switch to the Provider tab.')
+        toast.error('This account is registered as a Provider. Please switch to the Provider tab to sign in.')
         setLoginRole('provider')
         return
       }
 
       if (loginRole === 'provider' && userRole === 'customer') {
         await supabase.auth.signOut()
-        toast.error('This account is registered as a Customer. You cannot log in through the Provider portal. Please switch to the Customer tab.')
+        toast.error('This account is registered as a Customer. Please switch to the Customer tab to sign in.')
         setLoginRole('customer')
         return
       }

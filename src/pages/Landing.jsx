@@ -1,10 +1,19 @@
-import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
   MapPin, Star, Shield, Zap, Clock, MessageCircle,
   Search, Calendar, CheckCircle2, ChevronRight, ArrowRight,
-  Sparkles, Award, Users
+  Sparkles, Award, Users, Home, LayoutGrid, Settings, User,
+  Menu, X
 } from 'lucide-react'
+
+const NAV_ITEMS = [
+  { id: 'hero', label: 'Home', icon: Home },
+  { id: 'explore', label: 'Explore', icon: Search },
+  { id: 'features', label: 'Features', icon: LayoutGrid },
+  { id: 'how-it-works', label: 'How It Works', icon: Settings },
+]
 
 const FEATURES = [
   { icon: Zap,            title: 'Book in Minutes',        desc: 'Find and book services or rentals instantly without unnecessary back-and-forth.' },
@@ -94,18 +103,58 @@ function AnimFade({ children, delay = 0 }) {
 }
 
 export default function LandingPage() {
+  const [activeSection, setActiveSection] = useState('hero')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Track active section on scroll
+  useEffect(() => {
+    const sections = ['hero', 'explore', 'features', 'how-it-works']
+    const handleScroll = () => {
+      const scrollPos = window.scrollY + 140
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const el = document.getElementById(sections[i])
+        if (el && el.offsetTop <= scrollPos) {
+          setActiveSection(sections[i])
+          break
+        }
+      }
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  const scrollToSection = (e, id) => {
+    e.preventDefault()
+    setActiveSection(id)
+    setMobileMenuOpen(false)
+    if (id === 'hero') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      const el = document.getElementById(id)
+      if (el) {
+        const topOffset = 80
+        const elementPosition = el.getBoundingClientRect().top
+        const offsetPosition = elementPosition + window.pageYOffset - topOffset
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        })
+      }
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-brand-950 font-sans text-gray-800">
+    <div id="top" className="min-h-screen bg-brand-950 font-sans text-gray-800">
 
       {/* ── TOP NAVBAR ────────────────────────────────────────────── */}
-      <nav className="sticky top-0 z-50 bg-brand-950/95 backdrop-blur-md border-b border-brand-800/60 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 flex items-center justify-between py-4 sm:py-5">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-3">
+      <nav className="sticky top-0 z-50 bg-brand-950/95 backdrop-blur-md border-b border-white/10 shadow-lg">
+        <div className="w-full max-w-7xl mx-auto px-6 sm:px-10 lg:px-12 flex items-center justify-between py-4 sm:py-5">
+          {/* Logo with plenty of breathing room */}
+          <Link to="/" className="flex items-center gap-3 flex-shrink-0 group">
             <img
               src="/logoword(white).png"
               alt="ServiceQ"
-              className="h-8 sm:h-9 w-auto object-contain"
+              className="h-8 sm:h-9 w-auto object-contain transition-transform group-hover:scale-105 duration-200"
               onError={(e) => {
                 e.target.onerror = null
                 e.target.src = '/logo.png'
@@ -113,30 +162,122 @@ export default function LandingPage() {
             />
           </Link>
 
-          {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-brand-100">
-            <a href="#hero" className="hover:text-white transition py-1">Home</a>
-            <a href="#explore" className="hover:text-white transition py-1">Explore</a>
-            <a href="#features" className="hover:text-white transition py-1">Features</a>
-            <a href="#how-it-works" className="hover:text-white transition py-1">How It Works</a>
+          {/* Desktop Nav Items matching reference design */}
+          <div className="hidden md:flex items-center gap-2 lg:gap-3 text-sm">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon
+              const isActive = activeSection === item.id
+              return (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  onClick={(e) => scrollToSection(e, item.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm transition-all duration-200 ${
+                    isActive
+                      ? 'bg-blue-600/35 border border-blue-400/40 text-white font-semibold shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                      : 'text-slate-300 hover:text-white hover:bg-white/10 font-medium'
+                  }`}
+                >
+                  <Icon size={15} className={isActive ? 'text-white' : 'text-slate-400'} />
+                  <span>{item.label}</span>
+                </a>
+              )
+            })}
           </div>
 
-          {/* Action Buttons with strong visibility */}
-          <div className="flex items-center gap-3.5">
+          {/* Desktop Action Buttons with exact reference pill styles */}
+          <div className="hidden md:flex items-center gap-3 lg:gap-4 flex-shrink-0">
+            {/* Vertical divider */}
+            <div className="h-5 w-px bg-white/20 mx-1 hidden lg:block" />
+
             <Link
               to="/login"
-              className="px-4.5 py-2 text-sm font-bold text-white hover:text-brand-100 border border-white/40 hover:border-white rounded-xl transition bg-white/5"
+              className="rounded-full border border-white/30 hover:border-white/60 hover:bg-white/10 text-white px-5 py-2 text-sm font-medium flex items-center gap-2 transition duration-200 active:scale-95"
             >
-              Sign In
+              <User size={15} className="text-white" />
+              <span>Sign In</span>
             </Link>
+
             <Link
               to="/register"
-              className="px-5 py-2 text-sm font-bold text-brand-950 bg-white hover:bg-brand-50 rounded-xl shadow-md transition hover:scale-105 active:scale-95"
+              className="rounded-full bg-gradient-to-r from-blue-500 via-sky-500 to-sky-400 hover:from-blue-600 hover:to-sky-500 text-white px-5 py-2 text-sm font-semibold flex items-center gap-1.5 shadow-[0_2px_12px_rgba(14,165,233,0.35)] hover:shadow-[0_4px_18px_rgba(14,165,233,0.5)] transition duration-200 active:scale-95"
             >
-              Get Started
+              <span>Get Started</span>
+              <ArrowRight size={15} />
             </Link>
           </div>
+
+          {/* Mobile hamburger button */}
+          <div className="flex items-center gap-2 md:hidden">
+            <Link
+              to="/login"
+              className="p-2 rounded-full border border-white/25 text-white hover:bg-white/10"
+              title="Sign In"
+            >
+              <User size={18} />
+            </Link>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl text-white hover:bg-white/10 transition"
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile Dropdown Panel */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden border-t border-white/10 bg-brand-950/98 px-6 py-5 flex flex-col gap-3"
+            >
+              <div className="flex flex-col gap-1.5">
+                {NAV_ITEMS.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeSection === item.id
+                  return (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      onClick={(e) => scrollToSection(e, item.id)}
+                      className={`flex items-center gap-3 px-4 py-2.5 rounded-full text-sm transition ${
+                        isActive
+                          ? 'bg-blue-600/35 border border-blue-400/40 text-white font-semibold'
+                          : 'text-slate-300 hover:text-white hover:bg-white/10 font-medium'
+                      }`}
+                    >
+                      <Icon size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
+                      <span>{item.label}</span>
+                    </a>
+                  )
+                })}
+              </div>
+              <div className="h-px w-full bg-white/15 my-1" />
+              <div className="flex flex-col gap-2.5">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-full border border-white/30 hover:bg-white/10 text-white px-5 py-2.5 text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <User size={15} />
+                  <span>Sign In</span>
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="rounded-full bg-gradient-to-r from-blue-500 via-sky-500 to-sky-400 text-white px-5 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 shadow-md"
+                >
+                  <span>Get Started</span>
+                  <ArrowRight size={15} />
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* ── HERO & EXPLORE (Seamless Gradient Blend) ────────────── */}
@@ -149,8 +290,9 @@ export default function LandingPage() {
         <section id="hero" className="relative z-10 pt-16 pb-12 scroll-mt-24">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
             <AnimFade>
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-800/90 border border-brand-400/40 text-brand-200 text-xs sm:text-sm font-semibold mb-6 shadow-sm">
-                <MapPin size={14} className="text-brand-300" /> Serving Cebu City & surrounding areas
+              <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-blue-950/60 hover:bg-blue-900/60 border border-blue-400/30 backdrop-blur-md text-white text-xs sm:text-sm font-medium shadow-[0_0_20px_rgba(59,130,246,0.25)] transition duration-200 mb-6">
+                <MapPin size={15} className="text-sky-400 flex-shrink-0" />
+                <span className="tracking-wide text-slate-100">Serving Cebu City & surrounding areas</span>
               </div>
             </AnimFade>
 

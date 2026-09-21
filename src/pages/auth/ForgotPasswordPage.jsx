@@ -325,11 +325,19 @@ export default function ForgotPasswordPage() {
                   />
                 </div>
 
-                <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
-                  {loading
-                    ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : 'Update Password'}
-                </button>
+                <div className="flex gap-3 mt-1">
+                  <Link
+                    to="/login"
+                    className="btn-secondary flex-1 py-3 flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
+                  >
+                    <ArrowLeft size={16} /> Back to Sign In
+                  </Link>
+                  <button type="submit" disabled={loading} className="btn-primary flex-1 py-2.5">
+                    {loading
+                      ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : 'Update Password'}
+                  </button>
+                </div>
               </motion.form>
             )}
 
