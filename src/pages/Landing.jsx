@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import {
@@ -105,11 +105,26 @@ function AnimFade({ children, delay = 0 }) {
 export default function LandingPage() {
   const [activeSection, setActiveSection] = useState('hero')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const isManualScrolling = useRef(false)
+  const scrollTimeout = useRef(null)
 
   // Track active section on scroll
   useEffect(() => {
     const sections = ['hero', 'explore', 'features', 'how-it-works']
     const handleScroll = () => {
+      // Don't override activeSection while smooth scrolling to clicked section
+      if (isManualScrolling.current) return
+
+      if (window.scrollY < 100) {
+        setActiveSection('hero')
+        return
+      }
+
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 60) {
+        setActiveSection('how-it-works')
+        return
+      }
+
       const scrollPos = window.scrollY + 140
       for (let i = sections.length - 1; i >= 0; i--) {
         const el = document.getElementById(sections[i])
@@ -119,14 +134,22 @@ export default function LandingPage() {
         }
       }
     }
+
     window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (scrollTimeout.current) clearTimeout(scrollTimeout.current)
+    }
   }, [])
 
   const scrollToSection = (e, id) => {
     e.preventDefault()
     setActiveSection(id)
     setMobileMenuOpen(false)
+
+    isManualScrolling.current = true
+    if (scrollTimeout.current) clearTimeout(scrollTimeout.current)
+
     if (id === 'hero') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
@@ -141,6 +164,19 @@ export default function LandingPage() {
         })
       }
     }
+
+    const unlockScroll = () => {
+      isManualScrolling.current = false
+      window.removeEventListener('scrollend', unlockScroll)
+    }
+
+    if ('onscrollend' in window) {
+      window.addEventListener('scrollend', unlockScroll, { once: true })
+    }
+
+    scrollTimeout.current = setTimeout(() => {
+      isManualScrolling.current = false
+    }, 900)
   }
 
   return (
@@ -162,8 +198,8 @@ export default function LandingPage() {
             />
           </Link>
 
-          {/* Desktop Nav Items matching reference design */}
-          <div className="hidden md:flex items-center gap-2 lg:gap-3 text-sm">
+          {/* Desktop Nav Items with smooth animated sliding pill */}
+          <div className="hidden md:flex items-center gap-1.5 lg:gap-2 text-sm p-1 rounded-full bg-white/[0.03] border border-white/[0.08] backdrop-blur-sm">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon
               const isActive = activeSection === item.id
@@ -172,14 +208,26 @@ export default function LandingPage() {
                   key={item.id}
                   href={`#${item.id}`}
                   onClick={(e) => scrollToSection(e, item.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm transition-all duration-200 ${
+                  className={`relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 outline-none focus:outline-none select-none ${
                     isActive
-                      ? 'bg-blue-600/35 border border-blue-400/40 text-white font-semibold shadow-[0_0_15px_rgba(59,130,246,0.3)]'
-                      : 'text-slate-300 hover:text-white hover:bg-white/10 font-medium'
+                      ? 'text-white font-semibold'
+                      : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  <Icon size={15} className={isActive ? 'text-white' : 'text-slate-400'} />
-                  <span>{item.label}</span>
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeNavPill"
+                      className="absolute inset-0 rounded-full bg-blue-600/35 border border-blue-400/40 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <Icon
+                    size={15}
+                    className={`relative z-10 transition-colors duration-200 ${
+                      isActive ? 'text-white' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="relative z-10">{item.label}</span>
                 </a>
               )
             })}
