@@ -1,22 +1,11 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { MessageCircle, CheckCircle, XCircle } from 'lucide-react'
+import { MessageCircle, CheckCircle, XCircle, CalendarCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Pagination from '@/components/ui/Pagination'
-
-const MOCK = [
-  { id: 'SQ-A1', customer: 'Ana Reyes',     service: 'Home Cleaning',     date: '2026-09-10', time: '9:00 AM', duration: '1 session', amount: 1100, status: 'pending',   payout: null },
-  { id: 'SQ-B2', customer: 'Marco Lopez',   service: 'Home Cleaning',     date: '2026-09-08', time: '2:00 PM', duration: '1 session', amount: 550,  status: 'scheduled', payout: null },
-  { id: 'SQ-C3', customer: 'Grace Tan',     service: 'Deep Cleaning',     date: '2026-09-07', time: '10:00 AM',duration: '1 session', amount: 1320, status: 'active',    payout: null },
-  { id: 'SQ-D4', customer: 'Rico Santos',   service: 'Home Cleaning',     date: '2026-09-03', time: '8:00 AM', duration: '1 session', amount: 880,  status: 'completed', payout: 'released' },
-  { id: 'SQ-E5', customer: 'Joy DC',        service: 'Office Cleaning',   date: '2026-08-28', time: '9:00 AM', duration: '1 session', amount: 880,  status: 'cancelled', payout: null },
-  { id: 'SQ-F6', customer: 'Carlo Mendoza', service: 'Sofa Cleaning',     date: '2026-08-25', time: '1:00 PM', duration: '1 session', amount: 650,  status: 'completed', payout: 'released' },
-  { id: 'SQ-G7', customer: 'Elena Gomez',   service: 'Move-in Deep Clean',date: '2026-08-22', time: '8:30 AM', duration: '1 session', amount: 1800, status: 'completed', payout: 'released' },
-  { id: 'SQ-H8', customer: 'David Lim',     service: 'Window Cleaning',   date: '2026-08-20', time: '11:00 AM',duration: '1 session', amount: 400,  status: 'scheduled', payout: null },
-]
 
 const TABS = [
   { id: 'all', label: 'All' },
@@ -26,7 +15,13 @@ const TABS = [
 export default function ProviderBookings() {
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
-  const [bookings, setBookings] = useState(MOCK)
+  const [bookings, setBookings] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
+      if (Array.isArray(stored)) return stored
+    } catch {}
+    return []
+  })
 
   const PAGE_SIZE = 4
   const isDefaultAll = tab === 'all'
@@ -43,7 +38,11 @@ export default function ProviderBookings() {
   }
 
   const updateStatus = (id, status) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status } : b))
+    setBookings(prev => {
+      const updated = prev.map(b => b.id === id ? { ...b, status } : b)
+      try { localStorage.setItem('serviceq_provider_bookings', JSON.stringify(updated)) } catch {}
+      return updated
+    })
     toast.success(`Booking ${status}`)
     setTab(status)
     setPage(1)
@@ -63,7 +62,17 @@ export default function ProviderBookings() {
 
       <div className="flex flex-col gap-4">
         {visible.length === 0 ? (
-          <div className="text-center py-16 text-gray-400"><p className="text-4xl mb-2">📭</p><p>No {tab} bookings</p></div>
+          <div className="card py-16 text-center text-gray-400 border border-gray-200/80 shadow-sm flex flex-col items-center justify-center">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+              <CalendarCheck size={28} />
+            </div>
+            <p className="font-bold text-gray-800 text-base">No bookings found</p>
+            <p className="text-xs text-gray-400 mt-1 max-w-sm">
+              {tab === 'all'
+                ? "You don't have any bookings yet. Incoming customer bookings will appear here."
+                : `No ${tab} bookings found.`}
+            </p>
+          </div>
         ) : displayed.map(b => (
           <motion.div key={b.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             className="card flex flex-col sm:flex-row items-start sm:items-center gap-4">

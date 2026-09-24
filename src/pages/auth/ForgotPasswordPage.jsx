@@ -224,7 +224,11 @@ export default function ForgotPasswordPage() {
                   >
                     <ArrowLeft size={16} /> Back
                   </Link>
-                  <button type="submit" disabled={loading} className="btn-primary btn-lg flex-1 font-bold shadow-sm">
+                  <button
+                    type="submit"
+                    disabled={loading || !email.trim()}
+                    className="btn-primary btn-lg flex-1 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     {loading
                       ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       : 'Send 6-Digit OTP'}
@@ -262,7 +266,11 @@ export default function ForgotPasswordPage() {
                   ))}
                 </div>
 
-                <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
+                <button
+                  type="submit"
+                  disabled={loading || otp.join('').trim().length < 6}
+                  className="btn-primary w-full py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                   {loading
                     ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     : 'Verify Code'}

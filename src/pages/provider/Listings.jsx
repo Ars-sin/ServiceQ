@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Archive, Eye, ToggleLeft, ToggleRight, Check, ShieldAlert, CheckCircle2, MapPin, Calendar, Clock, DollarSign, ExternalLink } from 'lucide-react'
+import {
+  Plus, Edit2, Archive, Eye, ToggleLeft, ToggleRight, Check,
+  ShieldAlert, CheckCircle2, MapPin, Calendar, Clock, DollarSign,
+  ExternalLink, ArrowLeft, ArrowRight, Package
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
@@ -10,18 +14,6 @@ import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-
-const BASE_MOCK = [
-  { id: '1', title: 'Home Cleaning Service',   type: 'Service', category: 'Cleaning', price: 500,  unit: 'per session', status: 'active',   bookings: 28, color: 'from-purple-400 to-pink-400' },
-  { id: '2', title: 'Deep Cleaning Package',   type: 'Service', category: 'Cleaning', price: 1200, unit: 'per session', status: 'active',   bookings: 14, color: 'from-violet-400 to-purple-400' },
-  { id: '3', title: 'Office Cleaning Service', type: 'Service', category: 'Cleaning', price: 800,  unit: 'per session', status: 'inactive', bookings: 5,  color: 'from-pink-400 to-rose-400' },
-  { id: '4', title: 'Post-Event Cleanup',      type: 'Service', category: 'Cleaning', price: 1500, unit: 'per session', status: 'archived', bookings: 8,  color: 'from-fuchsia-400 to-pink-400' },
-  { id: '5', title: 'Sofa & Upholstery Care',  type: 'Service', category: 'Cleaning', price: 650,  unit: 'per session', status: 'active',   bookings: 19, color: 'from-blue-400 to-indigo-400' },
-  { id: '6', title: 'Window & Glass Cleaning', type: 'Service', category: 'Cleaning', price: 400,  unit: 'per session', status: 'active',   bookings: 11, color: 'from-cyan-400 to-blue-400' },
-  { id: '7', title: 'Commercial Kitchen Clean',type: 'Service', category: 'Cleaning', price: 2200, unit: 'per session', status: 'inactive', bookings: 3,  color: 'from-amber-400 to-orange-400' },
-  { id: '8', title: 'Move-in / Move-out Pack', type: 'Service', category: 'Cleaning', price: 1800, unit: 'per session', status: 'active',   bookings: 22, color: 'from-emerald-400 to-teal-400' },
-  { id: '9', title: 'Mattress Sanitization',   type: 'Service', category: 'Cleaning', price: 550,  unit: 'per session', status: 'active',   bookings: 9,  color: 'from-teal-400 to-cyan-400' },
-]
 
 const TABS = [
   { id: 'all',      label: 'All Listings' },
@@ -33,84 +25,57 @@ const TABS = [
 const WIZARD_STEPS = ['Type & Category', 'Details & Photos', 'Pricing', 'Location', 'Availability', 'Review & Publish']
 
 const INITIAL_FORM = {
-  type: 'Service',
-  category: 'Cleaning',
+  type: '',
+  category: '',
   title: '',
   description: '',
-  price: '500',
+  price: '',
   unit: 'per session',
   minDuration: '1',
   maxDuration: '10',
-  location: 'Cebu City',
-  serviceArea: 'Metro Cebu',
-  days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+  location: '',
+  serviceArea: '',
+  days: [],
   hoursFrom: '08:00',
   hoursTo: '17:00',
 }
 
 export default function ProviderListings() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user, profile } = useAuth()
   const [tab, setTab]               = useState('all')
   const [page, setPage]             = useState(1)
   const [showAdd, setShowAdd]       = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
   const [viewingListing, setViewingListing] = useState(null)
-  const [showKycModal, setShowKycModal] = useState(false)
-  const [isVerified, setIsVerified] = useState(false)
-
-  useEffect(() => {
-    async function checkVerification() {
-      if (!user?.id) return
-      let meta = null
-      try {
-        if (profile?.avatar_url && profile.avatar_url.startsWith('{')) {
-          meta = JSON.parse(profile.avatar_url)
-        }
-      } catch {}
-
-      if (meta?.status === 'approved') {
-        setIsVerified(true)
-        return
-      }
-
-      const { data: prov } = await supabase
-        .from('providers')
-        .select('kyc_status')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (prov?.kyc_status === 'verified') {
-        setIsVerified(true)
-      }
-    }
-    checkVerification()
-  }, [user, profile])
-
-  const handleOpenAdd = () => {
-    if (!isVerified) {
-      setShowKycModal(true)
-      return
-    }
-    setShowAdd(true)
-    setWizardStep(0)
-  }
-
-  // Initialize listings from local storage merged with base mock
+  // Initialize listings from local storage (defaults to empty array for new providers)
   const [listings, setListings]     = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_provider_listings'))
-      if (Array.isArray(stored) && stored.length > 0) {
-        const storedIds = new Set(stored.map(l => l.id))
-        const remaining = BASE_MOCK.filter(l => !storedIds.has(l.id))
-        return [...stored, ...remaining]
+      if (Array.isArray(stored)) {
+        return stored
       }
     } catch {}
-    return BASE_MOCK
+    return []
   })
 
   // Wizard form state
   const [form, setForm] = useState(INITIAL_FORM)
+
+  const handleOpenAdd = () => {
+    setShowAdd(true)
+    setWizardStep(0)
+  }
+
+  // Slide 26: Listen for ?action=add from dashboard
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      handleOpenAdd()
+      searchParams.delete('action')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams])
 
   const PAGE_SIZE = 4
   const isDefaultAll = tab === 'all'
@@ -137,6 +102,17 @@ export default function ProviderListings() {
     toast.success('Listing status updated')
   }
 
+  const isStepValid = (step) => {
+    switch (step) {
+      case 0: return Boolean(form.type && form.category)
+      case 1: return Boolean(form.title.trim() && form.description.trim())
+      case 2: return Boolean(form.price && parseFloat(form.price) > 0)
+      case 3: return Boolean(form.location.trim() && form.serviceArea.trim())
+      case 4: return Boolean(form.days.length > 0 && form.hoursFrom && form.hoursTo)
+      default: return true
+    }
+  }
+
   const handlePublish = () => {
     if (!form.title.trim()) {
       return toast.error('Please provide a listing title')
@@ -145,9 +121,9 @@ export default function ProviderListings() {
     const newListing = {
       id: String(Date.now()),
       title: form.title.trim(),
-      type: form.type,
-      category: form.category,
-      price: parseFloat(form.price) || 500,
+      type: form.type || 'Service',
+      category: form.category || 'General',
+      price: parseFloat(form.price) || 0,
       unit: form.unit,
       status: 'active',
       bookings: 0,
@@ -187,83 +163,99 @@ export default function ProviderListings() {
       <Tabs tabs={TABS.map(t => ({ ...t, count: listings.filter(l => t.id === 'all' || l.status === t.id).length }))}
         active={tab} onChange={handleTabChange} />
 
-      <div className="card overflow-x-auto p-0 border border-gray-200/80 shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-gray-400 text-xs border-b border-gray-100">
-              <th className="p-4 font-medium">Listing</th>
-              <th className="p-4 font-medium">Type</th>
-              <th className="p-4 font-medium">Price</th>
-              <th className="p-4 font-medium">Bookings</th>
-              <th className="p-4 font-medium">Status</th>
-              <th className="p-4 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {displayed.map(l => (
-              <tr
-                key={l.id}
-                onClick={() => setViewingListing(l)}
-                className="hover:bg-emerald-50/40 cursor-pointer transition-colors group"
-              >
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${l.color} flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
-                      ✓
-                    </div>
-                    <div>
-                      <div className="font-semibold text-gray-900 text-sm group-hover:text-emerald-700 transition-colors">{l.title}</div>
-                      <div className="text-xs text-gray-400">{l.category}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="p-4 text-gray-600 text-xs">{l.type}</td>
-                <td className="p-4 font-bold text-brand-600">{formatPHP(l.price)}<span className="text-xs text-gray-400 font-normal"> {l.unit}</span></td>
-                <td className="p-4 text-gray-600 text-xs font-semibold">{l.bookings}</td>
-                <td className="p-4"><Badge variant={statusVariant(l.status)} className="capitalize">{l.status}</Badge></td>
-                <td className="p-4" onClick={e => e.stopPropagation()}>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setViewingListing(l)}
-                      title="View Details"
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-emerald-700 transition-colors"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    <button
-                      onClick={() => toggleStatus(l.id)}
-                      title={l.status === 'active' ? 'Disable Listing' : 'Activate Listing'}
-                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
-                    >
-                      {l.status === 'active' ? <ToggleRight size={20} className="text-emerald-600" /> : <ToggleLeft size={20} className="text-gray-400" />}
-                    </button>
-                    <button onClick={() => toast.success('Archived to records')} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Archive size={15} /></button>
-                  </div>
-                </td>
+      {visible.length === 0 ? (
+        <div className="card py-16 text-center text-gray-400 border border-gray-200/80 shadow-sm flex flex-col items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3">
+            <Package size={28} />
+          </div>
+          <p className="font-bold text-gray-800 text-base">No listings found</p>
+          <p className="text-xs text-gray-400 mt-1 max-w-sm">
+            {tab === 'all'
+              ? 'You haven\'t published any listings yet. Click "Add New Listing" to create your first offering.'
+              : `There are currently no listings in "${tab}" status.`}
+          </p>
+          {tab === 'all' && (
+            <button
+              onClick={handleOpenAdd}
+              className="btn-primary text-xs mt-4 gap-1.5"
+              style={{ background: '#059669' }}
+            >
+              <Plus size={14} /> Add New Listing
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="card overflow-x-auto p-0 border border-gray-200/80 shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-400 text-xs border-b border-gray-100">
+                <th className="p-4 font-medium">Listing</th>
+                <th className="p-4 font-medium">Type</th>
+                <th className="p-4 font-medium">Price</th>
+                <th className="p-4 font-medium">Bookings</th>
+                <th className="p-4 font-medium">Status</th>
+                <th className="p-4 font-medium">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {displayed.map(l => (
+                <tr
+                  key={l.id}
+                  onClick={() => setViewingListing(l)}
+                  className="hover:bg-emerald-50/40 cursor-pointer transition-colors group"
+                >
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${l.color} flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
+                        ✓
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900 text-sm group-hover:text-emerald-700 transition-colors">{l.title}</div>
+                        <div className="text-xs text-gray-400">{l.category}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-4 text-gray-600 text-xs">{l.type}</td>
+                  <td className="p-4 font-bold text-brand-600">{formatPHP(l.price)}<span className="text-xs text-gray-400 font-normal"> {l.unit}</span></td>
+                  <td className="p-4 text-gray-600 text-xs font-semibold">{l.bookings}</td>
+                  <td className="p-4"><Badge variant={statusVariant(l.status)} className="capitalize">{l.status}</Badge></td>
+                  <td className="p-4" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setViewingListing(l)}
+                        title="View Details"
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-emerald-700 transition-colors"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
+                        onClick={() => toggleStatus(l.id)}
+                        title={l.status === 'active' ? 'Disable Listing' : 'Activate Listing'}
+                        className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                      >
+                        {l.status === 'active' ? <ToggleRight size={20} className="text-emerald-600" /> : <ToggleLeft size={20} className="text-gray-400" />}
+                      </button>
+                      <button onClick={() => toast.success('Archived to records')} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Archive size={15} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        {visible.length === 0 && (
-          <div className="py-16 text-center text-gray-400">
-            <p className="text-4xl mb-2">📋</p>
-            <p className="font-medium text-gray-600">No listings in this category</p>
-          </div>
-        )}
-
-        {/* Conditional Pagination: only when tab === 'all' */}
-        {isDefaultAll && visible.length > PAGE_SIZE && (
-          <div className="p-4 border-t border-gray-100">
-            <Pagination
-              currentPage={page}
-              totalItems={visible.length}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-            />
-          </div>
-        )}
-      </div>
+          {/* Conditional Pagination: only when tab === 'all' */}
+          {isDefaultAll && visible.length > PAGE_SIZE && (
+            <div className="p-4 border-t border-gray-100">
+              <Pagination
+                currentPage={page}
+                totalItems={visible.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add Listing Wizard Modal */}
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title={`Add New Listing – ${WIZARD_STEPS[wizardStep]}`} size="lg">
@@ -277,7 +269,7 @@ export default function ProviderListings() {
         {/* Step 0: Type & Category */}
         {wizardStep === 0 && (
           <div className="flex flex-col gap-4">
-            <label className="label">Offering Type</label>
+            <label className="label">Offering Type *</label>
             <div className="grid grid-cols-3 gap-3">
               {['Service', 'Rental Property', 'Rental Item'].map(t => (
                 <button
@@ -294,12 +286,13 @@ export default function ProviderListings() {
             </div>
 
             <div className="form-group mt-2">
-              <label className="label">Category</label>
+              <label className="label">Category *</label>
               <select
                 value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                 className="input"
               >
+                <option value="">Select a category</option>
                 <option value="Cleaning">Cleaning & Sanitation</option>
                 <option value="Repairs">Repairs & Maintenance</option>
                 <option value="Tutoring">Tutoring & Education</option>
@@ -326,7 +319,7 @@ export default function ProviderListings() {
               />
             </div>
             <div className="form-group">
-              <label className="label">Detailed Description</label>
+              <label className="label">Detailed Description *</label>
               <textarea
                 rows={3}
                 className="input resize-none"
@@ -379,7 +372,7 @@ export default function ProviderListings() {
         {wizardStep === 3 && (
           <div className="flex flex-col gap-4">
             <div className="form-group">
-              <label className="label">Primary Location / Base City</label>
+              <label className="label">Primary Location / Base City *</label>
               <input
                 className="input"
                 value={form.location}
@@ -388,7 +381,7 @@ export default function ProviderListings() {
               />
             </div>
             <div className="form-group">
-              <label className="label">Service Area Coverage</label>
+              <label className="label">Service Area Coverage *</label>
               <input
                 className="input"
                 placeholder="e.g. Cebu City, Mandaue, Lapu-Lapu, Talisay"
@@ -402,10 +395,10 @@ export default function ProviderListings() {
         {/* Step 4: Availability */}
         {wizardStep === 4 && (
           <div className="flex flex-col gap-4">
-            <label className="label">Available Days</label>
+            <label className="label">Available Days *</label>
             <div className="grid grid-cols-4 gap-2">
               {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-                <label key={d} className="flex items-center gap-2 text-xs font-medium cursor-pointer p-2 rounded-lg border border-gray-100 hover:bg-gray-50">
+                <label key={d} className={`flex items-center gap-2 text-xs font-medium cursor-pointer p-2 rounded-lg border transition-all ${form.days.includes(d) ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
                   <input
                     type="checkbox"
                     checked={form.days.includes(d)}
@@ -467,26 +460,28 @@ export default function ProviderListings() {
           </div>
         )}
 
-        <div className="flex justify-between mt-6 pt-3 border-t border-gray-100">
+        <div className="flex justify-between items-center mt-6 pt-3 border-t border-gray-100">
           <button
+            type="button"
             onClick={() => setWizardStep(s => Math.max(0, s - 1))}
             disabled={wizardStep === 0}
-            className="btn-ghost text-xs disabled:opacity-40"
+            className="border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Back
+            <ArrowLeft size={14} /> Back
           </button>
           {wizardStep < 5 && (
             <button
+              type="button"
+              disabled={!isStepValid(wizardStep)}
               onClick={() => {
-                if (wizardStep === 1 && !form.title.trim()) {
-                  return toast.error('Please enter a listing title')
+                if (isStepValid(wizardStep)) {
+                  setWizardStep(s => s + 1)
                 }
-                setWizardStep(s => s + 1)
               }}
-              className="btn-primary text-xs"
+              className="btn-primary text-xs flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#059669' }}
             >
-              Next Step →
+              Next Step <ArrowRight size={14} />
             </button>
           )}
         </div>

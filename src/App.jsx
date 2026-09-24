@@ -26,6 +26,7 @@ import ProviderBookings    from '@/pages/provider/Bookings'
 import ProviderEarnings    from '@/pages/provider/Earnings'
 import ProviderSubscription from '@/pages/provider/Subscription'
 import ProviderProfile     from '@/pages/provider/Profile'
+import ProviderSettings    from '@/pages/provider/Settings'
 
 // Admin portal
 import AdminLayout     from '@/layouts/AdminLayout'
@@ -155,6 +156,7 @@ function AppRoutes() {
         <Route path="earnings"     element={<ProviderEarnings />} />
         <Route path="subscription" element={<ProviderSubscription />} />
         <Route path="profile"      element={<ProviderProfile />} />
+        <Route path="settings"     element={<ProviderSettings />} />
       </Route>
 
       {/* ── Admin Portal ── */}

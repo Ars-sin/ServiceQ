@@ -86,7 +86,9 @@ function ManualFields({ value = {}, onChange }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="form-group">
-          <label className="label">Barangay</label>
+          <label className="label">
+            Barangay <span className="text-red-500 font-bold">*</span>
+          </label>
           <input
             className="input"
             placeholder="e.g. Lahug"
@@ -95,7 +97,9 @@ function ManualFields({ value = {}, onChange }) {
           />
         </div>
         <div className="form-group">
-          <label className="label">City / Municipality</label>
+          <label className="label">
+            City / Municipality <span className="text-red-500 font-bold">*</span>
+          </label>
           <input
             className="input"
             placeholder="e.g. Cebu City"

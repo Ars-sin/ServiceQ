@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   LayoutDashboard, Package, CalendarCheck, DollarSign,
-  Zap, User, LogOut, Bell, Menu,
+  Zap, User, Settings, LogOut, Bell, Menu,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,7 @@ const NAV = [
   { to: '/provider/earnings',     label: 'Earnings',     icon: DollarSign },
   { to: '/provider/subscription', label: 'Subscription', icon: Zap },
   { to: '/provider/profile',      label: 'Profile',      icon: User },
+  { to: '/provider/settings',     label: 'Settings',     icon: Settings },
 ]
 
 export default function ProviderLayout() {

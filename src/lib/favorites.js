@@ -1,18 +1,15 @@
 const STORAGE_KEY = 'serviceq_customer_favorites'
-const DEFAULT_FAVORITES = ['1', '3', '4', '8', '9', '12']
+const DEFAULT_FAVORITES = []
 
 export function getFavoriteIds() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) return parsed
     }
   } catch {}
 
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_FAVORITES))
-  } catch {}
   return DEFAULT_FAVORITES
 }
 

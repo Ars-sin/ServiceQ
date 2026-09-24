@@ -33,6 +33,8 @@ const PROVIDER_CATEGORIES = [
   'Other Local Service / Rental',
 ]
 
+import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
+
 export default function RegisterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -44,6 +46,8 @@ export default function RegisterPage() {
   const [step, setStep]                   = useState(0)
   const [role, setRole]                   = useState(initialRole)
   const [showPw, setShowPw]               = useState(false)
+  const [showConfirmPw, setShowConfirmPw] = useState(false)
+  const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [agreed, setAgreed]               = useState(false)
   const [loading, setLoading]             = useState(false)
   const [verifyLoading, setVerifyLoading] = useState(false)
@@ -69,13 +73,13 @@ export default function RegisterPage() {
     confirmPassword: '',
   })
 
-  // Provider-specific details
+  // Provider-specific details - clean placeholders / unselected by default
   const [providerDetails, setProviderDetails] = useState({
     businessName: '',
-    providerType: 'service', // 'service' | 'rental' | 'both'
-    category: 'Cleaning & Home Care',
-    yearsExp: '1',
-    serviceCoverage: ['Cebu City', 'Mandaue City', 'Lapu-Lapu City'],
+    providerType: '', // 'service' | 'rental' | 'both' (unselected by default)
+    category: '',     // unselected placeholder by default
+    yearsExp: '',     // unselected placeholder by default
+    serviceCoverage: [], // unselected by default
   })
 
   // Location
@@ -136,10 +140,10 @@ export default function RegisterPage() {
     setOtherCoverageText('')
     setProviderDetails({
       businessName: '',
-      providerType: 'service',
-      category: 'Cleaning & Home Care',
-      yearsExp: '1',
-      serviceCoverage: ['Cebu City', 'Mandaue City', 'Lapu-Lapu City'],
+      providerType: '',
+      category: '',
+      yearsExp: '',
+      serviceCoverage: [],
     })
     setLocation({
       address: '',
@@ -152,6 +156,7 @@ export default function RegisterPage() {
     })
     setAgreed(false)
     setShowPw(false)
+    setShowConfirmPw(false)
     setOtp(['', '', '', '', '', ''])
   }
 
@@ -203,14 +208,64 @@ export default function RegisterPage() {
     inputRefs.current[nextFocusIndex]?.focus()
   }
 
+  // ── Live validation flags for disabled button states ────────────────────
+  const hasMinLength = form.password.length >= 6
+  const hasUpperLower = /[a-z]/.test(form.password) && /[A-Z]/.test(form.password)
+  const hasNumber = /\d/.test(form.password)
+  const isPasswordValid = hasMinLength && hasUpperLower && hasNumber
+  const passwordsMatch = Boolean(form.password && form.confirmPassword && form.password === form.confirmPassword)
+
+  const isStep0Valid = role === 'provider'
+    ? Boolean(
+        (isFreelancer || providerDetails.businessName.trim()) &&
+        providerDetails.providerType &&
+        providerDetails.category &&
+        (providerDetails.category !== 'Other Local Service / Rental' || customCategory.trim()) &&
+        providerDetails.yearsExp !== '' &&
+        form.firstName.trim().length >= 2 &&
+        form.lastName.trim().length >= 2 &&
+        /^\S+@\S+\.\S+$/.test(form.email.trim()) &&
+        form.phone.replace(/\D/g, '').length >= 10
+      )
+    : Boolean(
+        form.firstName.trim().length >= 2 &&
+        form.lastName.trim().length >= 2 &&
+        /^\S+@\S+\.\S+$/.test(form.email.trim()) &&
+        form.phone.replace(/\D/g, '').length >= 10
+      )
+
+  const isStep1Valid = role === 'provider'
+    ? Boolean(
+        location.barangay?.trim() &&
+        location.city?.trim() &&
+        providerDetails.serviceCoverage.length > 0 &&
+        (!providerDetails.serviceCoverage.includes('Other Location in Cebu') || otherCoverageText.trim())
+      )
+    : Boolean(location.barangay?.trim() && location.city?.trim())
+
+  const isStep2Valid = isPasswordValid && passwordsMatch && agreed
+  const isStep3Valid = otp.join('').trim().length === 6
+
   // ── Step validation (strict feedback on the exact step) ───────────────
   const validateStep0 = () => {
     if (role === 'provider' && !isFreelancer && !providerDetails.businessName.trim()) {
       toast.error('Please enter your business or trade name (or check freelancer if individual)')
       return false
     }
+    if (role === 'provider' && !providerDetails.providerType) {
+      toast.error('Please select what you offer (Services, Rentals, or Both)')
+      return false
+    }
+    if (role === 'provider' && !providerDetails.category) {
+      toast.error('Please select your primary category')
+      return false
+    }
     if (role === 'provider' && providerDetails.category === 'Other Local Service / Rental' && !customCategory.trim()) {
       toast.error('Please specify your other service or rental type')
+      return false
+    }
+    if (role === 'provider' && providerDetails.yearsExp === '') {
+      toast.error('Please select your years of experience')
       return false
     }
     if (!form.firstName.trim()) {
@@ -251,8 +306,8 @@ export default function RegisterPage() {
   }
 
   const validateStep1 = () => {
-    if (!location.city.trim() && !location.address.trim()) {
-      toast.error('Please search and select your base location')
+    if (!location.barangay?.trim() || !location.city?.trim()) {
+      toast.error('Please enter your Barangay and City/Municipality')
       return false
     }
     if (role === 'provider') {
@@ -597,7 +652,9 @@ export default function RegisterPage() {
                     {!isFreelancer ? (
                       <div className="form-group">
                         <label className="label flex items-center justify-between">
-                          <span>Business or Trade Name</span>
+                          <span>
+                            Business or Trade Name <span className="text-red-500 font-bold">*</span>
+                          </span>
                         </label>
                         <div className="relative">
                           <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -620,7 +677,9 @@ export default function RegisterPage() {
 
                     {/* Provider Offering Type (Service, Rental, or Both) */}
                     <div className="form-group">
-                      <label className="label">What do you offer to customers?</label>
+                      <label className="label">
+                        What do you offer to customers? <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
                           { id: 'service', label: '🛠️ Services', desc: 'Repairs, Cleaning, Tutors' },
@@ -647,29 +706,35 @@ export default function RegisterPage() {
                     {/* Primary Industry / Category & Experience */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="form-group">
-                        <label className="label">Primary Category</label>
+                        <label className="label">
+                          Primary Category <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <select
                           value={providerDetails.category}
                           onChange={e => handleProviderDetailChange('category', e.target.value)}
-                          className="input"
+                          className={`input ${!providerDetails.category ? 'text-gray-400' : 'text-gray-800'}`}
                         >
+                          <option value="">Select a category</option>
                           {PROVIDER_CATEGORIES.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
+                            <option key={cat} value={cat} className="text-gray-800">{cat}</option>
                           ))}
                         </select>
                       </div>
 
                       <div className="form-group">
-                        <label className="label">Experience / In Business</label>
+                        <label className="label">
+                          Experience / In Business <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <select
                           value={providerDetails.yearsExp}
                           onChange={e => handleProviderDetailChange('yearsExp', e.target.value)}
-                          className="input"
+                          className={`input ${providerDetails.yearsExp === '' ? 'text-gray-400' : 'text-gray-800'}`}
                         >
-                          <option value="0">Just starting out (Under 1 year)</option>
-                          <option value="1">1 – 2 years</option>
-                          <option value="3">3 – 5 years</option>
-                          <option value="5">5+ years established</option>
+                          <option value="">Years of experience</option>
+                          <option value="0" className="text-gray-800">Just starting out (Under 1 year)</option>
+                          <option value="1" className="text-gray-800">1 – 2 years</option>
+                          <option value="3" className="text-gray-800">3 – 5 years</option>
+                          <option value="5" className="text-gray-800">5+ years established</option>
                         </select>
                       </div>
                     </div>
@@ -677,7 +742,9 @@ export default function RegisterPage() {
                     {/* Conditional Custom Category Input */}
                     {providerDetails.category === 'Other Local Service / Rental' && (
                       <div className="form-group">
-                        <label className="label">Specify Service / Rental Type</label>
+                        <label className="label">
+                          Specify Service / Rental Type <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <input
                           value={customCategory}
                           onChange={e => setCustomCategory(e.target.value)}
@@ -688,11 +755,13 @@ export default function RegisterPage() {
                       </div>
                     )}
 
-                    {/* Owner / Contact Representative Name (First, MI, Last) */}
+                    {/* Owner / Contact Representative Name (Balanced 2-Column) */}
                     <div>
-                      <label className="label mb-1.5">Owner / Representative Name</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                        <div className="form-group sm:col-span-2">
+                      <label className="label mb-1.5">
+                        Owner / Representative Name <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="form-group">
                           <div className="relative">
                             <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
@@ -705,17 +774,7 @@ export default function RegisterPage() {
                             />
                           </div>
                         </div>
-                        <div className="form-group sm:col-span-1">
-                          <input
-                            name="middleInitial"
-                            maxLength={2}
-                            value={form.middleInitial}
-                            onChange={handleChange}
-                            placeholder="M.I."
-                            className="input text-center px-1"
-                          />
-                        </div>
-                        <div className="form-group sm:col-span-2">
+                        <div className="form-group">
                           <input
                             name="lastName"
                             required
@@ -731,7 +790,9 @@ export default function RegisterPage() {
                     {/* Email & Contact Number side by side */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="form-group">
-                        <label className="label">Business / Contact Email</label>
+                        <label className="label">
+                          Business / Contact Email <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <div className="relative">
                           <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                           <input
@@ -747,7 +808,9 @@ export default function RegisterPage() {
                       </div>
 
                       <div className="form-group">
-                        <label className="label">Contact Number</label>
+                        <label className="label">
+                          Contact Number <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <div className="relative">
                           <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                           <input
@@ -767,9 +830,11 @@ export default function RegisterPage() {
                   /* ── Customer Account Fields ── */
                   <>
                     <div className="form-group">
-                      <label className="label mb-1.5">Full Name</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-                        <div className="form-group sm:col-span-2">
+                      <label className="label mb-1.5">
+                        Full Name <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="form-group">
                           <div className="relative">
                             <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                             <input
@@ -782,17 +847,7 @@ export default function RegisterPage() {
                             />
                           </div>
                         </div>
-                        <div className="form-group sm:col-span-1">
-                          <input
-                            name="middleInitial"
-                            maxLength={2}
-                            value={form.middleInitial}
-                            onChange={handleChange}
-                            placeholder="M.I."
-                            className="input text-center px-1"
-                          />
-                        </div>
-                        <div className="form-group sm:col-span-2">
+                        <div className="form-group">
                           <input
                             name="lastName"
                             required
@@ -806,7 +861,9 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="form-group">
-                      <label className="label">Email address</label>
+                      <label className="label">
+                        Email address <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <div className="relative">
                         <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -822,7 +879,9 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="form-group">
-                      <label className="label">Contact Number</label>
+                      <label className="label">
+                        Contact Number <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <div className="relative">
                         <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                         <input
@@ -841,14 +900,48 @@ export default function RegisterPage() {
 
                 <button
                   type="button"
+                  disabled={!isStep0Valid}
                   onClick={nextStep}
-                  className={`btn-primary btn-lg w-full flex items-center justify-center gap-2 font-bold shadow-sm mt-2 ${
+                  className={`btn-primary btn-lg w-full flex items-center justify-center gap-2 font-bold shadow-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed ${
                     role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                   }`}
                 >
                   <span>Next</span>
                   <ChevronRight size={16} />
                 </button>
+
+                {/* Social Sign-Up Options (Google & Facebook) */}
+                <div className="flex items-center gap-3 my-2 pt-2">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-xs text-gray-400">or sign up with</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleModal(true)}
+                    className="btn-secondary py-2.5 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    title="Sign up with Google"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toast('Facebook sign-up coming soon!')}
+                    className="btn-secondary py-2.5 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    title="Sign up with Facebook"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                    </svg>
+                  </button>
+                </div>
               </motion.div>
             )}
 
@@ -956,8 +1049,9 @@ export default function RegisterPage() {
                   </button>
                   <button
                     type="button"
+                    disabled={!isStep1Valid}
                     onClick={nextStep}
-                    className={`btn-primary btn-lg flex-1 flex items-center justify-center gap-2 font-bold shadow-sm ${
+                    className={`btn-primary btn-lg flex-1 flex items-center justify-center gap-2 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
@@ -978,9 +1072,11 @@ export default function RegisterPage() {
                 onSubmit={handleSubmit}
                 className="flex flex-col gap-4"
               >
-                {/* Password */}
+                {/* Create Password */}
                 <div className="form-group">
-                  <label className="label">Create Password</label>
+                  <label className="label">
+                    Create Password <span className="text-red-500 font-bold">*</span>
+                  </label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
@@ -1000,20 +1096,64 @@ export default function RegisterPage() {
                       {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+
+                  {/* Password requirement indicators (Slide 8 & 24) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mt-2 text-[11px]">
+                    <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasMinLength ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                        {hasMinLength ? '✓' : '•'}
+                      </span>
+                      <span>At least 6 characters</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${hasUpperLower ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasUpperLower ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                        {hasUpperLower ? '✓' : '•'}
+                      </span>
+                      <span>Uppercase & lowercase</span>
+                    </div>
+                    <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>
+                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasNumber ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                        {hasNumber ? '✓' : '•'}
+                      </span>
+                      <span>At least 1 number</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Confirm Password */}
+                {/* Confirm Password (with Lock and Eye icons - Slide 8 & 24) */}
                 <div className="form-group">
-                  <label className="label">Confirm Password</label>
-                  <input
-                    name="confirmPassword"
-                    type="password"
-                    required
-                    value={form.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    className="input"
-                  />
+                  <label className="label">
+                    Confirm Password <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      name="confirmPassword"
+                      type={showConfirmPw ? 'text' : 'password'}
+                      required
+                      value={form.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="••••••••"
+                      className="input pl-9 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+
+                  {/* Passwords match indicator */}
+                  <div className="mt-1.5 flex items-center gap-1.5 text-xs">
+                    <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${passwordsMatch ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                      {passwordsMatch ? '✓' : '•'}
+                    </span>
+                    <span className={passwordsMatch ? 'text-emerald-600 font-semibold' : 'text-gray-400'}>
+                      {passwordsMatch ? 'Passwords match' : 'Passwords must match'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Terms Agreement Checkbox */}
@@ -1060,6 +1200,14 @@ export default function RegisterPage() {
                   </label>
                 )}
 
+                {/* Email Verification Notice (Slide 8 & 24) */}
+                <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
+                  <Mail size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>Email Verification Notice:</strong> The 6-digit confirmation code will be sent to your registered email address (<span className="font-semibold">{form.email || 'your email'}</span>), not your phone number.
+                  </p>
+                </div>
+
                 <div className="flex gap-3 mt-1">
                   <button
                     type="button"
@@ -1070,15 +1218,18 @@ export default function RegisterPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className={`btn-primary btn-lg flex-1 font-bold shadow-sm ${
+                    disabled={loading || !isStep2Valid}
+                    className={`btn-primary btn-lg flex-1 flex items-center justify-center gap-1.5 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
                     {loading ? (
                       <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      'Send Verification Code →'
+                      <>
+                        <span>Send Verification Code</span>
+                        <ChevronRight size={16} />
+                      </>
                     )}
                   </button>
                 </div>
@@ -1128,21 +1279,21 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(0)}
-                    className="btn-secondary flex-1 py-2.5 flex items-center justify-center gap-1.5 font-semibold text-xs"
+                    className="btn-secondary flex-1 py-2.5 flex items-center justify-center gap-1.5 font-semibold text-xs hover:bg-gray-100"
                   >
-                    <ArrowLeft size={14} /> Back to Edit Info
+                    <ArrowLeft size={14} /> Edit Account Info
                   </button>
                   <button
                     type="submit"
-                    disabled={verifyLoading}
-                    className={`btn-primary flex-1 py-2.5 font-bold shadow-sm ${
+                    disabled={verifyLoading || otp.join('').trim().length < 6}
+                    className={`btn-primary flex-1 py-2.5 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
                     {verifyLoading ? (
                       <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
-                      'Verify & Activate'
+                      'Verify & Activate Account'
                     )}
                   </button>
                 </div>
@@ -1264,6 +1415,18 @@ export default function RegisterPage() {
           </button>
         </div>
       </Modal>
+
+      {/* ── Google Sign-In / Sign-Up Modal ── */}
+      <GoogleSignInModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        loginRole={role}
+        onSuccessLogin={() => navigate(role === 'provider' ? '/provider/dashboard' : '/customer/explore')}
+        onProceedRegister={(email) => {
+          setShowGoogleModal(false)
+          setForm(prev => ({ ...prev, email }))
+        }}
+      />
     </div>
   )
 }

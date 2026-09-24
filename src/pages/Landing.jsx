@@ -89,13 +89,14 @@ const STEPS = [
   },
 ]
 
-function AnimFade({ children, delay = 0 }) {
+function AnimFade({ children, delay = 0, className = '' }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5, delay }}
+      className={className}
     >
       {children}
     </motion.div>
@@ -489,12 +490,12 @@ export default function LandingPage() {
             </div>
           </AnimFade>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
             {STEPS.map((s, i) => (
-              <AnimFade key={s.n} delay={i * 0.1}>
-                <div className="flex flex-col items-center text-center p-6 rounded-2xl bg-gray-50 border border-gray-100 hover:border-brand-300 hover:shadow-lg transition-all duration-200">
+              <AnimFade key={s.n} delay={i * 0.1} className="h-full">
+                <div className="h-full flex flex-col items-center text-center p-8 rounded-2xl bg-gray-50 border border-gray-100 hover:border-brand-300 hover:shadow-lg transition-all duration-200">
                   {/* Rounded blue outline icon container (matching user mockup) */}
-                  <div className="w-20 h-20 rounded-2xl border-2 border-brand-500 bg-brand-50 flex items-center justify-center text-brand-600 mb-5 shadow-sm">
+                  <div className="w-20 h-20 rounded-2xl border-2 border-brand-500 bg-brand-50 flex items-center justify-center text-brand-600 mb-6 shadow-sm flex-shrink-0">
                     <s.icon size={34} className="text-brand-600" />
                   </div>
                   <h3 className="font-extrabold text-gray-900 text-base mb-2">{s.title}</h3>

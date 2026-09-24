@@ -270,8 +270,8 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
-              className={`btn-primary btn-lg w-full font-bold shadow-sm mt-1 ${
+              disabled={loading || !form.email.trim() || !form.password}
+              className={`btn-primary btn-lg w-full font-bold shadow-sm mt-1 disabled:opacity-50 disabled:cursor-not-allowed ${
                 loginRole === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
               }`}
             >

@@ -40,18 +40,15 @@ export default function CustomerBookings() {
   const [rating, setRating]          = useState(0)
   const [comment, setComment]        = useState('')
 
-  // Load bookings from local storage merged with base mock
+  // Load bookings from local storage (empty by default for new users)
   const [bookings, setBookings] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_customer_bookings'))
-      if (Array.isArray(stored) && stored.length > 0) {
-        // Merge stored with base mock without duplicates
-        const storedIds = new Set(stored.map(b => b.id))
-        const remaining = BASE_MOCK_BOOKINGS.filter(b => !storedIds.has(b.id))
-        return [...stored, ...remaining]
+      if (Array.isArray(stored)) {
+        return stored
       }
     } catch {}
-    return BASE_MOCK_BOOKINGS
+    return []
   })
 
   const PAGE_SIZE = 4
