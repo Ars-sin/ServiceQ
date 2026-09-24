@@ -371,12 +371,44 @@ export default function RegisterPage() {
             business_name: resolvedBusinessName,
             provider_type: role === 'provider' ? [providerDetails.providerType] : null,
             category: resolvedCategory,
+            years_experience: providerDetails.yearsExp,
             service_area: role === 'provider' ? coverageList.join(', ') : null,
           }
         },
       })
 
       if (error) throw error
+
+      // Cache provider registration details so Provider Profile immediately reflects them (Slide 39)
+      if (role === 'provider') {
+        const cachedProviderData = {
+          fullName: resolvedFullName,
+          email: form.email.trim(),
+          phone: form.phone.replace(/\D/g, ''),
+          businessName: resolvedBusinessName,
+          description: '',
+          category: resolvedCategory,
+          providerType: resolvedCategory || (providerDetails.providerType === 'rental' ? 'Rentals' : 'Services'),
+          yearsExp: providerDetails.yearsExp || 'Less than a year',
+          serviceArea: coverageList.join(', ') || (location.city ? `${location.city}, Metro Cebu` : 'Cebu City, Metro Cebu'),
+          address: location.address,
+          barangay: location.barangay,
+          city: location.city || 'Cebu City',
+          province: location.province || 'Cebu',
+          postalCode: location.postalCode || '6000',
+          idType: '',
+          idNumber: '',
+          payoutMethod: '',
+          payoutAccountName: '',
+          payoutAccountNumber: '',
+          status: 'under_verification'
+        }
+        if (data?.user?.id) {
+          localStorage.setItem(`serviceq_provider_profile_${data.user.id}`, JSON.stringify(cachedProviderData))
+        }
+        localStorage.setItem(`serviceq_provider_profile_email_${form.email.trim().toLowerCase()}`, JSON.stringify(cachedProviderData))
+        localStorage.setItem('serviceq_latest_provider_registered', JSON.stringify(cachedProviderData))
+      }
 
       // Save initial profile details
       if (data?.user?.id) {
@@ -401,9 +433,9 @@ export default function RegisterPage() {
             await supabase.from('providers').upsert({
               user_id: data.user.id,
               business_name: resolvedBusinessName,
-              business_description: `Category: ${resolvedCategory} | ${providerDetails.yearsExp} year(s) experience`,
-              provider_type: [providerDetails.providerType],
-              years_experience: parseInt(providerDetails.yearsExp) || 1,
+              business_description: `Category: ${resolvedCategory} | ${providerDetails.yearsExp} experience`,
+              provider_type: [providerDetails.providerType || 'service'],
+              years_experience: providerDetails.yearsExp === 'Less than a year' ? 0 : (parseInt(providerDetails.yearsExp) || 1),
               service_area: coverageList.join(', ') || location.city || 'Cebu',
               kyc_status: 'under_verification',
               provider_status: 'active',
@@ -731,10 +763,10 @@ export default function RegisterPage() {
                           className={`input ${providerDetails.yearsExp === '' ? 'text-gray-400' : 'text-gray-800'}`}
                         >
                           <option value="">Years of experience</option>
-                          <option value="0" className="text-gray-800">Just starting out (Under 1 year)</option>
-                          <option value="1" className="text-gray-800">1 – 2 years</option>
-                          <option value="3" className="text-gray-800">3 – 5 years</option>
-                          <option value="5" className="text-gray-800">5+ years established</option>
+                          <option value="Less than a year" className="text-gray-800">Less than a year</option>
+                          <option value="1 – 2 years" className="text-gray-800">1 – 2 years</option>
+                          <option value="3 – 5 years" className="text-gray-800">3 – 5 years</option>
+                          <option value="5+ years" className="text-gray-800">5+ years</option>
                         </select>
                       </div>
                     </div>

@@ -16,8 +16,24 @@ export default function ForgotPasswordPage() {
   const [resendCooldown, setCooldown]   = useState(0)
   const inputRefs                       = useRef([])
 
-  // Listen for direct recovery link clicks in email
+  // Listen for direct recovery link clicks in email (Slide 19)
   useEffect(() => {
+    const checkRecovery = () => {
+      const hash = window.location.hash || ''
+      const search = window.location.search || ''
+      if (
+        hash.includes('type=recovery') ||
+        hash.includes('access_token=') ||
+        search.includes('type=recovery') ||
+        search.includes('code=')
+      ) {
+        toast.success('Email verified via recovery link! Please set your new password.')
+        setStep(3)
+      }
+    }
+
+    checkRecovery()
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         toast.success('Email verified via recovery link! Please set your new password.')
@@ -69,10 +85,13 @@ export default function ForgotPasswordPage() {
 
     setLoading(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail)
+      const redirectUrl = `${window.location.origin}/reset-password`
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: redirectUrl,
+      })
       if (error) throw error
 
-      toast.success(`6-digit OTP sent to ${cleanEmail}! Check your inbox.`)
+      toast.success(`Password reset instructions sent to ${cleanEmail}!`)
       setCooldown(60)
       setStep(2)
       setTimeout(() => inputRefs.current[0]?.focus(), 150)
@@ -114,9 +133,12 @@ export default function ForgotPasswordPage() {
     if (resendCooldown > 0) return
     setLoading(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
+      const redirectUrl = `${window.location.origin}/reset-password`
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: redirectUrl,
+      })
       if (error) throw error
-      toast.success('Fresh OTP code sent to your email!')
+      toast.success('Fresh reset code or link sent to your email!')
       setCooldown(60)
       setOtp(['', '', '', '', '', ''])
       inputRefs.current[0]?.focus()
@@ -247,7 +269,14 @@ export default function ForgotPasswordPage() {
                   </div>
                   <h2 className="font-bold text-gray-900 text-base">Check your email</h2>
                   <p className="text-xs text-gray-500 mt-1">
-                    We sent a 6-digit code to <strong className="text-gray-800">{email}</strong>
+                    We sent a verification code or reset link to <strong className="text-gray-800">{email}</strong>
+                  </p>
+                </div>
+
+                <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 text-xs text-blue-900 text-left flex items-start gap-2.5">
+                  <Mail size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>Direct Link Received?</strong> If you received a "Reset your password" button in your email instead of a 6-digit code, simply tap that button in your email to proceed directly to setting your new password.
                   </p>
                 </div>
 

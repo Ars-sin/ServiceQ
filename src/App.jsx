@@ -112,6 +112,7 @@ function AppRoutes() {
       <Route path="/login"           element={<GuestOnly><LoginPage /></GuestOnly>} />
       <Route path="/register"        element={<GuestOnly><RegisterPage /></GuestOnly>} />
       <Route path="/forgot-password" element={<GuestOnly><ForgotPasswordPage /></GuestOnly>} />
+      <Route path="/reset-password"  element={<GuestOnly><ForgotPasswordPage /></GuestOnly>} />
 
       {/* ── Provider Onboarding (requires login) ── */}
       <Route path="/provider/onboarding"
