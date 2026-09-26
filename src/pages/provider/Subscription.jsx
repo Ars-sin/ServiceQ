@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, Zap } from 'lucide-react'
+import { CheckCircle, Zap, Eye, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import { SUBSCRIPTION_TIERS } from '@/lib/constants'
+import Modal from '@/components/ui/Modal'
 
 const FEATURES = [
   { label: 'Active Listings',      free: '3',   basic: '10',  premium: '50' },
@@ -17,6 +19,7 @@ const CURRENT_TIER = 'free'
 const LISTINGS_USED = 2
 
 export default function ProviderSubscription() {
+  const [previewPlan, setPreviewPlan] = useState(null)
   const current = SUBSCRIPTION_TIERS[CURRENT_TIER.toUpperCase()]
 
   return (
@@ -88,24 +91,34 @@ export default function ProviderSubscription() {
                 </div>
               </div>
 
-              {/* Round Border Button */}
-              {isActive ? (
+              {/* Action Buttons: Preview + Upgrade */}
+              <div className="flex flex-col gap-2">
+                {isActive ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full py-2.5 px-4 rounded-full border border-gray-300 text-gray-700 bg-gray-50 font-semibold text-sm text-center shadow-xs cursor-default"
+                  >
+                    Your current plan
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toast.success(`Upgraded to ${tier.label}! 🎉`)}
+                    className="w-full py-2.5 px-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm text-center shadow-sm transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Zap size={14} /> Upgrade to {tier.label}
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  disabled
-                  className="w-full py-2.5 px-4 rounded-full border border-gray-300 text-gray-700 bg-gray-50 font-semibold text-sm text-center shadow-xs cursor-default"
+                  onClick={() => setPreviewPlan(tier)}
+                  className="w-full py-1.5 px-3 rounded-full text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors flex items-center justify-center gap-1.5"
                 >
-                  Your current plan
+                  <Eye size={13} /> Preview Plan Details
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => toast.success(`Upgraded to ${tier.label}! 🎉`)}
-                  className="w-full py-2.5 px-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm text-center shadow-sm transition-all flex items-center justify-center gap-1.5"
-                >
-                  <Zap size={14} /> Upgrade to {tier.label}
-                </button>
-              )}
+              </div>
 
               {/* Features list */}
               <div className="pt-2 border-t border-gray-100 flex-1 flex flex-col">
@@ -139,6 +152,76 @@ export default function ProviderSubscription() {
           )
         })}
       </div>
+
+      {/* Subscription Mode Preview Modal (O8) */}
+      <Modal
+        open={Boolean(previewPlan)}
+        onClose={() => setPreviewPlan(null)}
+        title={`${previewPlan?.label || 'Plan'} Mode Preview`}
+        size="md"
+      >
+        {previewPlan && (
+          <div className="flex flex-col gap-5">
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-brand-50 to-emerald-50 border border-brand-200 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-brand-700 uppercase tracking-wider">Plan Overview</span>
+                <h3 className="text-2xl font-black text-gray-900">{previewPlan.label}</h3>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  {previewPlan.id === 'free' ? 'Ideal for exploring ServiceQ and starting out in Cebu' : previewPlan.id === 'basic' ? 'Best for growing full-time local service providers' : 'Designed for high-scale rental shops and professional crews'}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-brand-700">₱{previewPlan.price}</span>
+                <span className="text-xs text-gray-500 block">/ month</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Plan Inclusions & Limits</h4>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="text-gray-400 block">Listing Capacity</span>
+                  <span className="font-bold text-gray-900 text-sm">{previewPlan.maxListings} Listings</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="text-gray-400 block">Search Ranking</span>
+                  <span className="font-bold text-gray-900 text-sm">{previewPlan.id === 'free' ? 'Standard' : previewPlan.id === 'basic' ? 'Priority Boost' : 'Top Tier VIP'}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="text-gray-400 block">Support Tier</span>
+                  <span className="font-bold text-gray-900 text-sm">{previewPlan.id === 'free' ? 'Community' : 'Priority 24/7'}</span>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                  <span className="text-gray-400 block">Featured Provider Badge</span>
+                  <span className="font-bold text-gray-900 text-sm">{previewPlan.id === 'premium' ? 'Included ✓' : 'Not Included'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setPreviewPlan(null)}
+                className="btn-ghost flex-1 text-xs"
+              >
+                Close Preview
+              </button>
+              {previewPlan.id !== CURRENT_TIER && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.success(`Subscribed to ${previewPlan.label} Plan! 🎉`)
+                    setPreviewPlan(null)
+                  }}
+                  className="btn-primary flex-1 text-xs font-bold"
+                >
+                  <Zap size={14} className="mr-1" /> Subscribe Now
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Feature comparison */}
       <div className="card overflow-x-auto p-0">

@@ -310,6 +310,11 @@ export default function RegisterPage() {
       toast.error('Please enter your Barangay and City/Municipality')
       return false
     }
+    // R4: Postal code required
+    if (!location.postalCode?.trim()) {
+      toast.error('Please enter your Postal Code')
+      return false
+    }
     if (role === 'provider') {
       if (providerDetails.serviceCoverage.length === 0) {
         toast.error('Please select at least one Cebu service coverage area')
@@ -688,17 +693,14 @@ export default function RegisterPage() {
                             Business or Trade Name <span className="text-red-500 font-bold">*</span>
                           </span>
                         </label>
-                        <div className="relative">
-                          <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                          <input
-                            name="businessName"
-                            required={!isFreelancer}
-                            value={providerDetails.businessName}
-                            onChange={e => handleProviderDetailChange('businessName', e.target.value)}
-                            placeholder="e.g. Cebu Pro Cleaning Services or Queen City Rentals"
-                            className="input pl-9 border-emerald-200 focus:border-emerald-500"
-                          />
-                        </div>
+                        <input
+                          name="businessName"
+                          required={!isFreelancer}
+                          value={providerDetails.businessName}
+                          onChange={e => handleProviderDetailChange('businessName', e.target.value)}
+                          placeholder="e.g. Cebu Pro Cleaning Services or Queen City Rentals"
+                          className="input border-emerald-200 focus:border-emerald-500"
+                        />
                       </div>
                     ) : (
                       <div className="text-xs text-emerald-800 bg-emerald-50/60 border border-emerald-200 rounded-xl px-3.5 py-2.5 flex items-center gap-2">
@@ -794,17 +796,14 @@ export default function RegisterPage() {
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="form-group">
-                          <div className="relative">
-                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input
-                              name="firstName"
-                              required
-                              value={form.firstName}
-                              onChange={handleChange}
-                              placeholder="First Name"
-                              className="input pl-9"
-                            />
-                          </div>
+                          <input
+                            name="firstName"
+                            required
+                            value={form.firstName}
+                            onChange={handleChange}
+                            placeholder="First Name"
+                            className="input"
+                          />
                         </div>
                         <div className="form-group">
                           <input
@@ -825,38 +824,64 @@ export default function RegisterPage() {
                         <label className="label">
                           Business / Contact Email <span className="text-red-500 font-bold">*</span>
                         </label>
-                        <div className="relative">
-                          <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                          <input
-                            name="email"
-                            type="email"
-                            required
-                            value={form.email}
-                            onChange={handleChange}
-                            placeholder="business@email.com"
-                            className="input pl-9"
-                          />
-                        </div>
+                        <input
+                          name="email"
+                          type="email"
+                          required
+                          value={form.email}
+                          onChange={handleChange}
+                          placeholder="business@email.com"
+                          className="input"
+                        />
                       </div>
 
                       <div className="form-group">
                         <label className="label">
                           Contact Number <span className="text-red-500 font-bold">*</span>
                         </label>
-                        <div className="relative">
-                          <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                          <input
-                            name="phone"
-                            type="tel"
-                            required
-                            value={form.phone}
-                            onChange={handleChange}
-                            placeholder="09xxxxxxxxx"
-                            className="input pl-9"
-                          />
-                        </div>
+                        <input
+                          name="phone"
+                          type="tel"
+                          required
+                          value={form.phone}
+                          onChange={handleChange}
+                          placeholder="09xxxxxxxxx"
+                          className="input"
+                        />
                       </div>
                     </div>
+
+                    {/* P2: Reminder for Lacking/Missing Fields */}
+                    {(() => {
+                      const lacking = []
+                      if (!isFreelancer && !providerDetails.businessName.trim()) lacking.push('Business Name')
+                      if (!providerDetails.providerType) lacking.push('Offering Type')
+                      if (!providerDetails.category) lacking.push('Category')
+                      if (providerDetails.category === 'Other Local Service / Rental' && !customCategory.trim()) lacking.push('Specific Category')
+                      if (!providerDetails.yearsExp) lacking.push('Experience')
+                      if (!form.firstName.trim()) lacking.push('First Name')
+                      if (!form.lastName.trim()) lacking.push('Last Name')
+                      if (!form.email.trim()) lacking.push('Email')
+                      if (!form.phone.trim()) lacking.push('Contact Number')
+
+                      if (lacking.length > 0) {
+                        return (
+                          <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 mt-1">
+                            <span className="font-bold flex items-center gap-1.5 text-amber-800">
+                              <span>⚠️</span> Reminder — Please fill in required fields:
+                            </span>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {lacking.map(f => (
+                                <span key={f} className="px-2 py-0.5 bg-amber-100/70 border border-amber-200 rounded-md font-medium text-amber-900 text-[11px]">
+                                  {f}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
                   </>
                 ) : (
                   /* ── Customer Account Fields ── */
@@ -867,17 +892,14 @@ export default function RegisterPage() {
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="form-group">
-                          <div className="relative">
-                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input
-                              name="firstName"
-                              required
-                              value={form.firstName}
-                              onChange={handleChange}
-                              placeholder="First Name"
-                              className="input pl-9"
-                            />
-                          </div>
+                          <input
+                            name="firstName"
+                            required
+                            value={form.firstName}
+                            onChange={handleChange}
+                            placeholder="First Name"
+                            className="input"
+                          />
                         </div>
                         <div className="form-group">
                           <input
@@ -896,36 +918,30 @@ export default function RegisterPage() {
                       <label className="label">
                         Email address <span className="text-red-500 font-bold">*</span>
                       </label>
-                      <div className="relative">
-                        <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          name="email"
-                          type="email"
-                          required
-                          value={form.email}
-                          onChange={handleChange}
-                          placeholder="you@email.com"
-                          className="input pl-9"
-                        />
-                      </div>
+                      <input
+                        name="email"
+                        type="email"
+                        required
+                        value={form.email}
+                        onChange={handleChange}
+                        placeholder="you@email.com"
+                        className="input"
+                      />
                     </div>
 
                     <div className="form-group">
                       <label className="label">
                         Contact Number <span className="text-red-500 font-bold">*</span>
                       </label>
-                      <div className="relative">
-                        <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                          name="phone"
-                          type="tel"
-                          required
-                          value={form.phone}
-                          onChange={handleChange}
-                          placeholder="09xxxxxxxxx"
-                          className="input pl-9"
-                        />
-                      </div>
+                      <input
+                        name="phone"
+                        type="tel"
+                        required
+                        value={form.phone}
+                        onChange={handleChange}
+                        placeholder="09xxxxxxxxx"
+                        className="input"
+                      />
                     </div>
                   </>
                 )}
@@ -1110,7 +1126,6 @@ export default function RegisterPage() {
                     Create Password <span className="text-red-500 font-bold">*</span>
                   </label>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       name="password"
                       type={showPw ? 'text' : 'password'}
@@ -1118,7 +1133,7 @@ export default function RegisterPage() {
                       value={form.password}
                       onChange={handleChange}
                       placeholder="••••••••"
-                      className="input pl-9 pr-10"
+                      className="input pr-10"
                     />
                     <button
                       type="button"
@@ -1152,13 +1167,12 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                {/* Confirm Password (with Lock and Eye icons - Slide 8 & 24) */}
+                {/* Confirm Password (with Eye icon) */}
                 <div className="form-group">
                   <label className="label">
                     Confirm Password <span className="text-red-500 font-bold">*</span>
                   </label>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       name="confirmPassword"
                       type={showConfirmPw ? 'text' : 'password'}
@@ -1166,7 +1180,7 @@ export default function RegisterPage() {
                       value={form.confirmPassword}
                       onChange={handleChange}
                       placeholder="••••••••"
-                      className="input pl-9 pr-10"
+                      className="input pr-10"
                     />
                     <button
                       type="button"

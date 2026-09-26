@@ -134,9 +134,9 @@ export default function CustomerExplore() {
   const [search, setSearch]             = useState('')
   const [selectedType, setSelectedType] = useState('all') // 'all' | 'services' | 'rentals'
   const [sort, setSort]                 = useState('recommended')
-  const [maxPrice, setMaxPrice]         = useState(10000)
+  const [minPrice, setMinPrice]         = useState(0)
   const [minRating, setMinRating]       = useState(0)
-  const [quickFilter, setQuickFilter]   = useState(null)
+  const [quickFilters, setQuickFilters] = useState([])
   const [showFilters, setShowFilters]   = useState(false)
   const [favoriteIds, setFavoriteIds]   = useState(getFavoriteIds)
 
@@ -160,9 +160,9 @@ export default function CustomerExplore() {
     selectedType === 'all' &&
     !search.trim() &&
     sort === 'recommended' &&
-    maxPrice >= 10000 &&
+    minPrice === 0 &&
     minRating === 0 &&
-    !quickFilter
+    quickFilters.length === 0
 
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 6
@@ -170,7 +170,7 @@ export default function CustomerExplore() {
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setPage(1)
-  }, [search, selectedType, sort, maxPrice, minRating, quickFilter])
+  }, [search, selectedType, sort, minPrice, minRating, quickFilters])
 
   // Filter and sort listings
   const filtered = ALL_LISTINGS
@@ -189,16 +189,16 @@ export default function CustomerExplore() {
         return false
       }
 
-      // Max price
-      if (item.price > maxPrice) return false
+      // Min price filter
+      if (minPrice > 0 && item.price < minPrice) return false
 
       // Min rating
       if (item.rating < minRating) return false
 
-      // Quick filter
-      if (quickFilter === 'under500' && item.price > 500) return false
-      if (quickFilter === 'toprated' && item.rating < 4.8) return false
-      if (quickFilter === 'nearby' && item.distance > 2.0) return false
+      // Quick filters (multi-select array)
+      if (quickFilters.includes('under500') && item.price > 500) return false
+      if (quickFilters.includes('toprated') && item.rating < 4.8) return false
+      if (quickFilters.includes('nearby') && item.distance > 2.0) return false
 
       return true
     })
@@ -219,9 +219,9 @@ export default function CustomerExplore() {
     setSearch('')
     setSelectedType('all')
     setSort('recommended')
-    setMaxPrice(10000)
+    setMinPrice(0)
     setMinRating(0)
-    setQuickFilter(null)
+    setQuickFilters([])
     setPage(1)
   }
 
@@ -229,9 +229,9 @@ export default function CustomerExplore() {
     search.trim() !== '' ||
     selectedType !== 'all' ||
     sort !== 'recommended' ||
-    maxPrice < 10000 ||
+    minPrice > 0 ||
     minRating > 0 ||
-    quickFilter !== null
+    quickFilters.length > 0
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 pb-12">
@@ -291,14 +291,14 @@ export default function CustomerExplore() {
           <button
             onClick={() => setShowFilters(f => !f)}
             className={`btn-sm px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition ${
-              showFilters || maxPrice < 10000 || minRating > 0
+              showFilters || minPrice > 0 || minRating > 0
                 ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
                 : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
             }`}
           >
             <SlidersHorizontal size={14} />
             <span>Filters</span>
-            {(maxPrice < 10000 || minRating > 0) && (
+            {(minPrice > 0 || minRating > 0) && (
               <span className="w-2 h-2 rounded-full bg-white" />
             )}
           </button>
@@ -313,19 +313,19 @@ export default function CustomerExplore() {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4"
             >
-              {/* Max price slider */}
+              {/* Min price slider */}
               <div>
                 <div className="flex justify-between text-xs font-medium text-gray-700 mb-1">
-                  <span>Maximum Price:</span>
-                  <span className="font-bold text-brand-700">{formatPHP(maxPrice)}</span>
+                  <span>Minimum Price:</span>
+                  <span className="font-bold text-brand-700">{minPrice > 0 ? formatPHP(minPrice) : 'Any price'}</span>
                 </div>
                 <input
                   type="range"
-                  min="200"
-                  max="10000"
+                  min="0"
+                  max="5000"
                   step="100"
-                  value={maxPrice}
-                  onChange={e => setMaxPrice(Number(e.target.value))}
+                  value={minPrice}
+                  onChange={e => setMinPrice(Number(e.target.value))}
                   className="w-full accent-brand-600 cursor-pointer"
                 />
               </div>
@@ -388,7 +388,7 @@ export default function CustomerExplore() {
 
           <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block" />
 
-          {/* Quick shortcut filters */}
+          {/* Quick shortcut filters — now multi-select */}
           {[
             { id: 'under500', label: '⚡ Under ₱500' },
             { id: 'toprated', label: '⭐ Top Rated (4.8★+)' },
@@ -396,9 +396,9 @@ export default function CustomerExplore() {
           ].map(q => (
             <button
               key={q.id}
-              onClick={() => setQuickFilter(curr => curr === q.id ? null : q.id)}
+              onClick={() => setQuickFilters(curr => curr.includes(q.id) ? curr.filter(f => f !== q.id) : [...curr, q.id])}
               className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition ${
-                quickFilter === q.id
+                quickFilters.includes(q.id)
                   ? 'bg-brand-50 border-brand-300 text-brand-800 font-semibold'
                   : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}

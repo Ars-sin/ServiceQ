@@ -58,22 +58,31 @@ export default function GoogleSignInModal({
       }
 
       if (profile && profile.id) {
-        // Enforce strict role boundary: Provider cannot log in via Customer, Customer cannot log in via Provider
-        if (loginRole === 'customer' && profile.role === 'provider') {
-          toast.error('This account is registered as a Provider. You cannot log in through the Customer portal. Please switch to the Provider tab.')
-          return
-        }
-        if (loginRole === 'provider' && profile.role === 'customer') {
-          toast.error('This account is registered as a Customer. You cannot log in through the Provider portal. Please switch to the Customer tab.')
+        // ── Deleted user ──
+        // (profile exists but has no role — shouldn't happen, but guard anyway)
+
+        // ── Suspended user ──
+        if (profile.is_active === false) {
+          toast.error('This account has been suspended. Please contact support for assistance.')
           return
         }
 
-        // Exists in system and matches portal -> Direct log in!
-        toast.success(`Google verification successful! Welcome back, ${profile.full_name || profile.email}!`)
+        // Enforce strict role boundary
+        if (loginRole === 'customer' && profile.role === 'provider') {
+          toast.error('This is a Provider account. Please use the Provider tab to sign in.')
+          return
+        }
+        if (loginRole === 'provider' && profile.role === 'customer') {
+          toast.error('This is a Customer account. Please use the Customer tab to sign in.')
+          return
+        }
+
+        // Exists and matches portal → Direct log in!
+        toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
         onSuccessLogin?.(profile)
         onClose()
       } else {
-        // Does NOT exist in system -> Proceed to register and let them choose role
+        // Does NOT exist in system → Proceed to register
         setNotFoundEmail(cleanEmail)
         setStep('choose-role')
       }

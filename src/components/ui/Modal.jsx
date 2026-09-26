@@ -11,21 +11,22 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
   }
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={onClose}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className={cn(
               'relative bg-white rounded-2xl shadow-modal w-full z-10',
               sizes[size]

@@ -91,7 +91,7 @@ export default function CustomerProfile() {
   const bookingCount = useMemo(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_customer_bookings'))
-      if (Array.isArray(stored)) return stored.length
+      if (Array.isArray(stored)) return stored.filter(b => b.status !== 'cancelled').length
     } catch {}
     return 0
   }, [])
@@ -118,7 +118,7 @@ export default function CustomerProfile() {
           service: b.service,
           date: b.date,
           amount: b.amount,
-          status: b.status === 'cancelled' ? 'Refunded' : 'Paid'
+          status: b.status === 'cancelled' ? 'Cancelled' : b.status === 'refunded' ? 'Refunded' : 'Paid'
         }))
       }
     } catch {}

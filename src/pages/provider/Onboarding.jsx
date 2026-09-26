@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, ChevronRight, ChevronLeft, Upload, ArrowLeft } from 'lucide-react'
+import { CheckCircle, ChevronRight, ChevronLeft, Upload, ArrowLeft, Image, X, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { PROVIDER_TYPES, GOV_ID_TYPES, PAYMENT_METHODS, PH_REGIONS } from '@/lib/constants'
@@ -20,6 +20,13 @@ export default function ProviderOnboarding() {
   const [step, setStep]         = useState(0)
   const [done, setDone]         = useState(false)
   const [agreed, setAgreed]     = useState({ terms: false, agreement: false, fee: false })
+  
+  // Image previews
+  const [photoPreview, setPhotoPreview]       = useState(null)
+  const [idFrontPreview, setIdFrontPreview]   = useState(null)
+  const [idBackPreview, setIdBackPreview]     = useState(null)
+  const [selfiePreview, setSelfiePreview]     = useState(null)
+
   const [form, setForm]         = useState({
     // Step 0
     fullName: '', email: '', phone: '', dob: '', password: '', confirmPw: '',
@@ -40,23 +47,30 @@ export default function ProviderOnboarding() {
     address: '', barangay: '', city: '', province: '', postalCode: '', lat: null, lng: null,
   })
 
-  // Auto-fill from registration data (profile, auth user, or cached registration)
+  // O4: Auto-fill from registration data (profile, auth user, or cached registration)
   useEffect(() => {
     let savedReg = null
     try {
-      savedReg = JSON.parse(sessionStorage.getItem('serviceq_reg_data'))
+      savedReg = JSON.parse(
+        sessionStorage.getItem('serviceq_reg_data') ||
+        localStorage.getItem('serviceq_latest_provider_registered') ||
+        localStorage.getItem('serviceq_auth_profile') ||
+        'null'
+      )
     } catch {}
 
-    const name  = profile?.full_name || user?.user_metadata?.full_name || savedReg?.fullName
+    const name  = profile?.full_name || user?.user_metadata?.full_name || savedReg?.fullName || (savedReg?.firstName ? `${savedReg.firstName} ${savedReg.lastName || ''}`.trim() : '')
     const email = profile?.email || user?.email || savedReg?.email
     const phone = profile?.phone || user?.user_metadata?.phone || savedReg?.phone
+    const bName = profile?.business_name || user?.user_metadata?.business_name || savedReg?.businessName
 
-    if (name || email || phone) {
+    if (name || email || phone || bName) {
       setForm(f => ({
         ...f,
-        fullName: name  || f.fullName,
-        email:    email || f.email,
-        phone:    phone || f.phone,
+        fullName:     name  || f.fullName,
+        email:        email || f.email,
+        phone:        phone || f.phone,
+        businessName: bName || f.businessName,
       }))
     }
 
@@ -194,12 +208,17 @@ export default function ProviderOnboarding() {
     setDone(true)
   }
 
+  const allAgreed = agreed.terms && agreed.agreement && agreed.fee
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar stepper */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-6 gap-6">
+      {/* Sidebar stepper (Desktop) */}
+      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-6 gap-6 flex-shrink-0">
         <div className="flex flex-col gap-1 mb-4">
-          <div className="flex items-center gap-2"><img src="/logo.png" alt="ServiceQ" className="h-8 w-8 object-contain" /><span className="font-bold text-gray-900">ServiceQ</span></div>
+          <div className="flex items-center gap-2">
+            <img src="/logo.png" alt="ServiceQ" className="h-8 w-8 object-contain" />
+            <span className="font-bold text-gray-900">ServiceQ</span>
+          </div>
           <div className="text-xs text-gray-400">Provider Setup</div>
         </div>
         {STEPS.map((s, i) => (
@@ -208,7 +227,7 @@ export default function ProviderOnboarding() {
               i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-emerald-600 text-white ring-4 ring-emerald-100' : 'bg-gray-100 text-gray-400'
             }`}>{i < step ? <CheckCircle size={14} /> : i + 1}</div>
             <div>
-              <div className={`text-sm font-medium ${i === step ? 'text-emerald-700' : i < step ? 'text-gray-700' : 'text-gray-400'}`}>{s}</div>
+              <div className={`text-sm font-medium ${i === step ? 'text-emerald-700 font-semibold' : i < step ? 'text-gray-700' : 'text-gray-400'}`}>{s}</div>
               <div className="text-xs text-gray-400">Step {i + 1}</div>
             </div>
           </div>
@@ -226,268 +245,419 @@ export default function ProviderOnboarding() {
         </div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col p-6 md:p-10 max-w-2xl">
-        {/* Mobile step */}
-        <div className="md:hidden mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900"
-            >
-              <ArrowLeft size={14} /> Back to Home
-            </button>
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center font-bold">{step + 1}</div>
-            <span className="font-semibold text-sm">{STEPS[step]}</span>
-            <span className="text-xs text-gray-400 ml-auto">Step {step + 1} of {STEPS.length}</span>
-          </div>
-          <div className="w-full h-1.5 bg-gray-200 rounded-full">
-            <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
-          </div>
-        </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div key={step} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-6 flex-1">
-
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{STEPS[step]}</h1>
-              <p className="text-sm text-gray-500 mt-1">Step {step + 1} of {STEPS.length}</p>
+      {/* Main — Centered Form Container (O1) */}
+      <div className="flex-1 flex flex-col items-center justify-start p-6 md:p-10 w-full overflow-y-auto">
+        <div className="w-full max-w-2xl flex flex-col flex-1">
+          {/* Centered Top Progress Bar (O3) */}
+          <div className="w-full flex flex-col items-center mb-6">
+            <div className="w-full flex items-center justify-between mb-4 md:hidden">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft size={14} /> Back to Home
+              </button>
+              <span className="text-xs font-semibold text-emerald-700">Step {step + 1} of {STEPS.length}</span>
             </div>
 
-            <div className="card flex flex-col gap-4">
-              {/* STEP 0: Basic Info */}
-              {step === 0 && <>
-                {(user || profile || form.fullName) && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-800 flex items-start gap-2.5">
-                    <CheckCircle size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-semibold">Registered info auto-filled!</span>
-                      <p className="text-emerald-700 mt-0.5">Your name, email, and phone number were loaded from your registration. Please fill in the missing details below (Date of Birth & Profile Photo).</p>
-                    </div>
+            {/* Stepper Dots & Line */}
+            <div className="w-full max-w-md flex items-center justify-between gap-1 mb-3">
+              {STEPS.map((s, i) => (
+                <div key={s} className="flex items-center gap-1 flex-1 last:flex-none">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
+                      i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-emerald-600 text-white ring-4 ring-emerald-100' : 'bg-gray-200 text-gray-500'
+                    }`}
+                  >
+                    {i < step ? '✓' : i + 1}
                   </div>
-                )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="form-group sm:col-span-2">
-                    <label className="label">Full Name</label>
-                    <input className="input" placeholder="Juan dela Cruz" value={form.fullName} onChange={e => set('fullName', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">
-                      Email Address {user && <span className="text-xs text-emerald-600 font-normal">(registered account)</span>}
-                    </label>
-                    <input
-                      type="email"
-                      className={`input ${user ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
-                      readOnly={!!user}
-                      value={form.email}
-                      onChange={e => set('email', e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Phone Number</label>
-                    <input className="input" placeholder="09xxxxxxxxx" value={form.phone} onChange={e => set('phone', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label flex items-center justify-between">
-                      <span>Date of Birth</span>
-                      <span className="text-xs text-amber-600 font-medium">Missing — please select</span>
-                    </label>
-                    <input type="date" className="input" value={form.dob} onChange={e => set('dob', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label flex items-center justify-between">
-                      <span>Profile Photo</span>
-                      <span className="text-xs text-amber-600 font-medium">Missing — please upload</span>
-                    </label>
-                    <label className="input flex items-center gap-2 cursor-pointer">
-                      <Upload size={14} className="text-gray-400" />
-                      <span className="text-gray-400 text-sm">Upload photo...</span>
-                      <input type="file" accept="image/*" className="hidden" />
-                    </label>
-                  </div>
-                  {!user && (
-                    <>
-                      <div className="form-group">
-                        <label className="label">Password</label>
-                        <input type="password" className="input" value={form.password} onChange={e => set('password', e.target.value)} />
-                      </div>
-                      <div className="form-group">
-                        <label className="label">Confirm Password</label>
-                        <input type="password" className="input" value={form.confirmPw} onChange={e => set('confirmPw', e.target.value)} />
-                      </div>
-                    </>
+                  {i < STEPS.length - 1 && (
+                    <div className={`h-1 flex-1 rounded-full transition-all ${i < step ? 'bg-emerald-500' : 'bg-gray-200'}`} />
                   )}
                 </div>
-              </>}
+              ))}
+            </div>
 
-              {/* STEP 1: Address — Google Maps Location Picker */}
-              {step === 1 && <>
-                <LocationPicker
-                  value={locationData}
-                  onChange={setLocationData}
-                  label="Service Address / Operating Location in Cebu"
-                />
-              </>}
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-gray-900">{STEPS[step]}</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Step {step + 1} of {STEPS.length} · Provider Application</p>
+            </div>
+          </div>
 
-              {/* STEP 2: Provider Type & Details */}
-              {step === 2 && <>
-                <div className="form-group">
-                  <label className="label">Provider Type</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {PROVIDER_TYPES.map(pt => (
-                      <label key={pt.id} className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${form.providerType === pt.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="ptype" value={pt.id} checked={form.providerType === pt.id} onChange={() => set('providerType', pt.id)} className="hidden" />
-                        <span className="text-sm font-medium">{pt.label}</span>
+          <AnimatePresence mode="wait">
+            <motion.div key={step} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }} className="flex flex-col gap-6 flex-1">
+
+              {/* O6: Enlarged Card */}
+              <div className="card p-6 sm:p-8 flex flex-col gap-5 shadow-sm border border-gray-100 rounded-2xl bg-white">
+                {/* STEP 0: Basic Info */}
+                {step === 0 && <>
+                  {(user || profile || form.fullName) && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-800 flex items-start gap-2.5">
+                      <CheckCircle size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-semibold">Registered info auto-filled!</span>
+                        <p className="text-emerald-700 mt-0.5">Your name, email, and contact info were preloaded. Please select your birthdate and upload a profile photo below.</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="form-group sm:col-span-2">
+                      <label className="label">Full Name</label>
+                      <input className="input" placeholder="Juan dela Cruz" value={form.fullName} onChange={e => set('fullName', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">
+                        Email Address {user && <span className="text-xs text-emerald-600 font-normal">(registered)</span>}
                       </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="form-group sm:col-span-2">
-                    <label className="label">Business Name</label>
-                    <input className="input" value={form.businessName} onChange={e => set('businessName', e.target.value)} />
-                  </div>
-                  <div className="form-group sm:col-span-2">
-                    <label className="label">Business Description</label>
-                    <textarea rows={3} className="input resize-none" value={form.description} onChange={e => set('description', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Years of Experience</label>
-                    <input type="number" min={0} className="input" value={form.yearsExp} onChange={e => set('yearsExp', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Service Area</label>
-                    <input className="input" placeholder="e.g. Quezon City, Pasig" value={form.serviceArea} onChange={e => set('serviceArea', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Operating Hours From</label>
-                    <input type="time" className="input" value={form.hoursFrom} onChange={e => set('hoursFrom', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Operating Hours To</label>
-                    <input type="time" className="input" value={form.hoursTo} onChange={e => set('hoursTo', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Facebook (optional)</label>
-                    <input className="input" placeholder="https://facebook.com/..." value={form.facebook} onChange={e => set('facebook', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Instagram (optional)</label>
-                    <input className="input" placeholder="https://instagram.com/..." value={form.instagram} onChange={e => set('instagram', e.target.value)} />
-                  </div>
-                </div>
-              </>}
-
-              {/* STEP 3: KYC */}
-              {step === 3 && <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="label">Government ID Type</label>
-                    <select className="input" value={form.idType} onChange={e => set('idType', e.target.value)}>
-                      <option value="">Select ID type...</option>
-                      {GOV_ID_TYPES.map(id => <option key={id} value={id}>{id}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="label">ID Number</label>
-                    <input className="input" value={form.idNumber} onChange={e => set('idNumber', e.target.value)} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="label">Upload ID Photo</label>
-                  <label className="border-2 border-dashed border-gray-300 rounded-xl h-36 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400 transition-colors">
-                    <Upload size={28} className="text-gray-300" />
-                    <span className="text-sm text-gray-400">Click to upload your Government ID</span>
-                    <span className="text-xs text-gray-300">JPG, PNG up to 5MB</span>
-                    <input type="file" accept="image/*" className="hidden" />
-                  </label>
-                </div>
-                <div className="form-group">
-                  <label className="label">Selfie Verification</label>
-                  <label className="border-2 border-dashed border-gray-300 rounded-xl h-36 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-emerald-400 transition-colors">
-                    <span className="text-3xl">🤳</span>
-                    <span className="text-sm text-gray-400">Take or upload a selfie</span>
-                    <span className="text-xs text-gray-300">Hold your ID next to your face</span>
-                    <input type="file" accept="image/*" className="hidden" />
-                  </label>
-                </div>
-              </>}
-
-              {/* STEP 4: Payout */}
-              {step === 4 && <>
-                <div className="form-group">
-                  <label className="label">Preferred Payout Method</label>
-                  <div className="flex gap-3">
-                    {[{ id: 'gcash', label: '💚 GCash' }, { id: 'maya', label: '💙 Maya' }, { id: 'bank', label: '🏦 Bank Transfer' }].map(m => (
-                      <label key={m.id} className={`flex-1 p-3 text-center rounded-xl border-2 cursor-pointer transition-all text-sm font-medium ${form.payoutMethod === m.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 hover:border-gray-300'}`}>
-                        <input type="radio" name="payout" value={m.id} checked={form.payoutMethod === m.id} onChange={() => set('payoutMethod', m.id)} className="hidden" />
-                        {m.label}
+                      <input
+                        type="email"
+                        className={`input ${user ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
+                        readOnly={!!user}
+                        value={form.email}
+                        onChange={e => set('email', e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Phone Number</label>
+                      <input className="input" placeholder="09xxxxxxxxx" value={form.phone} onChange={e => set('phone', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label flex items-center justify-between">
+                        <span>Date of Birth</span>
+                        <span className="text-xs text-amber-600 font-medium">Required</span>
                       </label>
-                    ))}
-                  </div>
-                </div>
-                {form.payoutMethod === 'gcash' && (
-                  <div className="form-group">
-                    <label className="label">GCash Mobile Number</label>
-                    <input className="input" placeholder="09xxxxxxxxx" value={form.gcashNum} onChange={e => set('gcashNum', e.target.value)} />
-                  </div>
-                )}
-                {form.payoutMethod === 'maya' && (
-                  <div className="form-group">
-                    <label className="label">Maya Mobile Number</label>
-                    <input className="input" placeholder="09xxxxxxxxx" value={form.mayaNum} onChange={e => set('mayaNum', e.target.value)} />
-                  </div>
-                )}
-                {form.payoutMethod === 'bank' && <>
-                  <div className="form-group">
-                    <label className="label">Bank Name</label>
-                    <input className="input" placeholder="e.g. BDO, BPI, Metrobank" value={form.bankName} onChange={e => set('bankName', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Account Name</label>
-                    <input className="input" value={form.accountName} onChange={e => set('accountName', e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="label">Account Number</label>
-                    <input className="input" value={form.accountNum} onChange={e => set('accountNum', e.target.value)} />
+                      <input type="date" className="input" value={form.dob} onChange={e => set('dob', e.target.value)} />
+                    </div>
+
+                    {/* O2: Profile Photo Upload Preview */}
+                    <div className="form-group">
+                      <label className="label flex items-center justify-between">
+                        <span>Profile Photo</span>
+                        {!photoPreview && <span className="text-xs text-amber-600 font-medium">Required</span>}
+                      </label>
+                      {photoPreview ? (
+                        <div className="flex items-center gap-3 p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                          <img src={photoPreview} alt="Preview" className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-xs" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-emerald-900">Photo attached ✓</p>
+                            <p className="text-[10px] text-emerald-700">Will be shown on your profile.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPhotoPreview(null)}
+                            className="text-xs text-rose-600 hover:text-rose-700 p-1"
+                            title="Remove"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="input flex items-center justify-center gap-2 cursor-pointer border-dashed hover:border-emerald-500 transition-colors">
+                          <Upload size={14} className="text-gray-400" />
+                          <span className="text-gray-500 text-xs font-medium">Upload photo...</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => {
+                              const file = e.target.files?.[0]
+                              if (file) {
+                                setPhotoPreview(URL.createObjectURL(file))
+                                toast.success('Profile photo attached!')
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {!user && (
+                      <>
+                        <div className="form-group">
+                          <label className="label">Password</label>
+                          <input type="password" className="input" value={form.password} onChange={e => set('password', e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                          <label className="label">Confirm Password</label>
+                          <input type="password" className="input" value={form.confirmPw} onChange={e => set('confirmPw', e.target.value)} />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </>}
-              </>}
 
-              {/* STEP 5: Agreements */}
-              {step === 5 && <>
-                <div className="bg-gray-50 rounded-xl p-4 h-40 overflow-y-auto text-xs text-gray-500 leading-relaxed mb-2">
-                  <strong>ServiceQ Terms & Conditions</strong><br /><br />
-                  By registering as a provider on ServiceQ, you agree to maintain accurate listing information, honor all confirmed bookings, provide services as described, and adhere to all platform policies. ServiceQ reserves the right to suspend or terminate accounts that violate these terms. A platform fee of 10% is deducted from each successful booking payout...
-                </div>
-                {[
-                  { key: 'terms', label: 'I have read and agree to the Terms & Conditions' },
-                  { key: 'agreement', label: 'I agree to the Provider Agreement and service obligations' },
-                  { key: 'fee', label: 'I understand and consent to the 10% Platform Fee per booking' },
-                ].map(({ key, label }) => (
-                  <label key={key} className="flex items-start gap-3 cursor-pointer">
-                    <input type="checkbox" checked={agreed[key]} onChange={e => setAgreed(a => ({ ...a, [key]: e.target.checked }))}
-                      className="mt-0.5 accent-emerald-600 w-4 h-4" />
-                    <span className="text-sm text-gray-700">{label}</span>
-                  </label>
-                ))}
-              </>}
-            </div>
-          </motion.div>
-        </AnimatePresence>
+                {/* STEP 1: Address — Google Maps Location Picker */}
+                {step === 1 && <>
+                  <LocationPicker
+                    value={locationData}
+                    onChange={setLocationData}
+                    label="Service Address / Operating Location in Cebu"
+                  />
+                </>}
 
-        {/* Nav buttons */}
-        <div className="flex justify-between pt-6 mt-auto">
-          <button onClick={back} disabled={step === 0} className="btn-ghost gap-2 disabled:opacity-30">
-            <ChevronLeft size={16} /> Back
-          </button>
-          <button onClick={next} className="btn-primary gap-2" style={{ background: '#059669' }}>
-            {step === 5 ? 'Submit Application' : 'Next'} <ChevronRight size={16} />
-          </button>
+                {/* STEP 2: Provider Type & Details */}
+                {step === 2 && <>
+                  <div className="form-group">
+                    <label className="label">Provider Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {PROVIDER_TYPES.map(pt => (
+                        <label key={pt.id} className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${form.providerType === pt.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 hover:border-gray-300'}`}>
+                          <input type="radio" name="ptype" value={pt.id} checked={form.providerType === pt.id} onChange={() => set('providerType', pt.id)} className="hidden" />
+                          <span className="text-sm font-medium">{pt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="form-group sm:col-span-2">
+                      <label className="label">Business Name</label>
+                      <input className="input" value={form.businessName} onChange={e => set('businessName', e.target.value)} />
+                    </div>
+                    <div className="form-group sm:col-span-2">
+                      <label className="label">Business Description</label>
+                      <textarea rows={3} className="input resize-none" value={form.description} onChange={e => set('description', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Years of Experience</label>
+                      <input type="number" min={0} className="input" value={form.yearsExp} onChange={e => set('yearsExp', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Service Area</label>
+                      <input className="input" placeholder="e.g. Cebu City, Mandaue" value={form.serviceArea} onChange={e => set('serviceArea', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Operating Hours From</label>
+                      <input type="time" className="input" value={form.hoursFrom} onChange={e => set('hoursFrom', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Operating Hours To</label>
+                      <input type="time" className="input" value={form.hoursTo} onChange={e => set('hoursTo', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Facebook (optional)</label>
+                      <input className="input" placeholder="https://facebook.com/..." value={form.facebook} onChange={e => set('facebook', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Instagram (optional)</label>
+                      <input className="input" placeholder="https://instagram.com/..." value={form.instagram} onChange={e => set('instagram', e.target.value)} />
+                    </div>
+                  </div>
+                </>}
+
+                {/* STEP 3: KYC with B2B ID Front & Back (O5) */}
+                {step === 3 && <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label className="label">Government ID Type</label>
+                      <select className="input" value={form.idType} onChange={e => set('idType', e.target.value)}>
+                        <option value="">Select ID type...</option>
+                        {GOV_ID_TYPES.map(id => <option key={id} value={id}>{id}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="label">ID Number</label>
+                      <input className="input" value={form.idNumber} onChange={e => set('idNumber', e.target.value)} placeholder="e.g. 1234-5678-9012" />
+                    </div>
+                  </div>
+
+                  {/* Separate Front & Back ID Uploads (O5) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Front Upload */}
+                    <div className="form-group">
+                      <label className="label">ID Photo (Front Page) *</label>
+                      {idFrontPreview ? (
+                        <div className="relative border border-emerald-300 rounded-xl overflow-hidden bg-gray-50">
+                          <img src={idFrontPreview} alt="ID Front" className="w-full h-32 object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setIdFrontPreview(null)}
+                            className="absolute top-2 right-2 bg-white/90 hover:bg-white text-rose-600 p-1 rounded-full shadow-xs"
+                          >
+                            <X size={14} />
+                          </button>
+                          <div className="text-[10px] text-center bg-emerald-600 text-white py-0.5 font-semibold">Front Attached ✓</div>
+                        </div>
+                      ) : (
+                        <label className="border-2 border-dashed border-gray-300 rounded-xl h-32 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-emerald-400 bg-gray-50/40 transition-colors">
+                          <Upload size={22} className="text-gray-400" />
+                          <span className="text-xs font-semibold text-gray-700">Upload ID Front</span>
+                          <span className="text-[10px] text-gray-400">Clear photo of the front side</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files?.[0]
+                              if (f) {
+                                setIdFrontPreview(URL.createObjectURL(f))
+                                toast.success('ID Front attached!')
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Back Upload */}
+                    <div className="form-group">
+                      <label className="label">ID Photo (Back Page) *</label>
+                      {idBackPreview ? (
+                        <div className="relative border border-emerald-300 rounded-xl overflow-hidden bg-gray-50">
+                          <img src={idBackPreview} alt="ID Back" className="w-full h-32 object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setIdBackPreview(null)}
+                            className="absolute top-2 right-2 bg-white/90 hover:bg-white text-rose-600 p-1 rounded-full shadow-xs"
+                          >
+                            <X size={14} />
+                          </button>
+                          <div className="text-[10px] text-center bg-emerald-600 text-white py-0.5 font-semibold">Back Attached ✓</div>
+                        </div>
+                      ) : (
+                        <label className="border-2 border-dashed border-gray-300 rounded-xl h-32 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-emerald-400 bg-gray-50/40 transition-colors">
+                          <Upload size={22} className="text-gray-400" />
+                          <span className="text-xs font-semibold text-gray-700">Upload ID Back</span>
+                          <span className="text-[10px] text-gray-400">Clear photo of the back side</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files?.[0]
+                              if (f) {
+                                setIdBackPreview(URL.createObjectURL(f))
+                                toast.success('ID Back attached!')
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Selfie Verification */}
+                  <div className="form-group">
+                    <label className="label">Selfie Verification with ID *</label>
+                    {selfiePreview ? (
+                      <div className="relative border border-emerald-300 rounded-xl overflow-hidden bg-gray-50 max-w-sm mx-auto">
+                        <img src={selfiePreview} alt="Selfie" className="w-full h-36 object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setSelfiePreview(null)}
+                          className="absolute top-2 right-2 bg-white/90 hover:bg-white text-rose-600 p-1 rounded-full shadow-xs"
+                        >
+                          <X size={14} />
+                        </button>
+                        <div className="text-[10px] text-center bg-emerald-600 text-white py-0.5 font-semibold">Selfie Attached ✓</div>
+                      </div>
+                    ) : (
+                      <label className="border-2 border-dashed border-gray-300 rounded-xl h-32 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-emerald-400 bg-gray-50/40 transition-colors">
+                        <span className="text-2xl">🤳</span>
+                        <span className="text-xs font-semibold text-gray-700">Take or upload selfie holding ID</span>
+                        <span className="text-[10px] text-gray-400">Hold your ID beside your face clearly</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={e => {
+                            const f = e.target.files?.[0]
+                            if (f) {
+                              setSelfiePreview(URL.createObjectURL(f))
+                              toast.success('Selfie attached!')
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </>}
+
+                {/* STEP 4: Payout */}
+                {step === 4 && <>
+                  <div className="form-group">
+                    <label className="label">Preferred Payout Method</label>
+                    <div className="flex gap-3">
+                      {[{ id: 'gcash', label: '💚 GCash' }, { id: 'maya', label: '💙 Maya' }, { id: 'bank', label: '🏦 Bank Transfer' }].map(m => (
+                        <label key={m.id} className={`flex-1 p-3 text-center rounded-xl border-2 cursor-pointer transition-all text-sm font-medium ${form.payoutMethod === m.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 hover:border-gray-300'}`}>
+                          <input type="radio" name="payout" value={m.id} checked={form.payoutMethod === m.id} onChange={() => set('payoutMethod', m.id)} className="hidden" />
+                          {m.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {form.payoutMethod === 'gcash' && (
+                    <div className="form-group">
+                      <label className="label">GCash Mobile Number</label>
+                      <input className="input" placeholder="09xxxxxxxxx" value={form.gcashNum} onChange={e => set('gcashNum', e.target.value)} />
+                    </div>
+                  )}
+                  {form.payoutMethod === 'maya' && (
+                    <div className="form-group">
+                      <label className="label">Maya Mobile Number</label>
+                      <input className="input" placeholder="09xxxxxxxxx" value={form.mayaNum} onChange={e => set('mayaNum', e.target.value)} />
+                    </div>
+                  )}
+                  {form.payoutMethod === 'bank' && <>
+                    <div className="form-group">
+                      <label className="label">Bank Name</label>
+                      <input className="input" placeholder="e.g. BDO, BPI, Metrobank" value={form.bankName} onChange={e => set('bankName', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Account Name</label>
+                      <input className="input" value={form.accountName} onChange={e => set('accountName', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="label">Account Number</label>
+                      <input className="input" value={form.accountNum} onChange={e => set('accountNum', e.target.value)} />
+                    </div>
+                  </>}
+                </>}
+
+                {/* STEP 5: Agreements */}
+                {step === 5 && <>
+                  <div className="bg-gray-50 rounded-xl p-4 h-40 overflow-y-auto text-xs text-gray-500 leading-relaxed mb-2 border border-gray-100">
+                    <strong>ServiceQ Terms & Conditions</strong><br /><br />
+                    By registering as a provider on ServiceQ, you agree to maintain accurate listing information, honor all confirmed bookings, provide services as described, and adhere to all platform policies. ServiceQ reserves the right to suspend or terminate accounts that violate these terms. A platform fee of 10% is deducted from each successful booking payout...
+                  </div>
+                  {[
+                    { key: 'terms', label: 'I have read and agree to the Terms & Conditions' },
+                    { key: 'agreement', label: 'I agree to the Provider Agreement and service obligations' },
+                    { key: 'fee', label: 'I understand and consent to the 10% Platform Fee per booking' },
+                  ].map(({ key, label }) => (
+                    <label key={key} className="flex items-start gap-3 cursor-pointer p-2.5 rounded-xl hover:bg-gray-50 transition-colors">
+                      <input type="checkbox" checked={agreed[key]} onChange={e => setAgreed(a => ({ ...a, [key]: e.target.checked }))}
+                        className="mt-0.5 accent-emerald-600 w-4 h-4 rounded" />
+                      <span className="text-sm text-gray-700">{label}</span>
+                    </label>
+                  ))}
+
+                  {/* O7: Warning banner if not all boxes ticked */}
+                  {!allAgreed && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                      ⚠️ Please check all 3 boxes above to unlock the <strong>Submit Application</strong> button.
+                    </div>
+                  )}
+                </>}
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Nav buttons */}
+          <div className="flex justify-between items-center pt-6 mt-auto">
+            <button onClick={back} disabled={step === 0} className="btn-ghost gap-2 disabled:opacity-30">
+              <ChevronLeft size={16} /> Back
+            </button>
+            <button
+              onClick={next}
+              disabled={step === 5 && !allAgreed}
+              className="btn-primary gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: '#059669' }}
+            >
+              {step === 5 ? 'Submit Application' : 'Next'} <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -507,4 +677,5 @@ export default function ProviderOnboarding() {
     </div>
   )
 }
+
 

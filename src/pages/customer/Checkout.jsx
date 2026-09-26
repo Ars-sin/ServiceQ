@@ -173,7 +173,7 @@ export default function Checkout() {
       </div>
 
       {/* Confirmation Modal */}
-      <Modal open={confirmed} onClose={() => {}} title="Booking Confirmed! 🎉" size="md">
+      <Modal open={confirmed} onClose={() => navigate('/customer/bookings')} title="Booking Confirmed! 🎉" size="md">
         <div className="flex flex-col items-center text-center gap-4">
           <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
             <CheckCircle size={36} className="text-emerald-600" />

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Loader, RefreshCw } from 'lucide-react'
+import { Search, Loader, RefreshCw, MessageSquarePlus, Trash2, Eye, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { statusVariant } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
@@ -9,12 +9,15 @@ import Pagination from '@/components/ui/Pagination'
 import { supabase } from '@/lib/supabase'
 
 export default function AdminUsers() {
-  const [search, setSearch]     = useState('')
-  const [filter, setFilter]     = useState('all')
-  const [page, setPage]         = useState(1)
-  const [viewUser, setViewUser] = useState(null)
-  const [users, setUsers]       = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [search, setSearch]                   = useState('')
+  const [filter, setFilter]                   = useState('all')
+  const [page, setPage]                       = useState(1)
+  const [viewUser, setViewUser]               = useState(null)
+  const [deleteModal, setDeleteModal]         = useState(null)
+  const [correctionModal, setCorrectionModal] = useState(null)
+  const [correctionNote, setCorrectionNote]   = useState('')
+  const [users, setUsers]                     = useState([])
+  const [loading, setLoading]                 = useState(true)
 
   const PAGE_SIZE = 6
   const isDefaultAll = filter === 'all' && !search.trim()
@@ -80,6 +83,50 @@ export default function AdminUsers() {
       toast.success(`User updated to ${newStatus}`)
     } catch (err) {
       toast.error('Failed to update user: ' + err.message)
+    }
+  }
+
+  const handleDeleteUser = async (userToDelete) => {
+    if (!userToDelete) return
+    try {
+      // 1. Delete from Supabase profiles
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userToDelete.id)
+
+      if (error) {
+        console.warn('Supabase delete warning (check RLS):', error.message)
+      }
+
+      // 2. Add audit log entry
+      try {
+        const existing = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+        const entry = {
+          id: `a${Date.now()}`,
+          staff: 'Admin',
+          role: 'superadmin',
+          action: 'User Deleted',
+          target: userToDelete.name || userToDelete.email,
+          desc: `Deleted user account "${userToDelete.name}" (${userToDelete.email}) [Role: ${userToDelete.role}].`,
+          before: { status: userToDelete.status, email: userToDelete.email },
+          after: { status: 'deleted' },
+          ip: '127.0.0.1',
+          ts: new Date().toISOString(),
+        }
+        localStorage.setItem('serviceq_audit_log', JSON.stringify([entry, ...existing]))
+      } catch {}
+
+      // 3. Update local state
+      setUsers(prev => prev.filter(u => u.id !== userToDelete.id))
+      toast.success(`User "${userToDelete.name}" deleted successfully`)
+
+      if (viewUser?.id === userToDelete.id) {
+        setViewUser(null)
+      }
+      setDeleteModal(null)
+    } catch (err) {
+      toast.error('Failed to delete user: ' + err.message)
     }
   }
 
@@ -177,14 +224,25 @@ export default function AdminUsers() {
                       </Badge>
                     </td>
                     <td className="p-4">
-                      <div className="flex gap-2 flex-wrap">
-                        <button onClick={() => setViewUser(u)} className="btn-ghost btn-sm text-xs">
-                          View
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <button
+                          onClick={() => setViewUser(u)}
+                          className="btn-ghost btn-sm text-xs flex items-center gap-1"
+                          title="View User Details"
+                        >
+                          <Eye size={12} /> View
+                        </button>
+                        <button
+                          onClick={() => { setCorrectionModal(u); setCorrectionNote('') }}
+                          className="btn-sm bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg px-2 py-1 text-xs font-medium flex items-center gap-1 transition-colors"
+                          title="Request Correction"
+                        >
+                          <MessageSquarePlus size={12} /> Correction
                         </button>
                         {u.status === 'active' && u.role !== 'admin' && (
                           <button
                             onClick={() => action(u.id, 'suspended')}
-                            className="btn-sm bg-amber-100 text-amber-700 rounded-lg px-2 py-1 text-xs font-medium"
+                            className="btn-sm bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-lg px-2 py-1 text-xs font-medium transition-colors"
                           >
                             Suspend
                           </button>
@@ -192,9 +250,18 @@ export default function AdminUsers() {
                         {u.status === 'suspended' && (
                           <button
                             onClick={() => action(u.id, 'active')}
-                            className="btn-sm bg-green-100 text-green-700 rounded-lg px-2 py-1 text-xs font-medium"
+                            className="btn-sm bg-green-100 text-green-700 hover:bg-green-200 rounded-lg px-2 py-1 text-xs font-medium transition-colors"
                           >
                             Unsuspend
+                          </button>
+                        )}
+                        {u.role !== 'admin' && (
+                          <button
+                            onClick={() => setDeleteModal(u)}
+                            className="btn-sm bg-red-100 text-red-700 hover:bg-red-200 rounded-lg px-2 py-1 text-xs font-medium flex items-center gap-1 transition-colors"
+                            title="Delete User"
+                          >
+                            <Trash2 size={12} /> Delete
                           </button>
                         )}
                       </div>
@@ -223,42 +290,154 @@ export default function AdminUsers() {
       <Modal open={!!viewUser} onClose={() => setViewUser(null)} title="User Account Details" size="md">
         {viewUser && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-2xl">
+            <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-2xl border border-gray-100">
+              <div className="w-14 h-14 rounded-2xl bg-brand-100 flex items-center justify-center text-brand-700 font-bold text-xl flex-shrink-0">
                 {(viewUser.name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()}
               </div>
-              <div>
-                <p className="font-bold text-gray-900 text-lg">{viewUser.name}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-900 text-base">{viewUser.name}</p>
+                <p className="text-xs text-gray-500 truncate">{viewUser.email}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Badge variant={statusVariant(viewUser.status)} className="capitalize">{viewUser.status}</Badge>
-                  <span className="text-xs text-gray-400 capitalize">Role: {viewUser.role}</span>
+                  <Badge variant={statusVariant(viewUser.status)} className="capitalize text-xs">{viewUser.status}</Badge>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize ${
+                    viewUser.role === 'admin' ? 'bg-rose-100 text-rose-700' :
+                    viewUser.role === 'provider' ? 'bg-emerald-100 text-emerald-700' :
+                    'bg-blue-100 text-blue-700'
+                  }`}>
+                    {viewUser.role}
+                  </span>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+
+            <div className="grid grid-cols-2 gap-2.5 text-xs">
               {[
-                ['Email', viewUser.email],
-                ['Phone', viewUser.phone],
+                ['Email Address', viewUser.email],
+                ['Contact Number', viewUser.phone],
                 ['Joined Date', viewUser.joined],
-                ['Address', viewUser.address],
+                ['Current Status', viewUser.status],
                 ['Account ID', viewUser.id],
-                ['Role', viewUser.role],
+                ['Registered Role', viewUser.role],
+                ['Location / Address', viewUser.address],
               ].map(([k, v]) => (
-                <div key={k} className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-gray-400 text-xs">{k}</p>
-                  <p className="font-medium text-gray-900 text-xs break-all">{v}</p>
+                <div key={k} className={`bg-gray-50 rounded-xl p-3 border border-gray-100 ${k === 'Location / Address' ? 'col-span-2' : ''}`}>
+                  <p className="text-gray-400 text-[11px] font-medium">{k}</p>
+                  <p className="font-semibold text-gray-900 text-xs mt-0.5 break-all capitalize">{v || 'N/A'}</p>
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => {
-                toast.success('Account verified')
-                setViewUser(null)
-              }}
-              className="btn-secondary w-full"
-            >
-              Close
-            </button>
+
+            {/* Actions inside modal */}
+            <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+              {viewUser.role !== 'admin' && (
+                <>
+                  {viewUser.status === 'active' ? (
+                    <button
+                      onClick={() => { action(viewUser.id, 'suspended'); setViewUser(v => ({ ...v, status: 'suspended' })) }}
+                      className="btn-sm bg-amber-100 text-amber-700 hover:bg-amber-200 rounded-xl px-3 py-2 text-xs font-semibold flex-1 transition-colors"
+                    >
+                      Suspend Account
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { action(viewUser.id, 'active'); setViewUser(v => ({ ...v, status: 'active' })) }}
+                      className="btn-sm bg-green-100 text-green-700 hover:bg-green-200 rounded-xl px-3 py-2 text-xs font-semibold flex-1 transition-colors"
+                    >
+                      Activate Account
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      const target = viewUser
+                      setViewUser(null)
+                      setTimeout(() => { setCorrectionModal(target); setCorrectionNote('') }, 200)
+                    }}
+                    className="btn-sm bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-xl px-3 py-2 text-xs font-semibold flex-1 transition-colors"
+                  >
+                    Request Correction
+                  </button>
+                  <button
+                    onClick={() => {
+                      const target = viewUser
+                      setViewUser(null)
+                      setTimeout(() => setDeleteModal(target), 200)
+                    }}
+                    className="btn-sm bg-red-100 text-red-700 hover:bg-red-200 rounded-xl px-3 py-2 text-xs font-semibold flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <Trash2 size={13} /> Delete User
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setViewUser(null)}
+                className="btn-ghost flex-1 py-2 text-xs font-medium"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete User Confirmation Modal */}
+      <Modal open={!!deleteModal} onClose={() => setDeleteModal(null)} title="Delete User Account" size="sm">
+        {deleteModal && (
+          <div className="flex flex-col gap-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+              <Trash2 size={26} />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">Delete {deleteModal.name}?</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                Are you sure you want to permanently remove this user account (<strong>{deleteModal.email}</strong>)? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setDeleteModal(null)} className="btn-secondary flex-1 text-xs">
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteUser(deleteModal)}
+                className="btn-danger flex-1 text-xs font-bold"
+              >
+                Yes, Delete User
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* AD2: Request Correction Modal */}
+      <Modal open={!!correctionModal} onClose={() => setCorrectionModal(null)} title="Request Correction" size="md">
+        {correctionModal && (
+          <div className="flex flex-col gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
+              Sending a correction request to <strong>{correctionModal.name}</strong> ({correctionModal.email})
+            </div>
+            <div className="form-group">
+              <label className="label">Correction Needed</label>
+              <textarea
+                rows={4}
+                value={correctionNote}
+                onChange={e => setCorrectionNote(e.target.value)}
+                placeholder="Describe what needs to be corrected (e.g. 'Please reupload a clearer photo of your government ID front page.')..."
+                className="input resize-none text-sm"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setCorrectionModal(null)} className="btn-ghost text-xs">Cancel</button>
+              <button
+                onClick={() => {
+                  if (!correctionNote.trim()) return toast.error('Please describe the correction needed')
+                  toast.success(`Correction request sent to ${correctionModal.name}`)
+                  setCorrectionModal(null)
+                  setCorrectionNote('')
+                }}
+                className="btn-primary text-xs"
+              >
+                Send Request
+              </button>
+            </div>
           </div>
         )}
       </Modal>

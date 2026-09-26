@@ -12,14 +12,16 @@ export default function ProviderDashboard() {
   const { user, profile } = useAuth()
   const [isVerified, setIsVerified] = useState(false)
 
-  // Real-time data from localStorage / Supabase
-  const [listings, setListings] = useState(() => {
+  // Load listings from user-scoped key (mirrors Listings.jsx)
+  const [listings, setListings] = useState([])
+
+  useEffect(() => {
+    if (!user?.id) return
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_provider_listings'))
-      if (Array.isArray(stored)) return stored
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`))
+      if (Array.isArray(stored)) setListings(stored)
     } catch {}
-    return []
-  })
+  }, [user?.id])
 
   const [bookings, setBookings] = useState(() => {
     try {

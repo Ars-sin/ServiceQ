@@ -27,44 +27,46 @@ export default function LoginPage() {
   const [resending, setResending]     = useState(false)
   const [showGoogleModal, setShowGoogleModal] = useState(false)
 
-  // Listen for active OAuth session (e.g. if redirected from Google OAuth)
+  // Listen for active OAuth session (e.g. redirected back from Google OAuth)
+  // Only runs once on mount — loginRole intentionally excluded from deps to prevent double-toast
   useEffect(() => {
+    let handled = false
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user?.email) {
-        // Query profiles to see if this email exists in the system
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', session.user.email)
-          .maybeSingle()
+      if (!session?.user?.email || handled) return
+      handled = true
 
-        if (profile?.role) {
-          // Admin can log in through either portal
-          // Only block strict customer <-> provider cross-login
-          if (loginRole === 'customer' && profile.role === 'provider') {
-            await supabase.auth.signOut()
-            toast.error('This account is registered as a Provider. Please switch to the Provider tab to sign in.')
-            setLoginRole('provider')
-            return
-          }
-          if (loginRole === 'provider' && profile.role === 'customer') {
-            await supabase.auth.signOut()
-            toast.error('This account is registered as a Customer. Please switch to the Customer tab to sign in.')
-            setLoginRole('customer')
-            return
-          }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('email', session.user.email)
+        .maybeSingle()
 
-          loginWithProfile(profile)
-          const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
-          toast.success(`Welcome back, ${profile.full_name || profile.email}!`)
-          navigate(destination, { replace: true })
-        } else {
-          toast('Google verified! Please choose your account type to complete registration.', { icon: '✨' })
-          navigate(`/register?email=${encodeURIComponent(session.user.email)}&name=${encodeURIComponent(session.user.user_metadata?.full_name || '')}&from=google`, { replace: true })
+      if (profile?.role) {
+        // Check cross-role mismatch (read loginRole from the ref snapshot at mount time)
+        if (loginRole === 'customer' && profile.role === 'provider') {
+          await supabase.auth.signOut()
+          toast.error('This account is registered as a Provider. Please use the Provider tab to sign in.')
+          setLoginRole('provider')
+          return
         }
+        if (loginRole === 'provider' && profile.role === 'customer') {
+          await supabase.auth.signOut()
+          toast.error('This account is registered as a Customer. Please use the Customer tab to sign in.')
+          setLoginRole('customer')
+          return
+        }
+
+        loginWithProfile(profile)
+        const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
+        toast.success(`Welcome back, ${profile.full_name || profile.email}!`)
+        navigate(destination, { replace: true })
+      } else {
+        toast('Google verified! Please choose your account type to complete registration.', { icon: '✨' })
+        navigate(`/register?email=${encodeURIComponent(session.user.email)}&name=${encodeURIComponent(session.user.user_metadata?.full_name || '')}&from=google`, { replace: true })
       }
     })
-  }, [navigate, loginWithProfile, loginRole])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally empty — runs once on mount only
 
   const handleChange = e => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -93,39 +95,61 @@ export default function LoginPage() {
     setLoading(true)
     setUnconfirmed(false)
     try {
+      // ── Step 1: Pre-check role by email BEFORE signing in ──
+      // This prevents the AuthContext race condition where onAuthStateChange
+      // sets the user and redirects them before our role check can fire.
+      const { data: preCheck } = await supabase
+        .from('profiles')
+        .select('role, is_active, full_name, email')
+        .ilike('email', form.email.trim())
+        .maybeSingle()
+
+      if (preCheck) {
+        // Suspended user — block before signing in
+        if (preCheck.is_active === false) {
+          toast.error('Your account has been suspended. Please contact support for assistance.')
+          return
+        }
+
+        const preRole = preCheck.role || 'customer'
+
+        // Wrong portal — show error, auto-switch tab, don't sign in at all
+        if (loginRole === 'customer' && preRole === 'provider') {
+          toast.error('This is a Provider account. Please use the Provider tab to sign in.')
+          setLoginRole('provider')
+          return
+        }
+        if (loginRole === 'provider' && preRole === 'customer') {
+          toast.error('This is a Customer account. Please use the Customer tab to sign in.')
+          setLoginRole('customer')
+          return
+        }
+      }
+
+      // ── Step 2: Role matches (or no profile yet) — attempt sign-in ──
       const { data, error } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
       })
       if (error) throw error
 
-      // Fetch role from profiles table
+      // ── Step 3: Fetch full profile post-login ──
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('*')
         .eq('id', data.user.id)
-        .single()
+        .maybeSingle()
 
-      const userRole = profile?.role || 'customer'
-
-      // Admin can log in through either portal
-      // Only block strict customer <-> provider cross-login
-      if (loginRole === 'customer' && userRole === 'provider') {
+      // Deleted user (profile row removed by admin)
+      if (!profile) {
         await supabase.auth.signOut()
-        toast.error('This account is registered as a Provider. Please switch to the Provider tab to sign in.')
-        setLoginRole('provider')
+        toast.error('This account no longer exists. Please contact support or create a new account.')
         return
       }
 
-      if (loginRole === 'provider' && userRole === 'customer') {
-        await supabase.auth.signOut()
-        toast.error('This account is registered as a Customer. Please switch to the Customer tab to sign in.')
-        setLoginRole('customer')
-        return
-      }
-
+      const userRole = profile.role || 'customer'
       const destination = ROLE_REDIRECT[userRole] ?? '/customer/explore'
-      toast.success('Welcome back!')
+      toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
       navigate(destination, { replace: true })
     } catch (err) {
       if (err.message?.toLowerCase().includes('email not confirmed')) {
@@ -138,6 +162,7 @@ export default function LoginPage() {
       setLoading(false)
     }
   }
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative py-12">

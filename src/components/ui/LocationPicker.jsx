@@ -120,12 +120,16 @@ function ManualFields({ value = {}, onChange }) {
           />
         </div>
         <div className="form-group">
-          <label className="label">Postal Code</label>
+          <label className="label">Postal Code <span className="text-red-500 font-bold">*</span></label>
           <input
             className="input"
+            type="number"
+            min="1000"
+            max="9999"
             placeholder="6000"
             value={value.postalCode || ''}
             onChange={e => f('postalCode', e.target.value)}
+            required
           />
         </div>
       </div>

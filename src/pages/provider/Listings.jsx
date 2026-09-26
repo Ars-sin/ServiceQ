@@ -47,18 +47,22 @@ export default function ProviderListings() {
   const [tab, setTab]               = useState('all')
   const [page, setPage]             = useState(1)
   const [showAdd, setShowAdd]       = useState(false)
+  const [showKycModal, setShowKycModal] = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
   const [viewingListing, setViewingListing] = useState(null)
-  // Initialize listings from local storage (defaults to empty array for new providers)
-  const [listings, setListings]     = useState(() => {
+  // Listings are scoped per-user so new providers always start fresh
+  const [listings, setListings]     = useState([])
+
+  // Load listings from user-scoped localStorage key once user is known
+  useEffect(() => {
+    if (!user?.id) return
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_provider_listings'))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`))
       if (Array.isArray(stored)) {
-        return stored
+        setListings(stored)
       }
     } catch {}
-    return []
-  })
+  }, [user?.id])
 
   // Wizard form state
   const [form, setForm] = useState(INITIAL_FORM)
@@ -96,7 +100,7 @@ export default function ProviderListings() {
       const updated = prev.map(l =>
         l.id === id ? { ...l, status: l.status === 'active' ? 'inactive' : 'active' } : l
       )
-      try { localStorage.setItem('serviceq_provider_listings', JSON.stringify(updated)) } catch {}
+      try { localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated)) } catch {}
       return updated
     })
     toast.success('Listing status updated')
@@ -133,7 +137,7 @@ export default function ProviderListings() {
     setListings(prev => {
       const updated = [newListing, ...prev]
       try {
-        localStorage.setItem('serviceq_provider_listings', JSON.stringify(updated))
+        localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated))
       } catch {}
       return updated
     })
