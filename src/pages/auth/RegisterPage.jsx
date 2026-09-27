@@ -62,6 +62,14 @@ export default function RegisterPage() {
   const [otp, setOtp]       = useState(['', '', '', '', '', ''])
   const inputRefs           = useRef([])
 
+  // Redirect to maintenance if active
+  useEffect(() => {
+    const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+    if (isMaintenance) {
+      navigate('/maintenance', { replace: true })
+    }
+  }, [navigate])
+
   // Basic form with separated name fields
   const [form, setForm] = useState({
     firstName: initialName.split(' ')[0] || '',

@@ -43,6 +43,7 @@ import AdminAuditLog   from '@/pages/admin/AuditLog'
 // Misc
 import NotFoundPage from '@/pages/NotFound'
 import LandingPage  from '@/pages/Landing'
+import MaintenancePage from '@/pages/Maintenance'
 
 // ─────────────────────────────────────────────────────────────
 //  Route Guards
@@ -60,6 +61,12 @@ function ProtectedRoute({ children, requiredRole }) {
 
   // Not logged in → go to login
   if (!user) return <Navigate to="/login" replace />
+
+  // Maintenance mode — non-admins cannot access protected portals
+  const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+  if (isMaintenance && role !== 'admin') {
+    return <Navigate to="/maintenance" replace />
+  }
 
   // Logged in but wrong portal → redirect to correct one
   if (requiredRole && role && role !== requiredRole) {
@@ -84,6 +91,10 @@ function GuestOnly({ children }) {
   if (loading) return <SplashScreen />
 
   if (user && role) {
+    const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+    if (isMaintenance && role !== 'admin') {
+      return <Navigate to="/maintenance" replace />
+    }
     const redirectMap = {
       customer: '/customer/dashboard',
       provider: '/provider/dashboard',
@@ -107,6 +118,7 @@ function AppRoutes() {
     <Routes>
       {/* ── Public ── */}
       <Route path="/" element={<LandingPage />} />
+      <Route path="/maintenance" element={<MaintenancePage />} />
 
       {/* ── Auth (guests only — redirect if already logged in) ── */}
       <Route path="/login"           element={<GuestOnly><LoginPage /></GuestOnly>} />

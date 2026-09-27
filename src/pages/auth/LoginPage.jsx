@@ -57,6 +57,11 @@ export default function LoginPage() {
         }
 
         loginWithProfile(profile)
+        const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+        if (isMaintenance && profile.role !== 'admin') {
+          navigate('/maintenance', { replace: true })
+          return
+        }
         const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
         toast.success(`Welcome back, ${profile.full_name || profile.email}!`)
         navigate(destination, { replace: true })
@@ -148,6 +153,11 @@ export default function LoginPage() {
       }
 
       const userRole = profile.role || 'customer'
+      const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+      if (isMaintenance && userRole !== 'admin') {
+        navigate('/maintenance', { replace: true })
+        return
+      }
       const destination = ROLE_REDIRECT[userRole] ?? '/customer/explore'
       toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
       navigate(destination, { replace: true })
@@ -368,6 +378,11 @@ export default function LoginPage() {
         loginRole={loginRole}
         onSuccessLogin={(profile) => {
           loginWithProfile(profile)
+          const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+          if (isMaintenance && profile.role !== 'admin') {
+            navigate('/maintenance', { replace: true })
+            return
+          }
           const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
           navigate(destination, { replace: true })
         }}

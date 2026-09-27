@@ -4,8 +4,9 @@ import {
   LayoutDashboard, Package, CalendarCheck, DollarSign,
   Zap, User, Settings, LogOut, Bell, Menu,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import toast from 'react-hot-toast'
 
 const NAV = [
   { to: '/provider/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
@@ -18,9 +19,26 @@ const NAV = [
 ]
 
 export default function ProviderLayout() {
-  const { signOut } = useAuth()
+  const { signOut, profile, role } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Block suspended providers
+  useEffect(() => {
+    if (profile && profile.status === 'suspended') {
+      toast.error('Your provider account has been suspended. Please contact support.')
+      signOut()
+      navigate('/login', { replace: true })
+    }
+  }, [profile])
+
+  // Maintenance mode — redirect non-admins
+  useEffect(() => {
+    const maintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+    if (maintenance && role !== 'admin') {
+      navigate('/maintenance', { replace: true })
+    }
+  }, [role, navigate])
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
