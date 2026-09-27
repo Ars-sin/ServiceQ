@@ -389,6 +389,15 @@ CREATE POLICY "Users can update own profile"
 CREATE POLICY "Public profiles readable for listings"
   ON profiles FOR SELECT USING (TRUE);  -- restrict further as needed
 
+-- ── Providers ────────────────────────────────────────────────
+CREATE POLICY "Providers readable by all"
+  ON providers FOR SELECT USING (TRUE);
+
+CREATE POLICY "Users can manage own provider profile"
+  ON providers FOR ALL
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
 -- ── Listings ─────────────────────────────────────────────────
 CREATE POLICY "Active listings are public"
   ON listings FOR SELECT USING (status = 'active');

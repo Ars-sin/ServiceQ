@@ -6,6 +6,7 @@ import { formatPHP } from '@/lib/utils'
 import { SUBSCRIPTION_TIERS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
+import { fetchProviderListings } from '@/lib/listingsService'
 
 const FEATURES = [
   { label: 'Active Listings',      free: '3',   basic: '10',  premium: '50' },
@@ -32,6 +33,13 @@ export default function ProviderSubscription() {
           count = stored.filter(l => l.status !== 'archived').length
         }
       } catch {}
+
+      fetchProviderListings(user.id).then(live => {
+        if (Array.isArray(live)) {
+          const liveCount = live.filter(l => l.status !== 'archived').length
+          if (liveCount > 0) setListingsCount(liveCount)
+        }
+      }).catch(() => {})
     }
     if (count === 0) {
       try {

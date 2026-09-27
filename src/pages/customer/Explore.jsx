@@ -13,29 +13,19 @@ import { formatPHP } from '@/lib/utils'
 import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
 import { useAuth } from '@/contexts/AuthContext'
 
+import { BASE_LISTINGS, loadCachedListings, fetchBackendListings } from '@/lib/listingsService'
+
 const TYPE_TABS = [
   { id: 'all',      label: 'All Listings', icon: LayoutGrid },
   { id: 'services', label: 'Services',     icon: Wrench },
   { id: 'rentals',  label: 'Rentals',      icon: Package },
 ]
 
-export const ALL_LISTINGS = [
-  { id: '1',  type: 'services', category: 'Services', subCategory: 'Cleaning',     title: 'Professional Home Cleaning',              price: 500,  unit: 'per session', rating: 4.8, reviews: 42, distance: 0.8, provider: 'Maria Santos',        tag: 'Top Rated' },
-  { id: '2',  type: 'rentals',  category: 'Rentals',  subCategory: 'Apartment',    title: 'Studio Apartment near Cebu IT Park',       price: 4500, unit: 'per month',   rating: 4.5, reviews: 18, distance: 1.2, provider: 'Renzo Realty',        tag: 'Verified' },
-  { id: '3',  type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'Laptop Rental (MacBook Pro M2)',           price: 800,  unit: 'per day',     rating: 4.9, reviews: 31, distance: 2.0, provider: 'TechRent Cebu',      tag: 'Fast Delivery' },
-  { id: '4',  type: 'services', category: 'Services', subCategory: 'Tutoring',     title: 'High School Math & Science Tutoring',      price: 300,  unit: 'per hour',    rating: 5.0, reviews: 57, distance: 0.5, provider: 'Engr. Cruz',          tag: 'Certified' },
-  { id: '5',  type: 'services', category: 'Services', subCategory: 'Repairs',      title: 'Split-Type AC Cleaning & Repair',          price: 350,  unit: 'per visit',   rating: 4.7, reviews: 29, distance: 3.1, provider: 'Fix-It Crew Cebu',   tag: 'Same Day' },
-  { id: '6',  type: 'rentals',  category: 'Rentals',  subCategory: 'Events',       title: 'Full Sound System & Stage Lights',         price: 3500, unit: 'per day',     rating: 4.6, reviews: 14, distance: 1.8, provider: 'Cebu Events Pro',    tag: 'Packages' },
-  { id: '7',  type: 'rentals',  category: 'Rentals',  subCategory: 'Vehicles',     title: 'Honda Click 125i Scooter Rental',          price: 450,  unit: 'per day',     rating: 4.9, reviews: 36, distance: 1.5, provider: 'Cebu MotoRent',      tag: 'Helmet Included' },
-  { id: '8',  type: 'services', category: 'Services', subCategory: 'Cleaning',     title: 'Deep Sofa & Carpet Steam Shampoo',         price: 650,  unit: 'per sofa',    rating: 4.8, reviews: 33, distance: 2.1, provider: 'CleanPro Cebu',      tag: 'Eco-friendly' },
-  { id: '9',  type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'Sony Alpha A7 IV Camera & Lens Kit',       price: 950,  unit: 'per day',     rating: 4.9, reviews: 40, distance: 2.8, provider: 'PixelRent Cebu',     tag: '4K Ready' },
-  { id: '10', type: 'services', category: 'Services', subCategory: 'Catering',     title: 'Packed Meals & Filipino Buffet Catering',  price: 250,  unit: 'per head',    rating: 4.9, reviews: 83, distance: 0.9, provider: 'Lutong Sugbo',       tag: 'Catering' },
-  { id: '11', type: 'rentals',  category: 'Rentals',  subCategory: 'Equipment',    title: 'Electric Generator (3500W Inverter)',       price: 1200, unit: 'per day',     rating: 4.8, reviews: 19, distance: 3.4, provider: 'PowerRent Cebu',     tag: 'Heavy Duty' },
-  { id: '12', type: 'rentals',  category: 'Rentals',  subCategory: 'Property',     title: '1-Bedroom Furnished Condo in Lahug',       price: 8500, unit: 'per month',   rating: 4.6, reviews: 15, distance: 0.9, provider: 'Cebu Living Homes',  tag: 'Furnished' },
-  { id: '13', type: 'rentals',  category: 'Rentals',  subCategory: 'Gadgets',      title: 'DSLR Gimbal & Drone Photography Kit',      price: 750,  unit: 'per day',     rating: 4.8, reviews: 26, distance: 1.7, provider: 'DroneHub Cebu',     tag: 'Popular' },
-  { id: '14', type: 'services', category: 'Services', subCategory: 'Repairs',      title: 'Plumbing & Water Leak Repair',             price: 400,  unit: 'per service', rating: 4.7, reviews: 21, distance: 1.1, provider: 'QuickPlumb Cebu',   tag: 'Express' },
-  { id: '15', type: 'rentals',  category: 'Rentals',  subCategory: 'Vehicles',     title: 'Toyota Innova Van with Driver',            price: 2800, unit: 'per day',     rating: 5.0, reviews: 64, distance: 2.4, provider: 'Sugbo Van Rentals',  tag: 'Tour Ready' },
-]
+export const ALL_LISTINGS = BASE_LISTINGS
+
+export function loadAllMergedListings() {
+  return loadCachedListings()
+}
 
 export function getListingIcon(subCategory) {
   switch (subCategory) {
@@ -130,52 +120,6 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
   )
 }
 
-export function loadAllMergedListings() {
-  const merged = []
-  const seenIds = new Set()
-
-  // 1. Load custom listings from localStorage
-  try {
-    const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
-    if (Array.isArray(custom)) {
-      for (const item of custom) {
-        if (item && item.id && !seenIds.has(String(item.id)) && item.status !== 'archived') {
-          seenIds.add(String(item.id))
-          merged.push(item)
-        }
-      }
-    }
-  } catch {}
-
-  // 2. Scan all provider-specific listing keys in localStorage
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && key.startsWith('serviceq_provider_listings_')) {
-        const provListings = JSON.parse(localStorage.getItem(key)) || []
-        if (Array.isArray(provListings)) {
-          for (const item of provListings) {
-            if (item && item.id && !seenIds.has(String(item.id)) && item.status !== 'archived') {
-              seenIds.add(String(item.id))
-              merged.push(item)
-            }
-          }
-        }
-      }
-    }
-  } catch {}
-
-  // 3. Fallback to default mock listings
-  for (const item of ALL_LISTINGS) {
-    if (!seenIds.has(String(item.id))) {
-      seenIds.add(String(item.id))
-      merged.push(item)
-    }
-  }
-
-  return merged
-}
-
 export default function CustomerExplore() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -188,17 +132,37 @@ export default function CustomerExplore() {
   const [showFilters, setShowFilters]   = useState(false)
   const [favoriteIds, setFavoriteIds]   = useState(getFavoriteIds)
 
-  const [allListings, setAllListings] = useState(loadAllMergedListings)
+  const [allListings, setAllListings] = useState(loadCachedListings)
 
   useEffect(() => {
-    const handleUpdate = () => {
-      setAllListings(loadAllMergedListings())
+    let isMounted = true
+    const syncBackend = async () => {
+      try {
+        const liveListings = await fetchBackendListings()
+        if (isMounted && Array.isArray(liveListings) && liveListings.length > 0) {
+          setAllListings(liveListings)
+        }
+      } catch (err) {
+        console.warn('Backend listings sync error:', err)
+      }
     }
+
+    syncBackend()
+
+    const handleUpdate = () => {
+      setAllListings(loadCachedListings())
+      syncBackend()
+    }
+
     window.addEventListener('serviceq_listings_updated', handleUpdate)
     window.addEventListener('storage', handleUpdate)
+    window.addEventListener('focus', syncBackend)
+
     return () => {
+      isMounted = false
       window.removeEventListener('serviceq_listings_updated', handleUpdate)
       window.removeEventListener('storage', handleUpdate)
+      window.removeEventListener('focus', syncBackend)
     }
   }, [])
 
@@ -240,9 +204,9 @@ export default function CustomerExplore() {
       // Search
       if (search.trim()) {
         const q = search.toLowerCase()
-        const matchTitle = item.title.toLowerCase().includes(q)
-        const matchSub   = item.subCategory?.toLowerCase().includes(q)
-        const matchProv  = item.provider.toLowerCase().includes(q)
+        const matchTitle = (item.title || '').toLowerCase().includes(q)
+        const matchSub   = (item.subCategory || '').toLowerCase().includes(q)
+        const matchProv  = (item.provider || '').toLowerCase().includes(q)
         if (!matchTitle && !matchSub && !matchProv) return false
       }
 
@@ -256,23 +220,30 @@ export default function CustomerExplore() {
       }
 
       // Min price filter
-      if (minPrice > 0 && item.price < minPrice) return false
+      if (minPrice > 0 && (item.price || 0) < minPrice) return false
 
       // Min rating
-      if (item.rating < minRating) return false
+      if ((item.rating ?? 5.0) < minRating) return false
 
       // Quick filters (multi-select array)
-      if (quickFilters.includes('under500') && item.price > 500) return false
-      if (quickFilters.includes('toprated') && item.rating < 4.8) return false
-      if (quickFilters.includes('nearby') && item.distance > 2.0) return false
+      if (quickFilters.includes('under500') && (item.price || 0) > 500) return false
+      if (quickFilters.includes('toprated') && (item.rating ?? 5.0) < 4.8) return false
+      if (quickFilters.includes('nearby') && (item.distance ?? 1.0) > 2.0) return false
 
       return true
     })
     .sort((a, b) => {
-      if (sort === 'price_asc')  return a.price - b.price
-      if (sort === 'price_desc') return b.price - a.price
-      if (sort === 'rating')     return b.rating - a.rating
-      if (sort === 'distance')   return a.distance - b.distance
+      const priceA = a.price || 0
+      const priceB = b.price || 0
+      const ratingA = a.rating ?? 5.0
+      const ratingB = b.rating ?? 5.0
+      const distA = a.distance ?? 1.0
+      const distB = b.distance ?? 1.0
+
+      if (sort === 'price_asc')  return priceA - priceB
+      if (sort === 'price_desc') return priceB - priceA
+      if (sort === 'rating')     return ratingB - ratingA
+      if (sort === 'distance')   return distA - distB
       return 0 // recommended default
     })
 

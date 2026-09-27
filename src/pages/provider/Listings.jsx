@@ -14,6 +14,13 @@ import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import {
+  fetchProviderListings,
+  saveProviderListing,
+  updateListingStatus,
+  archiveListing,
+  updateListingAvailability
+} from '@/lib/listingsService'
 
 const TABS = [
   { id: 'all',      label: 'All Listings' },
@@ -68,15 +75,27 @@ export default function ProviderListings() {
   // Listings are scoped per-user so new providers always start fresh
   const [listings, setListings]     = useState([])
 
-  // Load listings from user-scoped localStorage key once user is known
+  // Load listings from local cache immediately, then sync from Supabase backend
   useEffect(() => {
     if (!user?.id) return
+    let isMounted = true
+
+    // 1. Instant local read
     try {
       const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`))
-      if (Array.isArray(stored)) {
+      if (Array.isArray(stored) && stored.length > 0) {
         setListings(stored)
       }
     } catch {}
+
+    // 2. Live backend fetch
+    fetchProviderListings(user.id).then(live => {
+      if (isMounted && Array.isArray(live) && live.length > 0) {
+        setListings(live)
+      }
+    }).catch(err => console.warn('Could not load live provider listings:', err))
+
+    return () => { isMounted = false }
   }, [user?.id])
 
   // Wizard form state
@@ -100,49 +119,33 @@ export default function ProviderListings() {
     })
   }
 
-  const saveAvailability = () => {
+  const saveAvailability = async () => {
     if (!editingAvailability) return
-    setListings(prev => {
-      const updated = prev.map(l => l.id === editingAvailability.id ? {
-        ...l,
-        days: availForm.days,
-        hoursFrom: availForm.hoursFrom,
-        hoursTo: availForm.hoursTo,
-        availableFrom: availForm.availableFrom,
-        availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
-        ongoingAvailability: availForm.ongoingAvailability,
-      } : l)
-      try {
-        localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated))
-        const customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
-        const updatedCustom = customListings.map(l => l.id === editingAvailability.id ? {
-          ...l,
-          days: availForm.days,
-          hoursFrom: availForm.hoursFrom,
-          hoursTo: availForm.hoursTo,
-          availableFrom: availForm.availableFrom,
-          availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
-          ongoingAvailability: availForm.ongoingAvailability,
-        } : l)
-        localStorage.setItem('serviceq_custom_listings', JSON.stringify(updatedCustom))
-        window.dispatchEvent(new Event('serviceq_listings_updated'))
-      } catch {}
-      return updated
-    })
+
+    const availData = {
+      days: availForm.days,
+      hoursFrom: availForm.hoursFrom,
+      hoursTo: availForm.hoursTo,
+      availableFrom: availForm.availableFrom,
+      availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
+      ongoingAvailability: availForm.ongoingAvailability,
+    }
+
+    setListings(prev => prev.map(l => l.id === editingAvailability.id ? {
+      ...l,
+      ...availData,
+    } : l))
 
     if (viewingListing && viewingListing.id === editingAvailability.id) {
       setViewingListing(v => ({
         ...v,
-        days: availForm.days,
-        hoursFrom: availForm.hoursFrom,
-        hoursTo: availForm.hoursTo,
-        availableFrom: availForm.availableFrom,
-        availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
-        ongoingAvailability: availForm.ongoingAvailability,
+        ...availData,
       }))
     }
 
-    toast.success('Listing availability updated!')
+    await updateListingAvailability(editingAvailability.id, availData, user?.id)
+
+    toast.success('Listing availability updated and synced!')
     setEditingAvailability(null)
   }
 
@@ -169,15 +172,22 @@ export default function ProviderListings() {
     setPage(1)
   }
 
-  const toggleStatus = id => {
-    setListings(prev => {
-      const updated = prev.map(l =>
-        l.id === id ? { ...l, status: l.status === 'active' ? 'inactive' : 'active' } : l
-      )
-      try { localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated)) } catch {}
-      return updated
-    })
-    toast.success('Listing status updated')
+  const toggleStatus = async (id) => {
+    const current = listings.find(l => l.id === id)
+    const newStatus = current?.status === 'active' ? 'inactive' : 'active'
+
+    setListings(prev => prev.map(l =>
+      l.id === id ? { ...l, status: newStatus } : l
+    ))
+
+    await updateListingStatus(id, newStatus, user?.id)
+    toast.success(`Listing ${newStatus === 'active' ? 'activated' : 'deactivated'}`)
+  }
+
+  const handleArchive = async (id) => {
+    setListings(prev => prev.map(l => l.id === id ? { ...l, status: 'archived' } : l))
+    await archiveListing(id, user?.id)
+    toast.success('Listing archived and removed from customer explore')
   }
 
   const isStepValid = (step) => {
@@ -191,7 +201,7 @@ export default function ProviderListings() {
     }
   }
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!form.title.trim()) {
       return toast.error('Please provide a listing title')
     }
@@ -207,8 +217,8 @@ export default function ProviderListings() {
       unit: form.unit || 'per session',
       status: 'active',
       bookings: 0,
-      color: 'from-emerald-400 to-teal-400',
-      provider: profile?.full_name || 'Verified Provider',
+      color: typeNormalized === 'rentals' ? 'from-emerald-400 to-teal-400' : 'from-blue-400 to-indigo-400',
+      provider: profile?.full_name || user?.user_metadata?.full_name || 'Verified Provider',
       providerId: user?.id,
       distance: 1.0,
       rating: 5.0,
@@ -216,26 +226,21 @@ export default function ProviderListings() {
       days: form.days && form.days.length > 0 ? form.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       hoursFrom: form.hoursFrom || '08:00',
       hoursTo: form.hoursTo || '17:00',
-      availableFrom: form.availableFrom,
+      availableFrom: form.availableFrom || null,
       availableTo: form.ongoingAvailability ? null : form.availableTo,
       ongoingAvailability: form.ongoingAvailability,
-      location: form.location || 'Cebu City',
+      location: form.location || profile?.city || 'Cebu City',
       serviceArea: form.serviceArea || 'Metro Cebu',
       description: form.description || form.title,
     }
 
-    setListings(prev => {
-      const updated = [newListing, ...prev]
-      try {
-        localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated))
-        const customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
-        localStorage.setItem('serviceq_custom_listings', JSON.stringify([newListing, ...customListings.filter(l => l.id !== newListing.id)]))
-        window.dispatchEvent(new Event('serviceq_listings_updated'))
-      } catch {}
-      return updated
-    })
+    // Optimistic local state update
+    setListings(prev => [newListing, ...prev.filter(l => l.id !== newListing.id)])
 
-    toast.success('New listing published successfully!')
+    // Persist to backend & local cache
+    await saveProviderListing(newListing, user?.id)
+
+    toast.success('New listing published and live for customers!')
     setShowAdd(false)
     setWizardStep(0)
     setForm(INITIAL_FORM)
@@ -339,7 +344,13 @@ export default function ProviderListings() {
                       >
                         {l.status === 'active' ? <ToggleRight size={20} className="text-emerald-600" /> : <ToggleLeft size={20} className="text-gray-400" />}
                       </button>
-                      <button onClick={() => toast.success('Archived to records')} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"><Archive size={15} /></button>
+                      <button
+                        onClick={() => handleArchive(l.id)}
+                        title="Archive Listing"
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Archive size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>

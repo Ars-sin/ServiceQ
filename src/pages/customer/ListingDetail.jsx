@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { formatPHP, calcFees } from '@/lib/utils'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
 import { isFavorite, toggleFavorite } from '@/lib/favorites'
+import { fetchBackendListings } from '@/lib/listingsService'
 
 const DEFAULT_MOCK = {
   id: '1',
@@ -100,6 +101,19 @@ export default function ListingDetail() {
     }
   }, [id])
 
+  const [backendListing, setBackendListing] = useState(null)
+
+  useEffect(() => {
+    let isMounted = true
+    fetchBackendListings().then(items => {
+      if (isMounted && Array.isArray(items)) {
+        const found = items.find(l => String(l.id) === String(id))
+        if (found) setBackendListing(found)
+      }
+    }).catch(() => {})
+    return () => { isMounted = false }
+  }, [id])
+
   // Dynamically resolve listing from custom listings + ALL_LISTINGS by id
   const listing = useMemo(() => {
     let all = ALL_LISTINGS
@@ -111,7 +125,9 @@ export default function ListingDetail() {
       }
     } catch {}
 
-    const matched = all.find(l => String(l.id) === String(id))
+    const matched = (backendListing && String(backendListing.id) === String(id))
+      ? backendListing
+      : all.find(l => String(l.id) === String(id))
     if (!matched) return DEFAULT_MOCK
 
     const initials = (matched.provider || 'SP')

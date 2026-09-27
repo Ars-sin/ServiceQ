@@ -742,7 +742,7 @@ export default function RegisterPage() {
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className={`w-full transition-all duration-300 ${role === 'provider' ? 'max-w-2xl' : 'max-w-lg'}`}
+        className="w-full max-w-lg"
       >
         {/* Logo & Dynamic Header */}
         <div className="flex flex-col items-center mb-6">

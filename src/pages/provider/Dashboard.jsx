@@ -7,6 +7,7 @@ import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
+import { fetchProviderListings } from '@/lib/listingsService'
 export default function ProviderDashboard() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
@@ -21,6 +22,10 @@ export default function ProviderDashboard() {
       const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`))
       if (Array.isArray(stored)) setListings(stored)
     } catch {}
+
+    fetchProviderListings(user.id).then(live => {
+      if (Array.isArray(live) && live.length > 0) setListings(live)
+    }).catch(() => {})
   }, [user?.id])
 
   const [bookings, setBookings] = useState([])

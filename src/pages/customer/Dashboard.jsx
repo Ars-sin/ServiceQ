@@ -6,6 +6,7 @@ import { CATEGORIES } from '@/lib/constants'
 import { formatPHP } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { loadAllMergedListings } from './Explore'
+import { fetchBackendListings } from '@/lib/listingsService'
 
 const MOCK_LISTINGS = [
   { id: '1', title: 'Professional Home Cleaning', categoryId: 'cleaning', category: 'Cleaning Services', price: 500, unit: 'per session', rating: 4.8, reviews: 42, distance: '0.8 km', provider: 'Maria Santos', tag: 'Top Rated' },
@@ -98,14 +99,33 @@ export default function CustomerDashboard() {
   const [search, setSearch] = useState('')
   const [allListings, setAllListings] = useState(loadAllMergedListings)
 
-  // Reload listings whenever a provider publishes something new
+  // Reload listings whenever a provider publishes something new or backend updates
   useEffect(() => {
-    const handleUpdate = () => setAllListings(loadAllMergedListings())
+    let isMounted = true
+    const sync = async () => {
+      try {
+        const live = await fetchBackendListings()
+        if (isMounted && Array.isArray(live) && live.length > 0) {
+          setAllListings(live)
+        }
+      } catch {}
+    }
+
+    sync()
+
+    const handleUpdate = () => {
+      setAllListings(loadAllMergedListings())
+      sync()
+    }
+
     window.addEventListener('serviceq_listings_updated', handleUpdate)
     window.addEventListener('storage', handleUpdate)
+    window.addEventListener('focus', sync)
     return () => {
+      isMounted = false
       window.removeEventListener('serviceq_listings_updated', handleUpdate)
       window.removeEventListener('storage', handleUpdate)
+      window.removeEventListener('focus', sync)
     }
   }, [])
 

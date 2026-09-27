@@ -7,6 +7,7 @@ import { formatPHP, calcFees, genBookingId } from '@/lib/utils'
 import { PAYMENT_METHODS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
+import { loadCachedListings } from '@/lib/listingsService'
 import { useAuth } from '@/contexts/AuthContext'
 
 const DEFAULT_ORDER = {
@@ -42,7 +43,7 @@ export default function Checkout() {
       }
     } catch {}
 
-    const matched = ALL_LISTINGS.find(l => String(l.id) === String(id))
+    const matched = loadCachedListings().find(l => String(l.id) === String(id))
     if (matched) {
       return {
         id: matched.id,

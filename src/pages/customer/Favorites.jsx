@@ -7,6 +7,7 @@ import { formatPHP } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
 import { ALL_LISTINGS, getListingIcon } from '@/pages/customer/Explore'
 import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
+import { loadCachedListings } from '@/lib/listingsService'
 
 export default function CustomerFavorites() {
   const navigate = useNavigate()
@@ -22,10 +23,11 @@ export default function CustomerFavorites() {
     }
   }, [])
 
-  // Resolve matching listings from ALL_LISTINGS
+  // Resolve matching listings from merged catalog
   const favorites = useMemo(() => {
+    const all = loadCachedListings()
     return favoriteIds
-      .map(id => ALL_LISTINGS.find(l => String(l.id) === String(id)))
+      .map(id => all.find(l => String(l.id) === String(id)))
       .filter(Boolean)
   }, [favoriteIds])
 
