@@ -624,31 +624,36 @@ export async function submitWithdrawalRequestBackend({ providerId, providerName,
 }
 
 /**
- * Fetches all withdrawals: merges local storage and Supabase platform_settings.
+ * Fetches all withdrawals: prioritizes Supabase backend as the authority on status (approvals, completions, rejections),
+ * then merges any unsynced local withdrawals and caches the authoritative status back to localStorage.
  */
 export async function fetchBackendWithdrawals(userId) {
   const seen = new Set()
   const combined = []
 
-  const merge = (arr) => {
+  const isMockOrTest = (id) => !id || /^WD-00[1-6]$/.test(id) || /^WD-TEST/i.test(id) || id === 'WD-AO2UA'
+
+  const merge = (arr, isAuthoritative = false) => {
     if (!Array.isArray(arr)) return
     for (const w of arr) {
-      if (w?.id && !seen.has(w.id) && !/^WD-00[1-6]$/.test(w.id)) {
+      if (!w?.id || isMockOrTest(w.id)) continue
+      // If scoped to a specific provider, filter by providerId if available
+      if (userId && w.providerId && w.providerId !== userId) continue
+
+      if (!seen.has(w.id)) {
         seen.add(w.id)
         combined.push(w)
+      } else if (isAuthoritative) {
+        // Authoritative cloud status overrides older local record
+        const idx = combined.findIndex(item => item.id === w.id)
+        if (idx !== -1) {
+          combined[idx] = { ...combined[idx], ...w }
+        }
       }
     }
   }
 
-  // 1. Local storage read
-  try {
-    if (userId) {
-      merge(JSON.parse(localStorage.getItem(`serviceq_provider_withdrawals_${userId}`)) || [])
-    }
-    merge(JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || [])
-  } catch {}
-
-  // 2. Supabase backend fetch
+  // 1. SUPABASE BACKEND FETCH FIRST (Authoritative on approved / completed / rejected status)
   try {
     const { data: gRow } = await supabase
       .from('platform_settings')
@@ -658,7 +663,7 @@ export async function fetchBackendWithdrawals(userId) {
 
     if (gRow?.value) {
       const gList = JSON.parse(gRow.value) || []
-      merge(gList)
+      merge(gList, true)
     }
 
     if (userId) {
@@ -670,17 +675,25 @@ export async function fetchBackendWithdrawals(userId) {
 
       if (pRow?.value) {
         const pList = JSON.parse(pRow.value) || []
-        merge(pList)
+        merge(pList, true)
       }
     }
   } catch (err) {
     console.warn('fetchBackendWithdrawals Supabase error:', err)
   }
 
+  // 2. Local storage read second (to pick up any brand-new local submissions not yet synced)
+  try {
+    if (userId) {
+      merge(JSON.parse(localStorage.getItem(`serviceq_provider_withdrawals_${userId}`)) || [])
+    }
+    merge(JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || [])
+  } catch {}
+
   // Sort newest first
   combined.sort((a, b) => new Date(b.requested || b.date || 0) - new Date(a.requested || a.date || 0))
 
-  // 3. Two-way sync: If combined has valid withdrawals not yet in Supabase global list, push them to Supabase
+  // 3. Two-way sync: If local had a completely new withdrawal not in cloud, push to Supabase
   try {
     const { data: checkRow } = await supabase
       .from('platform_settings')
@@ -707,7 +720,7 @@ export async function fetchBackendWithdrawals(userId) {
     console.warn('Two-way withdrawal sync error:', syncErr)
   }
 
-  // Cache back to local storage
+  // 4. Update local storage with the authoritative status so stale 'pending_review' is replaced!
   try {
     localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(combined))
     if (userId) {

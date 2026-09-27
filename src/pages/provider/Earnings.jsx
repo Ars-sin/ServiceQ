@@ -308,7 +308,7 @@ export default function ProviderEarnings() {
                     <td className="p-4 font-bold text-emerald-700">{formatPHP(w.amount)}</td>
                     <td className="p-4">
                       <Badge variant={wdVariant(w.status)} className="capitalize text-xs font-semibold">
-                        {w.status ? w.status.replace('_', ' ') : 'Pending'}
+                        {w.status === 'completed' ? 'Approved & Paid' : w.status ? w.status.replace('_', ' ') : 'Pending'}
                       </Badge>
                     </td>
                   </tr>
