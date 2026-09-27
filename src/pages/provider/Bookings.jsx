@@ -21,70 +21,49 @@ export default function ProviderBookings() {
 
   const loadBookings = () => {
     try {
-      const userBookings = user?.id
-        ? (JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`)) || [])
-        : []
+      const seen = new Set()
+      const combined = []
 
-      // Also read from name-keyed bucket
-      const providerNameKey = `serviceq_provider_bookings_name_${(profile?.full_name || profile?.business_name || '').trim().toLowerCase().replace(/\s+/g, '_')}`
-      const nameKeyedBookings = providerNameKey.length > 40
-        ? (JSON.parse(localStorage.getItem(providerNameKey)) || [])
-        : []
-
-      const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
-      const genericBookings = JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || []
-
-      // Build a set of listing IDs that belong to this provider
-      const myListingIds = new Set()
-      try {
-        if (user?.id) {
-          const myListings = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`)) || []
-          myListings.forEach(l => myListingIds.add(String(l.id)))
-        }
-      } catch {}
-
-      // Match bookings by providerId, provider name, email, or listing ID
-      const providerName = (profile?.full_name || profile?.business_name || '').toLowerCase()
-      const providerEmail = (profile?.email || user?.email || '').toLowerCase()
-
-      const relevantFromAll = allBookings.filter(b => {
-        if (b.providerId && user?.id && String(b.providerId) === String(user.id)) return true
-        if (providerName && b.provider && b.provider.toLowerCase() === providerName) return true
-        if (providerEmail && b.customerEmail && b.customerEmail.toLowerCase() === providerEmail) return true
-        if (b.listingId && myListingIds.has(String(b.listingId))) return true
-        return false
-      })
-
-      const combined = [...userBookings]
-      const ids = new Set(combined.map(b => b.id))
-
-      // Merge name-keyed bookings
-      for (const b of nameKeyedBookings) {
-        if (!ids.has(b.id)) { combined.push(b); ids.add(b.id) }
-      }
-
-      for (const b of relevantFromAll) {
-        if (!ids.has(b.id)) {
-          combined.push(b)
-          ids.add(b.id)
-        }
-      }
-
-      // If still empty and generic demo bookings exist, display them
-      if (combined.length === 0 && genericBookings.length > 0) {
-        for (const b of genericBookings) {
-          if (!ids.has(b.id)) {
+      const merge = (arr) => {
+        if (!Array.isArray(arr)) return
+        for (const b of arr) {
+          if (b?.id && !seen.has(b.id)) {
+            seen.add(b.id)
             combined.push(b)
-            ids.add(b.id)
           }
         }
       }
+
+      // 1. Bookings saved directly to this provider by UUID
+      if (user?.id) {
+        merge(JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`)) || [])
+      }
+
+      // 2. All bookings from the global store
+      const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      merge(allBookings)
+
+      // 3. Customer bookings store (catches anything not in all_bookings)
+      merge(JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [])
+
+      // 4. Generic provider bookings store (demo fallback)
+      merge(JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || [])
+
+      // 5. Scan all provider-name-keyed buckets
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && key.startsWith('serviceq_provider_bookings_name_')) {
+            merge(JSON.parse(localStorage.getItem(key)) || [])
+          }
+        }
+      } catch {}
 
       // Sort newest first
       combined.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       setBookings(combined)
     } catch (e) {
-      console.error(e)
+      console.error('loadBookings error:', e)
     }
   }
 
@@ -96,7 +75,9 @@ export default function ProviderBookings() {
       window.removeEventListener('serviceq_bookings_updated', loadBookings)
       window.removeEventListener('storage', loadBookings)
     }
-  }, [user?.id, profile?.full_name, profile?.email])
+  }, [user?.id])
+
+
 
 
   const PAGE_SIZE = 4
