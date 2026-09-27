@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, ArrowLeft, CheckCircle, ShieldCheck, RefreshCw, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, ShieldCheck, RefreshCw, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
@@ -21,7 +21,16 @@ export default function ForgotPasswordPage() {
   const [resendCooldown, setCooldown]   = useState(0)
   const inputRefs                       = useRef([])
 
-  // Listen for direct recovery link clicks or /reset-password navigation
+  // Live password validation rules (Step 3)
+  const hasMinLength   = passwords.newPw.length >= 6
+  const hasUppercase   = /[A-Z]/.test(passwords.newPw)
+  const hasLowercase   = /[a-z]/.test(passwords.newPw)
+  const hasNumber      = /\d/.test(passwords.newPw)
+  const hasSpecial     = /[!@#$%^&*(),.?":{}|<>]/.test(passwords.newPw)
+  const passwordsMatch = passwords.newPw.length > 0 && passwords.newPw === passwords.confirmPw
+  const isPasswordValid = hasMinLength && passwordsMatch
+
+
   useEffect(() => {
     const isResetPath = window.location.pathname.includes('/reset-password')
     const hash = window.location.hash || ''
@@ -523,13 +532,45 @@ export default function ForgotPasswordPage() {
                       {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                  {passwords.confirmPw.length > 0 && (
-                    <p className={`text-[11px] font-medium mt-1.5 ${
-                      passwords.newPw === passwords.confirmPw ? 'text-emerald-600' : 'text-red-500'
-                    }`}>
-                      {passwords.newPw === passwords.confirmPw ? '✅ Passwords match' : '✗ Passwords do not match'}
-                    </p>
-                  )}
+                </div>
+
+                {/* Requirements checklist — consistent with Settings.jsx */}
+                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4">
+                  <p className="text-xs font-semibold text-gray-500 mb-2.5">Your new password must have:</p>
+                  <ul className="space-y-2 text-xs">
+                    <li className="flex items-center gap-2 text-gray-500">
+                      {hasMinLength ? <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" /> : <Circle size={15} className="text-gray-300 flex-shrink-0" />}
+                      At least 6 characters
+                    </li>
+                    <li className="flex items-center gap-2 text-gray-500">
+                      {hasUppercase ? <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" /> : <Circle size={15} className="text-gray-300 flex-shrink-0" />}
+                      One uppercase letter (A–Z)
+                    </li>
+                    <li className="flex items-center gap-2 text-gray-500">
+                      {hasLowercase ? <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" /> : <Circle size={15} className="text-gray-300 flex-shrink-0" />}
+                      One lowercase letter (a–z)
+                    </li>
+                    <li className="flex items-center gap-2 text-gray-500">
+                      {hasNumber ? <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" /> : <Circle size={15} className="text-gray-300 flex-shrink-0" />}
+                      One number (0–9)
+                    </li>
+                    <li className="flex items-center gap-2 text-gray-500">
+                      {hasSpecial ? <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" /> : <Circle size={15} className="text-gray-300 flex-shrink-0" />}
+                      One special character (e.g. !@#)
+                    </li>
+                    {passwords.confirmPw && (
+                      <li className="flex items-center gap-2 pt-1 border-t border-gray-200 text-xs">
+                        {passwordsMatch ? (
+                          <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                        ) : (
+                          <X size={15} className="text-red-500 flex-shrink-0" />
+                        )}
+                        <span className={passwordsMatch ? 'text-emerald-600 font-semibold' : 'text-red-500'}>
+                          {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                        </span>
+                      </li>
+                    )}
+                  </ul>
                 </div>
 
                 <div className="flex gap-3 mt-1">
@@ -545,7 +586,7 @@ export default function ForgotPasswordPage() {
                   </Link>
                   <button
                     type="submit"
-                    disabled={loading}
+                    disabled={loading || !isPasswordValid}
                     className={`flex-1 py-2.5 rounded-xl font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border border-transparent transition-all ${
                       role === 'provider'
                         ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
@@ -559,6 +600,7 @@ export default function ForgotPasswordPage() {
                 </div>
               </motion.form>
             )}
+
 
             {/* ── STEP 4: Success ─────────────────────────────────────── */}
             {step === 4 && (
