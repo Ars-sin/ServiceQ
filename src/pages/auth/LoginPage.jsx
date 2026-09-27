@@ -299,7 +299,12 @@ export default function LoginPage() {
             </div>
 
             <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-xs text-brand-600 hover:underline">
+              <Link
+                to={`/forgot-password?role=${loginRole}`}
+                className={`text-xs hover:underline font-semibold transition-colors ${
+                  loginRole === 'provider' ? 'text-emerald-700 hover:text-emerald-800' : 'text-brand-600 hover:text-brand-700'
+                }`}
+              >
                 Forgot password?
               </Link>
             </div>
