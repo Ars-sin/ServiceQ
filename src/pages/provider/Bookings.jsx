@@ -7,7 +7,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Pagination from '@/components/ui/Pagination'
 import { useAuth } from '@/contexts/AuthContext'
-import { fetchProviderBookings, updateBookingStatusBackend } from '@/lib/bookingsService'
+import { fetchProviderBookings, updateBookingStatusBackend, saveProviderBalancesBackend } from '@/lib/bookingsService'
 
 const TABS = [
   { id: 'all', label: 'All' },
@@ -156,7 +156,13 @@ export default function ProviderBookings() {
       if (status === 'completed' && bookingToUpdate) {
         const netAmt = Number(bookingToUpdate.net) || Math.round((Number(bookingToUpdate.amount) || 0) * 0.9)
         const currentAvail = Number(localStorage.getItem('serviceq_provider_avail_balance') || 0)
-        localStorage.setItem('serviceq_provider_avail_balance', String(currentAvail + netAmt))
+        const newAvail = currentAvail + netAmt
+        localStorage.setItem('serviceq_provider_avail_balance', String(newAvail))
+
+        if (user?.id) {
+          const currPend = Number(localStorage.getItem('serviceq_provider_pending_balance') || 0)
+          saveProviderBalancesBackend(user.id, newAvail, currPend)
+        }
 
         const txns = JSON.parse(localStorage.getItem('serviceq_provider_transactions')) || []
         localStorage.setItem('serviceq_provider_transactions', JSON.stringify([{

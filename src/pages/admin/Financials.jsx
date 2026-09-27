@@ -9,6 +9,14 @@ import Pagination from '@/components/ui/Pagination'
 import toast from 'react-hot-toast'
 import { DollarSign, TrendingUp, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 
+import {
+  fetchBackendWithdrawals,
+  approveWithdrawalBackend,
+  rejectWithdrawalBackend,
+  advanceWithdrawalBackend,
+  fetchBackendTransactions
+} from '@/lib/bookingsService'
+
 const INIT_TRANSACTIONS = [
   { id: 'TXN-001', customer: 'Ana Reyes',     provider: 'Maria Santos', service: 'Home Cleaning',    gross: 1100, fee: 110, net: 990,  date: '2026-09-05', status: 'successful' },
   { id: 'TXN-002', customer: 'Marco Lopez',   provider: 'TechRent PH',  service: 'Laptop Rental',    gross: 880,  fee: 88,  net: 792,  date: '2026-09-04', status: 'successful' },
@@ -38,7 +46,7 @@ export default function AdminFinancials() {
   const [tab, setTab] = useState('ledger')
   const [page, setPage] = useState(1)
 
-  const loadTransactions = () => {
+  const loadTransactionsLocal = () => {
     try {
       const all = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
       const cust = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
@@ -51,7 +59,7 @@ export default function AdminFinancials() {
         }
       }
       if (merged.length > 0) {
-        const mapped = merged.map(b => ({
+        return merged.map(b => ({
           id: b.id,
           customer: b.customer || 'Customer',
           provider: b.provider || 'Provider',
@@ -62,13 +70,12 @@ export default function AdminFinancials() {
           date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
           status: b.status === 'completed' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
         }))
-        return mapped
       }
     } catch {}
     return INIT_TRANSACTIONS
   }
 
-  const loadWithdrawals = () => {
+  const loadWithdrawalsLocal = () => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
       if (Array.isArray(stored) && stored.length > 0) {
@@ -78,25 +85,60 @@ export default function AdminFinancials() {
     return WITHDRAWALS
   }
 
-  const [transactions, setTransactions] = useState(loadTransactions)
-  const [withdrawals, setWithdrawals] = useState(loadWithdrawals)
+  const [transactions, setTransactions] = useState(loadTransactionsLocal)
+  const [withdrawals, setWithdrawals] = useState(loadWithdrawalsLocal)
   const [txnFilter, setTxnFilter] = useState('all')
   const [rejectModal, setRejectModal] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
 
-  // Live real-time sync with provider and customer actions
+  // Live real-time sync with Supabase backend and localStorage
   useEffect(() => {
-    const handleSync = () => {
-      setTransactions(loadTransactions())
-      setWithdrawals(loadWithdrawals())
+    const syncData = async () => {
+      try {
+        // Transactions from backend
+        const txns = await fetchBackendTransactions()
+        if (Array.isArray(txns) && txns.length > 0) {
+          setTransactions(txns)
+        } else {
+          setTransactions(loadTransactionsLocal())
+        }
+
+        // Withdrawals from backend
+        const wds = await fetchBackendWithdrawals()
+        if (Array.isArray(wds) && wds.length > 0) {
+          setWithdrawals(wds)
+        } else {
+          setWithdrawals(loadWithdrawalsLocal())
+        }
+      } catch (err) {
+        console.warn('Financials live sync error:', err)
+      }
     }
-    window.addEventListener('serviceq_withdrawals_updated', handleSync)
-    window.addEventListener('serviceq_bookings_updated', handleSync)
-    window.addEventListener('storage', handleSync)
+
+    syncData()
+
+    window.addEventListener('serviceq_withdrawals_updated', syncData)
+    window.addEventListener('serviceq_bookings_updated', syncData)
+    window.addEventListener('storage', syncData)
+
+    let bcW = null
+    let bcB = null
+    try {
+      bcW = new BroadcastChannel('serviceq_withdrawals')
+      bcW.onmessage = syncData
+      bcB = new BroadcastChannel('serviceq_bookings')
+      bcB.onmessage = syncData
+    } catch {}
+
+    const poll = setInterval(syncData, 3500)
+
     return () => {
-      window.removeEventListener('serviceq_withdrawals_updated', handleSync)
-      window.removeEventListener('serviceq_bookings_updated', handleSync)
-      window.removeEventListener('storage', handleSync)
+      clearInterval(poll)
+      window.removeEventListener('serviceq_withdrawals_updated', syncData)
+      window.removeEventListener('serviceq_bookings_updated', syncData)
+      window.removeEventListener('storage', syncData)
+      if (bcW) bcW.close()
+      if (bcB) bcB.close()
     }
   }, [])
 
@@ -113,65 +155,28 @@ export default function AdminFinancials() {
     return idx < WITHDRAWAL_FLOW.length - 1 ? WITHDRAWAL_FLOW[idx + 1] : null
   }
 
-  const advanceWd = (id, status) => {
-    setWithdrawals(prev => {
-      const updated = prev.map(w => w.id === id ? { ...w, status } : w)
-      try {
-        localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
-        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
-        window.dispatchEvent(new Event('storage'))
-      } catch {}
-      return updated
-    })
+  const advanceWd = async (id, status) => {
+    setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status } : w))
+    await advanceWithdrawalBackend(id, status)
     toast.success(`Status updated to: ${status.replace('_', ' ')}`)
   }
 
-  const approveWithdrawal = (id) => {
-    setWithdrawals(prev => {
-      const wd = prev.find(w => w.id === id)
-      const updated = prev.map(w => w.id === id ? { ...w, status: 'completed', approved_at: new Date().toISOString() } : w)
-      try {
-        localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
-        if (wd?.amount) {
-          const currPend = Number(localStorage.getItem('serviceq_provider_pending_balance') || 0)
-          localStorage.setItem('serviceq_provider_pending_balance', String(Math.max(0, currPend - Number(wd.amount))))
-        }
-        const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
-        const auditEntry = {
-          id: `a${Date.now()}`,
-          staff: 'Admin',
-          role: 'superadmin',
-          action: 'Withdrawal Approved & Paid',
-          target: id,
-          desc: `Admin approved payout of ₱${Number(wd?.amount || 0).toLocaleString()} for ${wd?.provider || 'Provider'} via ${wd?.method || 'Payout'}.`,
-          before: { status: wd?.status || 'pending' },
-          after: { status: 'completed' },
-          ip: '127.0.0.1',
-          ts: new Date().toISOString(),
-        }
-        localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...auditLog]))
-        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
-        window.dispatchEvent(new Event('storage'))
-      } catch {}
-      return updated
-    })
+  const approveWithdrawal = async (id) => {
+    setWithdrawals(prev => prev.map(w => w.id === id ? { ...w, status: 'completed', approved_at: new Date().toISOString() } : w))
+    await approveWithdrawalBackend(id, 'Admin')
     toast.success('Withdrawal approved and marked as paid out!')
   }
 
-  const rejectWd = () => {
+  const rejectWd = async () => {
     if (!rejectNote.trim()) return toast.error('Enter rejection reason')
-    setWithdrawals(prev => {
-      const updated = prev.map(w => w.id === rejectModal.id ? { ...w, status: 'rejected', rejectNote } : w)
-      try {
-        localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
-        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
-        window.dispatchEvent(new Event('storage'))
-      } catch {}
-      return updated
-    })
+    const targetId = rejectModal.id
+    setWithdrawals(prev => prev.map(w => w.id === targetId ? { ...w, status: 'rejected', rejectNote } : w))
+    await rejectWithdrawalBackend(targetId, rejectNote, 'Admin')
     toast.error('Withdrawal rejected')
-    setRejectModal(null); setRejectNote('')
+    setRejectModal(null)
+    setRejectNote('')
   }
+
 
   const handleTxnFilterChange = (val) => { setTxnFilter(val); setPage(1) }
 

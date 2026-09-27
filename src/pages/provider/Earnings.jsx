@@ -8,6 +8,12 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  submitWithdrawalRequestBackend,
+  fetchBackendWithdrawals,
+  fetchProviderBalancesBackend,
+  saveProviderBalancesBackend
+} from '@/lib/bookingsService'
 
 const wdVariant = s => ({
   pending_review: 'warning',
@@ -19,7 +25,7 @@ const wdVariant = s => ({
 }[s] ?? 'neutral')
 
 export default function ProviderEarnings() {
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
   const [tab, setTab]                   = useState('transactions')
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [wAmount, setWAmount]           = useState('')
@@ -65,8 +71,6 @@ export default function ProviderEarnings() {
     }
   }, [])
 
-
-
   // Revenue metrics
   const grossRevenue = transactions.reduce((acc, t) => acc + (t.gross || 0), 0)
   const platformFees = transactions.reduce((acc, t) => acc + (t.fee || 0), 0)
@@ -99,27 +103,56 @@ export default function ProviderEarnings() {
     return []
   })
 
-  // Sync state if updated from other components or tabs
+  // Sync state if updated from other components, tabs, or Supabase backend
   useEffect(() => {
-    const handleSync = () => {
+    const handleSync = async () => {
       try {
-        const storedW = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
-        if (Array.isArray(storedW)) setWithdrawals(storedW)
         const storedAvail = localStorage.getItem('serviceq_provider_avail_balance')
         if (storedAvail !== null && !isNaN(Number(storedAvail))) setAvailBalance(Number(storedAvail))
         const storedPend = localStorage.getItem('serviceq_provider_pending_balance')
         if (storedPend !== null && !isNaN(Number(storedPend))) setPendingBalance(Number(storedPend))
+
+        // Cloud balance fetch
+        if (user?.id) {
+          const cloudBal = await fetchProviderBalancesBackend(user.id)
+          if (cloudBal) {
+            setAvailBalance(cloudBal.avail)
+            setPendingBalance(cloudBal.pend)
+            localStorage.setItem('serviceq_provider_avail_balance', String(cloudBal.avail))
+            localStorage.setItem('serviceq_provider_pending_balance', String(cloudBal.pend))
+          }
+        }
+
+        // Live backend sync for withdrawals
+        const live = await fetchBackendWithdrawals(user?.id)
+        if (Array.isArray(live)) setWithdrawals(live)
       } catch {}
     }
+
+    handleSync()
+
     window.addEventListener('storage', handleSync)
     window.addEventListener('serviceq_withdrawals_updated', handleSync)
+
+    // Cross-tab BroadcastChannel
+    let bc = null
+    try {
+      bc = new BroadcastChannel('serviceq_withdrawals')
+      bc.onmessage = handleSync
+    } catch {}
+
+    // Polling every 4 seconds for backend updates (e.g. Admin approves withdrawal)
+    const poll = setInterval(handleSync, 4000)
+
     return () => {
+      clearInterval(poll)
       window.removeEventListener('storage', handleSync)
       window.removeEventListener('serviceq_withdrawals_updated', handleSync)
+      if (bc) bc.close()
     }
-  }, [])
+  }, [user?.id])
 
-  const handleWithdraw = () => {
+  const handleWithdraw = async () => {
     const amount = Number(wAmount)
     if (!amount || amount <= 0) return toast.error('Please enter a valid amount')
     if (amount > availBalance) return toast.error(`Max available: ${formatPHP(availBalance)}`)
@@ -132,47 +165,27 @@ export default function ProviderEarnings() {
     try {
       localStorage.setItem('serviceq_provider_avail_balance', String(newAvail))
       localStorage.setItem('serviceq_provider_pending_balance', String(newPending))
-    } catch {}
-
-    const newWd = {
-      id: 'WD-' + Date.now().toString(36).toUpperCase().slice(-5),
-      provider: profile?.full_name || 'Maria Santos',
-      method: wMethod === 'gcash' ? 'GCash' : wMethod === 'maya' ? 'Maya' : 'Bank Transfer',
-      amount,
-      date: new Date().toISOString().split('T')[0],
-      requested: new Date().toISOString().split('T')[0],
-      status: 'pending_review',
-    }
-
-    const updated = [newWd, ...withdrawals]
-    setWithdrawals(updated)
-
-    try {
-      localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
-      const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
-      const auditEntry = {
-        id: `a${Date.now()}`,
-        staff: profile?.full_name || 'Provider',
-        role: 'provider',
-        action: 'Withdrawal Requested',
-        target: newWd.id,
-        desc: `${newWd.provider} requested payout of ${formatPHP(amount)} via ${newWd.method}.`,
-        before: { status: 'none' },
-        after: { status: 'pending_review' },
-        ip: '127.0.0.1',
-        ts: new Date().toISOString(),
+      if (user?.id) {
+        saveProviderBalancesBackend(user.id, newAvail, newPending)
       }
-      localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...auditLog]))
     } catch {}
 
-    window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
-    window.dispatchEvent(new Event('storage'))
+    const newWd = await submitWithdrawalRequestBackend({
+      providerId: user?.id,
+      providerName: profile?.full_name || 'Provider',
+      amount,
+      method: wMethod,
+    })
+
+
+    setWithdrawals(prev => [newWd, ...prev.filter(w => w.id !== newWd.id)])
 
     toast.success(`Withdrawal of ${formatPHP(amount)} submitted! Pending admin review.`)
     setShowWithdraw(false)
     setWAmount('')
     setTab('withdrawals')
   }
+
 
   const TABS = [
     { id: 'transactions', label: `Transaction History (${transactions.length})` },

@@ -11,6 +11,7 @@ import { formatPHP, relativeTime, statusVariant, cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import { ALL_LISTINGS } from "@/pages/customer/Explore"
+import { fetchBackendWithdrawals, fetchBackendTransactions } from "@/lib/bookingsService"
 
 const TYPE_BADGE = {
   "New User":               "bg-blue-100 text-blue-700",
@@ -93,31 +94,41 @@ export default function Dashboard() {
         }
       } catch {}
 
-      // 3. Real bookings
+      // 3. Real bookings from Supabase backend & local cache
       let bookingsList = []
       try {
-        const all = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
-        const cust = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
-        const merged = [...all]
-        const ids = new Set(merged.map(b => b.id))
-        for (const b of cust) {
-          if (!ids.has(b.id)) {
-            merged.push(b)
-            ids.add(b.id)
+        const liveTxns = await fetchBackendTransactions()
+        if (Array.isArray(liveTxns) && liveTxns.length > 0) {
+          bookingsList = liveTxns
+        } else {
+          const all = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+          const cust = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+          const merged = [...all]
+          const ids = new Set(merged.map(b => b.id))
+          for (const b of cust) {
+            if (!ids.has(b.id)) {
+              merged.push(b)
+              ids.add(b.id)
+            }
           }
+          bookingsList = merged
         }
-        bookingsList = merged
       } catch {}
 
       const totalBookings = bookingsList.length
-      const gtv = bookingsList.reduce((sum, b) => sum + (Number(b.amount) || 0), 0)
-      const platformRevenue = bookingsList.reduce((sum, b) => sum + (Number(b.fee) || Math.round((Number(b.amount) || 0) * 0.1)), 0)
+      const gtv = bookingsList.reduce((sum, b) => sum + (Number(b.amount || b.gross) || 0), 0)
+      const platformRevenue = bookingsList.reduce((sum, b) => sum + (Number(b.fee) || Math.round((Number(b.amount || b.gross) || 0) * 0.1)), 0)
 
-      // 4. Real withdrawals
+      // 4. Real withdrawals from Supabase backend & local cache
       let withdrawalsList = []
       try {
-        const wStored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
-        if (Array.isArray(wStored)) withdrawalsList = wStored
+        const liveWds = await fetchBackendWithdrawals()
+        if (Array.isArray(liveWds) && liveWds.length > 0) {
+          withdrawalsList = liveWds
+        } else {
+          const wStored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
+          if (Array.isArray(wStored)) withdrawalsList = wStored
+        }
       } catch {}
 
       const completedWithdrawals = withdrawalsList.filter(w => w.status === 'completed')
@@ -125,6 +136,7 @@ export default function Dashboard() {
       const pendingWithdrawalsCount = withdrawalsList.filter(w => w.status === 'pending_review' || w.status === 'pending').length
 
       const inEscrow = Math.max(0, gtv - platformRevenue - providerPayouts)
+
 
       setMetrics({
         totalUsers,
@@ -222,11 +234,25 @@ export default function Dashboard() {
     window.addEventListener('serviceq_listings_updated', handleSync)
     window.addEventListener('storage', handleSync)
 
+    let bcW = null
+    let bcB = null
+    try {
+      bcW = new BroadcastChannel('serviceq_withdrawals')
+      bcW.onmessage = handleSync
+      bcB = new BroadcastChannel('serviceq_bookings')
+      bcB.onmessage = handleSync
+    } catch {}
+
+    const poll = setInterval(handleSync, 4000)
+
     return () => {
+      clearInterval(poll)
       window.removeEventListener('serviceq_withdrawals_updated', handleSync)
       window.removeEventListener('serviceq_bookings_updated', handleSync)
       window.removeEventListener('serviceq_listings_updated', handleSync)
       window.removeEventListener('storage', handleSync)
+      if (bcW) bcW.close()
+      if (bcB) bcB.close()
     }
   }, [])
 

@@ -445,3 +445,470 @@ export async function updateBookingStatusBackend(bookingId, newStatus, userId) {
 
   return true
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  FINANCIALS & WITHDRAWAL MANAGEMENT (BACKEND SYNC)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const GLOBAL_WITHDRAWALS_KEY = 'serviceq_global_withdrawals'
+
+/**
+ * Persists provider available & pending balance to Supabase cloud backend.
+ */
+export async function saveProviderBalancesBackend(userId, avail, pend) {
+  if (!userId) return
+  try {
+    await supabase.from('platform_settings').upsert({
+      key: `serviceq_provider_balance_${userId}`,
+      value: JSON.stringify({ avail: Number(avail) || 0, pend: Number(pend) || 0 }),
+      updated_at: new Date().toISOString()
+    })
+  } catch (err) {
+    console.warn('saveProviderBalancesBackend error:', err)
+  }
+}
+
+/**
+ * Fetches provider available & pending balance from Supabase cloud backend.
+ */
+export async function fetchProviderBalancesBackend(userId) {
+  if (!userId) return null
+  try {
+    const { data: row } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', `serviceq_provider_balance_${userId}`)
+      .maybeSingle()
+
+    if (row?.value) {
+      return JSON.parse(row.value)
+    }
+  } catch (err) {
+    console.warn('fetchProviderBalancesBackend error:', err)
+  }
+  return null
+}
+
+
+/**
+ * Submits a new withdrawal request from a provider.
+ * Syncs to localStorage and Supabase platform_settings under serviceq_global_withdrawals
+ * and serviceq_provider_withdrawals_${providerId}.
+ */
+export async function submitWithdrawalRequestBackend({ providerId, providerName, amount, method }) {
+  const newWd = {
+    id: 'WD-' + Date.now().toString(36).toUpperCase().slice(-5),
+    providerId: providerId || null,
+    provider: providerName || 'Provider',
+    method: method === 'gcash' ? 'GCash' : method === 'maya' ? 'Maya' : 'Bank Transfer',
+    amount: Number(amount),
+    date: new Date().toISOString().split('T')[0],
+    requested: new Date().toISOString().split('T')[0],
+    status: 'pending_review',
+  }
+
+  // 1. Update local storage
+  try {
+    const existing = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || []
+    const updated = [newWd, ...existing.filter(w => w.id !== newWd.id)]
+    localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+
+    if (providerId) {
+      localStorage.setItem(`serviceq_provider_withdrawals_${providerId}`, JSON.stringify(updated))
+    }
+
+    const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+    localStorage.setItem('serviceq_audit_log', JSON.stringify([{
+      id: `a${Date.now()}`,
+      staff: providerName,
+      role: 'provider',
+      action: 'Withdrawal Requested',
+      target: newWd.id,
+      desc: `${providerName} requested payout of ₱${Number(amount).toLocaleString()} via ${newWd.method}.`,
+      before: { status: 'none' },
+      after: { status: 'pending_review' },
+      ip: '127.0.0.1',
+      ts: new Date().toISOString(),
+    }, ...auditLog]))
+  } catch (err) {
+    console.warn('Local storage error in submitWithdrawalRequestBackend:', err)
+  }
+
+  window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+  window.dispatchEvent(new Event('storage'))
+
+  try {
+    const bc = new BroadcastChannel('serviceq_withdrawals')
+    bc.postMessage({ event: 'new_withdrawal', withdrawal: newWd })
+    bc.close()
+  } catch {}
+
+  // 2. Sync to Supabase platform_settings
+  try {
+    // A. Global withdrawals list (read by Admin Financials & Admin Dashboard)
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_WITHDRAWALS_KEY)
+      .maybeSingle()
+
+    let gList = []
+    if (gRow?.value) {
+      try { gList = JSON.parse(gRow.value) || [] } catch {}
+    }
+    const updatedG = [newWd, ...gList.filter(w => w.id !== newWd.id)]
+
+    await supabase.from('platform_settings').upsert({
+      key: GLOBAL_WITHDRAWALS_KEY,
+      value: JSON.stringify(updatedG),
+      updated_at: new Date().toISOString()
+    })
+
+    // B. Provider-specific withdrawals key
+    if (providerId) {
+      const pKey = `serviceq_provider_withdrawals_${providerId}`
+      const { data: pRow } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', pKey)
+        .maybeSingle()
+
+      let pList = []
+      if (pRow?.value) {
+        try { pList = JSON.parse(pRow.value) || [] } catch {}
+      }
+      const updatedP = [newWd, ...pList.filter(w => w.id !== newWd.id)]
+
+      await supabase.from('platform_settings').upsert({
+        key: pKey,
+        value: JSON.stringify(updatedP),
+        updated_at: new Date().toISOString()
+      })
+    }
+  } catch (err) {
+    console.warn('Supabase sync error in submitWithdrawalRequestBackend:', err)
+  }
+
+  return newWd
+}
+
+/**
+ * Fetches all withdrawals: merges local storage and Supabase platform_settings.
+ */
+export async function fetchBackendWithdrawals(userId) {
+  const seen = new Set()
+  const combined = []
+
+  const merge = (arr) => {
+    if (!Array.isArray(arr)) return
+    for (const w of arr) {
+      if (w?.id && !seen.has(w.id)) {
+        seen.add(w.id)
+        combined.push(w)
+      }
+    }
+  }
+
+  // 1. Local storage read
+  try {
+    if (userId) {
+      merge(JSON.parse(localStorage.getItem(`serviceq_provider_withdrawals_${userId}`)) || [])
+    }
+    merge(JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || [])
+  } catch {}
+
+  // 2. Supabase backend fetch
+  try {
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_WITHDRAWALS_KEY)
+      .maybeSingle()
+
+    if (gRow?.value) {
+      const gList = JSON.parse(gRow.value) || []
+      merge(gList)
+    }
+
+    if (userId) {
+      const { data: pRow } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', `serviceq_provider_withdrawals_${userId}`)
+        .maybeSingle()
+
+      if (pRow?.value) {
+        const pList = JSON.parse(pRow.value) || []
+        merge(pList)
+      }
+    }
+  } catch (err) {
+    console.warn('fetchBackendWithdrawals Supabase error:', err)
+  }
+
+  // Sort newest first
+  combined.sort((a, b) => new Date(b.requested || b.date || 0) - new Date(a.requested || a.date || 0))
+
+  // Cache back to local storage
+  try {
+    localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(combined))
+    if (userId) {
+      localStorage.setItem(`serviceq_provider_withdrawals_${userId}`, JSON.stringify(combined))
+    }
+  } catch {}
+
+  return combined
+}
+
+/**
+ * Admin approves a withdrawal request.
+ * Sets status to 'completed', deducts provider pending balance, and syncs across local storage and Supabase.
+ */
+export async function approveWithdrawalBackend(withdrawalId, adminName = 'Admin') {
+  let approvedWd = null
+
+  // 1. Update local storage
+  try {
+    const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || []
+    const updated = stored.map(w => {
+      if (w.id === withdrawalId) {
+        approvedWd = { ...w, status: 'completed', approved_at: new Date().toISOString() }
+        return approvedWd
+      }
+      return w
+    })
+    localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+
+    if (approvedWd?.providerId) {
+      localStorage.setItem(`serviceq_provider_withdrawals_${approvedWd.providerId}`, JSON.stringify(updated))
+    }
+
+    // Deduct from pending balance
+    if (approvedWd?.amount) {
+      const curr = Number(localStorage.getItem('serviceq_provider_pending_balance') || 0)
+      const newPend = Math.max(0, curr - Number(approvedWd.amount))
+      localStorage.setItem('serviceq_provider_pending_balance', String(newPend))
+      if (approvedWd?.providerId) {
+        const currAvail = Number(localStorage.getItem('serviceq_provider_avail_balance') || 0)
+        saveProviderBalancesBackend(approvedWd.providerId, currAvail, newPend)
+      }
+    }
+
+
+    // Audit log
+    const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+    localStorage.setItem('serviceq_audit_log', JSON.stringify([{
+      id: `a${Date.now()}`,
+      staff: adminName,
+      role: 'superadmin',
+      action: 'Withdrawal Approved & Paid',
+      target: withdrawalId,
+      desc: `Admin approved payout of ₱${Number(approvedWd?.amount || 0).toLocaleString()} for ${approvedWd?.provider || 'Provider'} via ${approvedWd?.method || 'Payout'}.`,
+      before: { status: approvedWd?.status || 'pending_review' },
+      after: { status: 'completed' },
+      ip: '127.0.0.1',
+      ts: new Date().toISOString(),
+    }, ...auditLog]))
+  } catch (err) {
+    console.warn('Local update error in approveWithdrawalBackend:', err)
+  }
+
+  window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+  window.dispatchEvent(new Event('storage'))
+
+  try {
+    const bc = new BroadcastChannel('serviceq_withdrawals')
+    bc.postMessage({ event: 'withdrawal_approved', withdrawalId })
+    bc.close()
+  } catch {}
+
+  // 2. Update Supabase platform_settings
+  try {
+    // Global withdrawals
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_WITHDRAWALS_KEY)
+      .maybeSingle()
+
+    if (gRow?.value) {
+      const list = JSON.parse(gRow.value) || []
+      const updatedG = list.map(w => w.id === withdrawalId ? { ...w, status: 'completed', approved_at: new Date().toISOString() } : w)
+      await supabase.from('platform_settings').upsert({
+        key: GLOBAL_WITHDRAWALS_KEY,
+        value: JSON.stringify(updatedG),
+        updated_at: new Date().toISOString()
+      })
+    }
+
+    // Provider withdrawals
+    if (approvedWd?.providerId) {
+      const pKey = `serviceq_provider_withdrawals_${approvedWd.providerId}`
+      const { data: pRow } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', pKey)
+        .maybeSingle()
+
+      if (pRow?.value) {
+        const list = JSON.parse(pRow.value) || []
+        const updatedP = list.map(w => w.id === withdrawalId ? { ...w, status: 'completed', approved_at: new Date().toISOString() } : w)
+        await supabase.from('platform_settings').upsert({
+          key: pKey,
+          value: JSON.stringify(updatedP),
+          updated_at: new Date().toISOString()
+        })
+      }
+    }
+  } catch (err) {
+    console.warn('Supabase approve error in approveWithdrawalBackend:', err)
+  }
+
+  return true
+}
+
+/**
+ * Admin rejects a withdrawal request.
+ * Updates status to 'rejected' with reason and refunds amount to provider available balance.
+ */
+export async function rejectWithdrawalBackend(withdrawalId, reason = 'Administrative review', adminName = 'Admin') {
+  let targetWd = null
+
+  // 1. Update local storage
+  try {
+    const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || []
+    const updated = stored.map(w => {
+      if (w.id === withdrawalId) {
+        targetWd = { ...w, status: 'rejected', rejectNote: reason }
+        return targetWd
+      }
+      return w
+    })
+    localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+
+    // Refund back to available balance and remove from pending
+    if (targetWd?.amount) {
+      const currAvail = Number(localStorage.getItem('serviceq_provider_avail_balance') || 0)
+      const currPend = Number(localStorage.getItem('serviceq_provider_pending_balance') || 0)
+      localStorage.setItem('serviceq_provider_avail_balance', String(currAvail + Number(targetWd.amount)))
+      localStorage.setItem('serviceq_provider_pending_balance', String(Math.max(0, currPend - Number(targetWd.amount))))
+    }
+  } catch (err) {
+    console.warn('Local reject error in rejectWithdrawalBackend:', err)
+  }
+
+  window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+  window.dispatchEvent(new Event('storage'))
+
+  // 2. Update Supabase platform_settings
+  try {
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_WITHDRAWALS_KEY)
+      .maybeSingle()
+
+    if (gRow?.value) {
+      const list = JSON.parse(gRow.value) || []
+      const updatedG = list.map(w => w.id === withdrawalId ? { ...w, status: 'rejected', rejectNote: reason } : w)
+      await supabase.from('platform_settings').upsert({
+        key: GLOBAL_WITHDRAWALS_KEY,
+        value: JSON.stringify(updatedG),
+        updated_at: new Date().toISOString()
+      })
+    }
+  } catch (err) {
+    console.warn('Supabase reject error in rejectWithdrawalBackend:', err)
+  }
+
+  return true
+}
+
+/**
+ * Advances withdrawal through the review stages (e.g. pending_review -> verified -> approved -> processing -> completed)
+ */
+export async function advanceWithdrawalBackend(withdrawalId, nextStatus) {
+  try {
+    const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals')) || []
+    const updated = stored.map(w => w.id === withdrawalId ? { ...w, status: nextStatus } : w)
+    localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+  } catch {}
+
+  window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+  window.dispatchEvent(new Event('storage'))
+
+  try {
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_WITHDRAWALS_KEY)
+      .maybeSingle()
+
+    if (gRow?.value) {
+      const list = JSON.parse(gRow.value) || []
+      const updatedG = list.map(w => w.id === withdrawalId ? { ...w, status: nextStatus } : w)
+      await supabase.from('platform_settings').upsert({
+        key: GLOBAL_WITHDRAWALS_KEY,
+        value: JSON.stringify(updatedG),
+        updated_at: new Date().toISOString()
+      })
+    }
+  } catch (err) {}
+
+  return true
+}
+
+/**
+ * Fetches all transactions from both local storage and Supabase backend.
+ */
+export async function fetchBackendTransactions() {
+  const seen = new Set()
+  const combined = []
+
+  const merge = (arr) => {
+    if (!Array.isArray(arr)) return
+    for (const b of arr) {
+      if (b?.id && !seen.has(b.id)) {
+        seen.add(b.id)
+        combined.push({
+          id: b.id,
+          customer: b.customer || 'Customer',
+          provider: b.provider || 'Provider',
+          service: b.service || 'Service',
+          gross: Number(b.amount) || 0,
+          fee: Number(b.fee) || Math.round((Number(b.amount) || 0) * 0.1),
+          net: Number(b.net) || Math.round((Number(b.amount) || 0) * 0.9),
+          date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
+          status: b.status === 'completed' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
+        })
+      }
+    }
+  }
+
+  // 1. Local storage read
+  try {
+    merge(JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [])
+    merge(JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [])
+  } catch {}
+
+  // 2. Supabase backend fetch
+  try {
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_BOOKINGS_KEY)
+      .maybeSingle()
+
+    if (gRow?.value) {
+      const gList = JSON.parse(gRow.value) || []
+      merge(gList)
+    }
+  } catch (err) {
+    console.warn('fetchBackendTransactions error:', err)
+  }
+
+  // Sort newest first
+  combined.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+  return combined
+}
+
