@@ -21,19 +21,47 @@ export default function ProviderBookings() {
 
   const loadBookings = () => {
     try {
-      const userBookings = user?.id ? (JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`)) || []) : []
+      const userBookings = user?.id
+        ? (JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`)) || [])
+        : []
+
+      // Also read from name-keyed bucket
+      const providerNameKey = `serviceq_provider_bookings_name_${(profile?.full_name || profile?.business_name || '').trim().toLowerCase().replace(/\s+/g, '_')}`
+      const nameKeyedBookings = providerNameKey.length > 40
+        ? (JSON.parse(localStorage.getItem(providerNameKey)) || [])
+        : []
+
       const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
       const genericBookings = JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || []
 
-      // Match bookings by providerId, provider name, or if user is owner
+      // Build a set of listing IDs that belong to this provider
+      const myListingIds = new Set()
+      try {
+        if (user?.id) {
+          const myListings = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`)) || []
+          myListings.forEach(l => myListingIds.add(String(l.id)))
+        }
+      } catch {}
+
+      // Match bookings by providerId, provider name, email, or listing ID
+      const providerName = (profile?.full_name || profile?.business_name || '').toLowerCase()
+      const providerEmail = (profile?.email || user?.email || '').toLowerCase()
+
       const relevantFromAll = allBookings.filter(b => {
-        if (b.providerId && user?.id && b.providerId === user.id) return true
-        if (profile?.full_name && b.provider && b.provider.toLowerCase() === profile.full_name.toLowerCase()) return true
+        if (b.providerId && user?.id && String(b.providerId) === String(user.id)) return true
+        if (providerName && b.provider && b.provider.toLowerCase() === providerName) return true
+        if (providerEmail && b.customerEmail && b.customerEmail.toLowerCase() === providerEmail) return true
+        if (b.listingId && myListingIds.has(String(b.listingId))) return true
         return false
       })
 
       const combined = [...userBookings]
       const ids = new Set(combined.map(b => b.id))
+
+      // Merge name-keyed bookings
+      for (const b of nameKeyedBookings) {
+        if (!ids.has(b.id)) { combined.push(b); ids.add(b.id) }
+      }
 
       for (const b of relevantFromAll) {
         if (!ids.has(b.id)) {
@@ -52,6 +80,8 @@ export default function ProviderBookings() {
         }
       }
 
+      // Sort newest first
+      combined.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       setBookings(combined)
     } catch (e) {
       console.error(e)
@@ -66,7 +96,8 @@ export default function ProviderBookings() {
       window.removeEventListener('serviceq_bookings_updated', loadBookings)
       window.removeEventListener('storage', loadBookings)
     }
-  }, [user?.id, profile?.full_name])
+  }, [user?.id, profile?.full_name, profile?.email])
+
 
   const PAGE_SIZE = 4
   const isDefaultAll = tab === 'all'
@@ -143,7 +174,21 @@ export default function ProviderBookings() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Manage incoming customer service requests and rentals</p>
+        </div>
+        {bookings.filter(b => b.status === 'pending').length > 0 && (
+          <button
+            onClick={() => handleTabChange('pending')}
+            className="flex items-center gap-2 bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold px-4 py-2 rounded-xl shadow-xs hover:bg-amber-100 transition-all animate-pulse"
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+            {bookings.filter(b => b.status === 'pending').length} New Booking{bookings.filter(b => b.status === 'pending').length > 1 ? 's' : ''} Pending
+          </button>
+        )}
+      </div>
       <Tabs
         tabs={TABS.map(t => ({
           ...t,

@@ -86,7 +86,7 @@ export default function Checkout() {
         fee: order.fee || fee,
         amount: total,
         net: (order.subtotal || subtotal), // Provider receives net without platform fee
-        status: 'scheduled',
+        status: 'pending',
         createdAt: new Date().toISOString(),
       }
       localStorage.setItem('serviceq_customer_bookings', JSON.stringify([newBooking, ...existing]))
@@ -95,10 +95,17 @@ export default function Checkout() {
       const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
       localStorage.setItem('serviceq_all_bookings', JSON.stringify([newBooking, ...allBookings.filter(b => b.id !== bookingId)]))
 
-      // Save directly to the specific provider's bookings
+      // Save directly to the specific provider's bookings (by providerId UUID)
       if (order.providerId) {
         const provBookings = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${order.providerId}`)) || []
         localStorage.setItem(`serviceq_provider_bookings_${order.providerId}`, JSON.stringify([newBooking, ...provBookings.filter(b => b.id !== bookingId)]))
+      }
+
+      // Save to provider-name keyed bucket as fallback (for providers who matched by name)
+      if (order.provider) {
+        const nameKey = `serviceq_provider_bookings_name_${order.provider.trim().toLowerCase().replace(/\s+/g, '_')}`
+        const nameBookings = JSON.parse(localStorage.getItem(nameKey)) || []
+        localStorage.setItem(nameKey, JSON.stringify([newBooking, ...nameBookings.filter(b => b.id !== bookingId)]))
       }
 
       // Also save to generic provider bookings for demo resilience
@@ -113,9 +120,9 @@ export default function Checkout() {
         role: 'customer',
         action: 'Booking Created & Paid',
         target: `${bookingId} (${order.title})`,
-        desc: `${customerName} paid ₱${total.toLocaleString()} for "${order.title}" via ${method.toUpperCase()}. Escrow held.`,
+        desc: `${customerName} paid ₱${total.toLocaleString()} for "${order.title}" via ${method.toUpperCase()}. Escrow held — awaiting provider acceptance.`,
         before: { status: 'none' },
-        after: { status: 'scheduled' },
+        after: { status: 'pending' },
         ip: '127.0.0.1',
         ts: new Date().toISOString(),
       }
@@ -123,6 +130,7 @@ export default function Checkout() {
 
       window.dispatchEvent(new Event('serviceq_bookings_updated'))
       window.dispatchEvent(new Event('storage'))
+
     } catch (e) {
       console.warn('Local booking cache error:', e)
     }

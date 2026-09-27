@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { DollarSign, TrendingUp, Wallet, Clock, ArrowDownRight, CheckCircle2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -25,8 +25,8 @@ export default function ProviderEarnings() {
   const [wAmount, setWAmount]           = useState('')
   const [wMethod, setWMethod]           = useState('gcash')
 
-  // Real-time Provider Bookings
-  const [bookings] = useState(() => {
+  // Real-time Provider Bookings — reload on events
+  const [bookings, setBookings] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
       if (Array.isArray(stored)) return stored
@@ -35,29 +35,37 @@ export default function ProviderEarnings() {
   })
 
   // Dynamic transactions derived from completed bookings or stored transactions
-  const transactions = useMemo(() => {
+  const [transactions, setTransactions] = useState(() => {
     try {
       const storedTxns = JSON.parse(localStorage.getItem('serviceq_provider_transactions'))
       if (Array.isArray(storedTxns) && storedTxns.length > 0) return storedTxns
     } catch {}
-    return bookings
-      .filter(b => b.status === 'completed' || b.status === 'active')
-      .map(b => {
-        const gross = Number(b.amount) || 0
-        const fee = Math.round(gross * 0.1)
-        const net = gross - fee
-        return {
-          id: b.id,
-          customer: b.customer || b.customer_name || 'Customer',
-          service: b.service || b.listing_title || 'Service',
-          gross,
-          fee,
-          net,
-          date: b.date || new Date().toISOString().split('T')[0],
-          payout: b.status === 'completed' ? 'released' : 'pending'
+    return []
+  })
+
+  // Reload transactions and bookings when anything changes
+  useEffect(() => {
+    const reload = () => {
+      try {
+        const storedTxns = JSON.parse(localStorage.getItem('serviceq_provider_transactions'))
+        if (Array.isArray(storedTxns) && storedTxns.length > 0) {
+          setTransactions(storedTxns)
         }
-      })
-  }, [bookings])
+        const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
+        if (Array.isArray(stored)) setBookings(stored)
+      } catch {}
+    }
+    window.addEventListener('serviceq_bookings_updated', reload)
+    window.addEventListener('serviceq_withdrawals_updated', reload)
+    window.addEventListener('storage', reload)
+    return () => {
+      window.removeEventListener('serviceq_bookings_updated', reload)
+      window.removeEventListener('serviceq_withdrawals_updated', reload)
+      window.removeEventListener('storage', reload)
+    }
+  }, [])
+
+
 
   // Revenue metrics
   const grossRevenue = transactions.reduce((acc, t) => acc + (t.gross || 0), 0)
