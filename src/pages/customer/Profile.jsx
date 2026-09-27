@@ -482,43 +482,105 @@ export default function CustomerProfile() {
                     <h3 className="font-bold text-gray-900 mb-1 flex items-center gap-2">
                       <Lock className="w-4 h-4 text-brand-600" /> Change Password
                     </h3>
-                    <p className="text-xs text-gray-400 mb-4">Password changes are applied immediately to your account.</p>
-                    <form onSubmit={handlePasswordChange} className="space-y-3">
-                      <div className="relative">
-                        <input
-                          type={showNewPass ? 'text' : 'password'}
-                          placeholder="New Password (min 6 characters)"
-                          value={passwordForm.newPass}
-                          onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
-                          className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowNewPass(!showNewPass)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
+                    <p className="text-xs text-gray-400 mb-4">Password changes are applied immediately to your account. Use a strong password with at least 6 characters.</p>
+                    <form onSubmit={handlePasswordChange} className="space-y-4">
+                      {/* New Password with strength meter */}
+                      <div>
+                        <label className="text-xs font-semibold text-gray-700 mb-1.5 block">New Password</label>
+                        <div className="relative">
+                          <input
+                            type={showNewPass ? 'text' : 'password'}
+                            placeholder="New Password (min 6 characters)"
+                            value={passwordForm.newPass}
+                            onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
+                            className={`w-full border rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 transition ${
+                              passwordForm.newPass.length > 0
+                                ? passwordForm.newPass.length >= 6
+                                  ? 'border-emerald-400 focus:ring-emerald-300'
+                                  : 'border-red-300 focus:ring-red-200'
+                                : 'border-gray-200 focus:ring-brand-400'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPass(!showNewPass)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        {/* Strength bar */}
+                        {passwordForm.newPass.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4].map(lvl => {
+                                const len = passwordForm.newPass.length
+                                const strength = len < 6 ? 1 : len < 9 ? 2 : len < 12 ? 3 : 4
+                                return (
+                                  <div
+                                    key={lvl}
+                                    className={`h-1.5 flex-1 rounded-full transition-all ${
+                                      lvl <= strength
+                                        ? strength === 1 ? 'bg-red-400'
+                                          : strength === 2 ? 'bg-orange-400'
+                                          : strength === 3 ? 'bg-yellow-400'
+                                          : 'bg-emerald-500'
+                                        : 'bg-gray-200'
+                                    }`}
+                                  />
+                                )
+                              })}
+                            </div>
+                            <p className={`text-[11px] font-medium ${
+                              passwordForm.newPass.length < 6 ? 'text-red-500'
+                              : passwordForm.newPass.length < 9 ? 'text-orange-500'
+                              : passwordForm.newPass.length < 12 ? 'text-yellow-600'
+                              : 'text-emerald-600'
+                            }`}>
+                              {passwordForm.newPass.length < 6 ? '⚠ Too short (min 6 chars)'
+                               : passwordForm.newPass.length < 9 ? '🔸 Weak'
+                               : passwordForm.newPass.length < 12 ? '🔶 Good'
+                               : '✅ Strong'}
+                            </p>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="relative">
-                        <input
-                          type={showConfirmPass ? 'text' : 'password'}
-                          placeholder="Confirm New Password"
-                          value={passwordForm.confirm}
-                          onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
-                          className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPass(!showConfirmPass)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        >
-                          {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
+                      {/* Confirm Password with match indicator */}
+                      <div>
+                        <label className="text-xs font-semibold text-gray-700 mb-1.5 block">Confirm New Password</label>
+                        <div className="relative">
+                          <input
+                            type={showConfirmPass ? 'text' : 'password'}
+                            placeholder="Confirm New Password"
+                            value={passwordForm.confirm}
+                            onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
+                            className={`w-full border rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 transition ${
+                              passwordForm.confirm.length > 0
+                                ? passwordForm.newPass === passwordForm.confirm
+                                  ? 'border-emerald-400 focus:ring-emerald-300'
+                                  : 'border-red-300 focus:ring-red-200'
+                                : 'border-gray-200 focus:ring-brand-400'
+                            }`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPass(!showConfirmPass)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        {passwordForm.confirm.length > 0 && (
+                          <p className={`text-[11px] font-medium mt-1.5 ${
+                            passwordForm.newPass === passwordForm.confirm ? 'text-emerald-600' : 'text-red-500'
+                          }`}>
+                            {passwordForm.newPass === passwordForm.confirm ? '✅ Passwords match' : '✗ Passwords do not match'}
+                          </p>
+                        )}
                       </div>
 
-                      <div className="flex justify-end">
+                      <div className="flex justify-end pt-1">
                         <button
                           type="submit"
                           disabled={pwLoading || !isPasswordValid}
