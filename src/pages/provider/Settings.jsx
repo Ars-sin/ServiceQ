@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Lock, Mail, Bell, Shield, Eye, EyeOff, Loader, CheckCircle2,
+  Lock, Mail, Bell, Shield, Eye, EyeOff, Loader, CheckCircle2, Circle,
   User, HelpCircle, ChevronRight, Check, X, Phone, MessageSquare
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -279,56 +279,58 @@ export default function ProviderSettings() {
 
                     {/* Requirements Box Right (Slide 44) */}
                     <div className="lg:col-span-5 bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col justify-center">
-                      <p className="text-xs font-bold text-gray-700 mb-2.5">Your new password must have:</p>
+                      <p className="text-xs font-semibold text-gray-500 mb-2.5">Your new password must have:</p>
                       <ul className="space-y-2 text-xs">
-                        <li className="flex items-center gap-2 text-gray-700 font-medium">
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                            hasMinLength ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
-                          }`}>
-                            {hasMinLength ? <Check size={10} strokeWidth={3} /> : '•'}
-                          </span>
+                        <li className="flex items-center gap-2 text-gray-500 text-xs">
+                          {hasMinLength ? (
+                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                          )}
                           At least 6 characters
                         </li>
-                        <li className="flex items-center gap-2 text-gray-700 font-medium">
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                            hasUppercase ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
-                          }`}>
-                            {hasUppercase ? <Check size={10} strokeWidth={3} /> : '•'}
-                          </span>
+                        <li className="flex items-center gap-2 text-gray-500 text-xs">
+                          {hasUppercase ? (
+                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                          )}
                           One uppercase letter (A–Z)
                         </li>
-                        <li className="flex items-center gap-2 text-gray-700 font-medium">
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                            hasLowercase ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
-                          }`}>
-                            {hasLowercase ? <Check size={10} strokeWidth={3} /> : '•'}
-                          </span>
+                        <li className="flex items-center gap-2 text-gray-500 text-xs">
+                          {hasLowercase ? (
+                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                          )}
                           One lowercase letter (a–z)
                         </li>
-                        <li className="flex items-center gap-2 text-gray-700 font-medium">
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                            hasNumber ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
-                          }`}>
-                            {hasNumber ? <Check size={10} strokeWidth={3} /> : '•'}
-                          </span>
+                        <li className="flex items-center gap-2 text-gray-500 text-xs">
+                          {hasNumber ? (
+                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                          )}
                           One number (0–9)
                         </li>
-                        <li className="flex items-center gap-2 text-gray-700 font-medium">
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                            hasSpecial ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
-                          }`}>
-                            {hasSpecial ? <Check size={10} strokeWidth={3} /> : '•'}
-                          </span>
+                        <li className="flex items-center gap-2 text-gray-500 text-xs">
+                          {hasSpecial ? (
+                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                          )}
                           One special character (e.g. !@#)
                         </li>
                         {passwordForm.confirm && (
-                          <li className="flex items-center gap-2 pt-1 border-t border-gray-200 text-gray-700 font-medium">
-                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
-                              passwordsMatch ? 'bg-emerald-600 text-white' : 'bg-red-500 text-white'
-                            }`}>
-                              {passwordsMatch ? <Check size={10} strokeWidth={3} /> : <X size={10} strokeWidth={3} />}
+                          <li className="flex items-center gap-2 pt-1 border-t border-gray-200 text-xs">
+                            {passwordsMatch ? (
+                              <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                            ) : (
+                              <X size={15} className="text-red-500 flex-shrink-0" />
+                            )}
+                            <span className={passwordsMatch ? 'text-emerald-600 font-semibold' : 'text-red-500'}>
+                              {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
                             </span>
-                            {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
                           </li>
                         )}
                       </ul>
@@ -340,9 +342,9 @@ export default function ProviderSettings() {
                     <button
                       type="button"
                       onClick={handleCancelPassword}
-                      disabled={!passwordForm.current.trim()}
+                      disabled={!passwordForm.current}
                       className={`text-xs px-5 py-2.5 rounded-xl font-semibold transition-all border ${
-                        passwordForm.current.trim()
+                        passwordForm.current
                           ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:scale-95 cursor-pointer shadow-xs'
                           : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                       }`}
