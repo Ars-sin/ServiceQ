@@ -9,6 +9,7 @@ import Modal from '@/components/ui/Modal'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
 import { loadCachedListings } from '@/lib/listingsService'
 import { useAuth } from '@/contexts/AuthContext'
+import { recordCustomerBooking } from '@/lib/bookingsService'
 
 const DEFAULT_ORDER = {
   id: '1',
@@ -49,6 +50,7 @@ export default function Checkout() {
         id: matched.id,
         title: matched.title,
         provider: matched.provider,
+        providerId: matched.providerId || null,
         date: new Date().toISOString().split('T')[0],
         sessions: 1,
         price: matched.price,
@@ -66,16 +68,14 @@ export default function Checkout() {
   const handlePay = async () => {
     if (!method) return toast.error('Please select a payment method')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setLoading(false)
+    await new Promise(r => setTimeout(r, 800))
 
-    // Save newly booked item to local bookings store for immediate display in My Bookings
     try {
-      const existing = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
       const customerName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'
-      const newBooking = {
+      await recordCustomerBooking({
         id: bookingId,
-        listingId: String(order.id || id),           // track which listing was booked
+        bookingRef: bookingId,
+        listingId: String(order.id || id),
         service: order.title,
         provider: order.provider || 'Verified Provider',
         providerId: order.providerId || null,
@@ -83,7 +83,7 @@ export default function Checkout() {
         customerEmail: user?.email || null,
         customerId: user?.id || null,
         date: order.date || new Date().toISOString().split('T')[0],
-        sessions: order.sessions || sessions,
+        sessions,
         subtotal: order.subtotal || subtotal,
         fee: order.fee || fee,
         amount: total,
@@ -91,91 +91,13 @@ export default function Checkout() {
         status: 'pending',
         paymentMethod: method,
         createdAt: new Date().toISOString(),
-      }
-      localStorage.setItem('serviceq_customer_bookings', JSON.stringify([newBooking, ...existing]))
-
-      // ── Increment booking counter on the listing ──────────────────
-      try {
-        const listingId = String(order.id || id)
-        // Update in custom listings store
-        const customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
-        const updatedCustom = customListings.map(l =>
-          String(l.id) === listingId ? { ...l, bookings: (Number(l.bookings) || 0) + 1 } : l
-        )
-        localStorage.setItem('serviceq_custom_listings', JSON.stringify(updatedCustom))
-
-        // Update in provider-scoped listings (if providerId known)
-        if (order.providerId) {
-          const provKey = `serviceq_provider_listings_${order.providerId}`
-          const provListings = JSON.parse(localStorage.getItem(provKey)) || []
-          const updatedProv = provListings.map(l =>
-            String(l.id) === listingId ? { ...l, bookings: (Number(l.bookings) || 0) + 1 } : l
-          )
-          localStorage.setItem(provKey, JSON.stringify(updatedProv))
-        }
-
-        // Persist to a booking-count store keyed by listingId for resilience
-        const countKey = `serviceq_listing_bookings_${listingId}`
-        const prevCount = Number(localStorage.getItem(countKey) || 0)
-        localStorage.setItem(countKey, String(prevCount + 1))
-
-        window.dispatchEvent(new Event('serviceq_listings_updated'))
-      } catch {}
-
-
-
-      // Save to global all bookings store
-      const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
-      localStorage.setItem('serviceq_all_bookings', JSON.stringify([newBooking, ...allBookings.filter(b => b.id !== bookingId)]))
-
-      // Save directly to the specific provider's bookings (by providerId UUID)
-      if (order.providerId) {
-        const provBookings = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${order.providerId}`)) || []
-        localStorage.setItem(`serviceq_provider_bookings_${order.providerId}`, JSON.stringify([newBooking, ...provBookings.filter(b => b.id !== bookingId)]))
-      }
-
-      // Save to provider-name keyed bucket as fallback (for providers who matched by name)
-      if (order.provider) {
-        const nameKey = `serviceq_provider_bookings_name_${order.provider.trim().toLowerCase().replace(/\s+/g, '_')}`
-        const nameBookings = JSON.parse(localStorage.getItem(nameKey)) || []
-        localStorage.setItem(nameKey, JSON.stringify([newBooking, ...nameBookings.filter(b => b.id !== bookingId)]))
-      }
-
-      // Also save to generic provider bookings for demo resilience
-      const genProvBookings = JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || []
-      localStorage.setItem('serviceq_provider_bookings', JSON.stringify([newBooking, ...genProvBookings.filter(b => b.id !== bookingId)]))
-
-      // Audit log entry for real-time admin view
-      const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
-      const auditEntry = {
-        id: `a${Date.now()}`,
-        staff: 'Customer Escrow',
-        role: 'customer',
-        action: 'Booking Created & Paid',
-        target: `${bookingId} (${order.title})`,
-        desc: `${customerName} paid ₱${total.toLocaleString()} for "${order.title}" via ${method.toUpperCase()}. Escrow held — awaiting provider acceptance.`,
-        before: { status: 'none' },
-        after: { status: 'pending' },
-        ip: '127.0.0.1',
-        ts: new Date().toISOString(),
-      }
-      localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...auditLog]))
-
-      window.dispatchEvent(new Event('serviceq_bookings_updated'))
-      window.dispatchEvent(new Event('storage'))
-
-      // ── Broadcast to provider tab immediately (cross-tab) ──
-      try {
-        const bc = new BroadcastChannel('serviceq_bookings')
-        bc.postMessage({ event: 'new_booking', bookingId, service: order.title })
-        bc.close()
-      } catch {}
-
+      })
     } catch (e) {
-      console.warn('Local booking cache error:', e)
+      console.warn('Booking record error:', e)
+    } finally {
+      setLoading(false)
+      setConfirmed(true)
     }
-
-    setConfirmed(true)
   }
 
   const handleDownloadReceipt = () => {

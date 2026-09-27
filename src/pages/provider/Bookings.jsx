@@ -7,6 +7,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Pagination from '@/components/ui/Pagination'
 import { useAuth } from '@/contexts/AuthContext'
+import { fetchProviderBookings, updateBookingStatusBackend } from '@/lib/bookingsService'
 
 const TABS = [
   { id: 'all', label: 'All' },
@@ -37,7 +38,7 @@ function readAllBookings(userId) {
       merge(JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${userId}`)) || [])
     }
 
-    // 2. Global all-bookings store (most important — Checkout always writes here)
+    // 2. Global all-bookings store
     merge(JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [])
 
     // 3. Customer bookings store
@@ -66,33 +67,50 @@ export default function ProviderBookings() {
   const { user, profile } = useAuth()
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
-  const [bookings, setBookings] = useState([])
+  const [bookings, setBookings] = useState(() => readAllBookings(user?.id))
   const [lastRefreshed, setLastRefreshed] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const prevCountRef = useRef(0)
 
-  // ── Core load function ────────────────────────────────────────────────────
-  const loadBookings = useCallback((silent = true) => {
-    const result = readAllBookings(user?.id)
-    setBookings(result)
+  // ── Core load function: instant local cache + live Supabase sync ───────────
+  const loadBookings = useCallback(async (silent = true) => {
+    // 1. Instant local read
+    const localResult = readAllBookings(user?.id)
+    if (localResult.length > 0) {
+      setBookings(localResult)
+    }
     setLastRefreshed(new Date())
 
-    // Notify if new bookings appeared since last load
-    const newPending = result.filter(b => b.status === 'pending').length
-    if (!silent && newPending > prevCountRef.current) {
-      toast.success(`${newPending} new booking${newPending > 1 ? 's' : ''} received!`)
+    // 2. Live Supabase fetch (cross-browser / incognito truth)
+    try {
+      const liveResult = await fetchProviderBookings(user?.id, profile?.full_name)
+      if (Array.isArray(liveResult)) {
+        setBookings(liveResult)
+
+        // Notify if new bookings arrived
+        const newPending = liveResult.filter(b => b.status === 'pending').length
+        if (!silent && newPending > prevCountRef.current) {
+          toast.success(`${newPending} new booking${newPending > 1 ? 's' : ''} received!`)
+        }
+        prevCountRef.current = newPending
+        return liveResult
+      }
+    } catch (err) {
+      console.warn('Backend bookings fetch error:', err)
     }
-    prevCountRef.current = newPending
-    return result
-  }, [user?.id])
+
+    return localResult
+  }, [user?.id, profile?.full_name])
 
   // ── Manual refresh button ─────────────────────────────────────────────────
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setRefreshing(true)
-    const result = loadBookings(false)
-    setTimeout(() => setRefreshing(false), 600)
-    if (result.length === 0) {
-      toast('No bookings found yet. Make sure a customer has completed checkout.', { icon: 'ℹ️' })
+    const result = await loadBookings(false)
+    setRefreshing(false)
+    if (!result || result.length === 0) {
+      toast('No bookings found yet. Ensure customer completed payment.', { icon: 'ℹ️' })
+    } else {
+      toast.success(`Synced ${result.length} booking${result.length > 1 ? 's' : ''} from backend!`)
     }
   }
 
@@ -104,17 +122,17 @@ export default function ProviderBookings() {
     // A) Same-tab event listeners
     const handle = () => loadBookings(false)
     window.addEventListener('serviceq_bookings_updated', handle)
-    window.addEventListener('storage', handle)            // fires when OTHER tab writes localStorage
+    window.addEventListener('storage', handle)
 
-    // B) Cross-tab BroadcastChannel (fires immediately when customer pays in another tab)
+    // B) Cross-tab BroadcastChannel
     let bc = null
     try {
       bc = new BroadcastChannel('serviceq_bookings')
       bc.onmessage = () => loadBookings(false)
     } catch {}
 
-    // C) Polling every 5 seconds — the guaranteed catch-all
-    const poll = setInterval(() => loadBookings(true), 5000)
+    // C) Polling every 3.5 seconds — guarantees cross-browser / incognito sync
+    const poll = setInterval(() => loadBookings(true), 3500)
 
     return () => {
       clearInterval(poll)
@@ -125,24 +143,15 @@ export default function ProviderBookings() {
   }, [loadBookings])
 
   // ── Status actions ────────────────────────────────────────────────────────
-  const updateStatus = (id, status) => {
+  const updateStatus = async (id, status) => {
     const bookingToUpdate = bookings.find(b => b.id === id)
     const updated = bookings.map(b => b.id === id ? { ...b, status } : b)
     setBookings(updated)
 
+    // Persist to local & backend
+    await updateBookingStatusBackend(id, status, user?.id)
+
     try {
-      // Sync to all localStorage keys
-      if (user?.id) {
-        localStorage.setItem(`serviceq_provider_bookings_${user.id}`, JSON.stringify(updated))
-      }
-      localStorage.setItem('serviceq_provider_bookings', JSON.stringify(updated))
-
-      const all = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
-      localStorage.setItem('serviceq_all_bookings', JSON.stringify(all.map(b => b.id === id ? { ...b, status } : b)))
-
-      const cust = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
-      localStorage.setItem('serviceq_customer_bookings', JSON.stringify(cust.map(b => b.id === id ? { ...b, status } : b)))
-
       // If completed → credit provider balance
       if (status === 'completed' && bookingToUpdate) {
         const netAmt = Number(bookingToUpdate.net) || Math.round((Number(bookingToUpdate.amount) || 0) * 0.9)
@@ -168,10 +177,6 @@ export default function ProviderBookings() {
         const labels = { scheduled: '✅ Booking accepted', cancelled: '❌ Booking declined', active: '🔵 Service started' }
         toast.success(labels[status] || `Status updated to ${status}`)
       }
-
-      // Broadcast to other tabs
-      try { new BroadcastChannel('serviceq_bookings').postMessage({ status }) } catch {}
-      window.dispatchEvent(new Event('serviceq_bookings_updated'))
     } catch (e) {
       console.error(e)
     }

@@ -82,9 +82,9 @@ export default function ProviderListings() {
 
     // ── Helper: compute live booking counts from all booking stores ──
     const getLiveBookingCounts = () => {
-      const counts = {} // listingId -> count
+      const counts = {} // listingId or serviceTitle -> count
       try {
-        // 1. From dedicated per-listing counter keys (fastest, most accurate)
+        // 1. From dedicated per-listing counter keys
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i)
           if (key && key.startsWith('serviceq_listing_bookings_')) {
@@ -92,14 +92,22 @@ export default function ProviderListings() {
             counts[lid] = Number(localStorage.getItem(key) || 0)
           }
         }
-        // 2. From all bookings — count by listingId (fills gaps if counter key missing)
+        // 2. From all bookings stores — count by listingId and title
         const allBk = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
         const custBk = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        const provBk = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`)) || []
+        const genBk = JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || []
+
         const seen = new Set()
-        for (const b of [...allBk, ...custBk]) {
-          if (b.listingId && !seen.has(b.id)) {
+        for (const b of [...allBk, ...custBk, ...provBk, ...genBk]) {
+          if (b && b.id && !seen.has(b.id)) {
             seen.add(b.id)
-            counts[String(b.listingId)] = (counts[String(b.listingId)] || 0) + 1
+            if (b.listingId) {
+              counts[String(b.listingId)] = (counts[String(b.listingId)] || 0) + 1
+            }
+            if (b.service) {
+              counts[b.service] = (counts[b.service] || 0) + 1
+            }
           }
         }
       } catch {}
@@ -108,10 +116,17 @@ export default function ProviderListings() {
 
     const applyBookingCounts = (items) => {
       const counts = getLiveBookingCounts()
-      return items.map(l => ({
-        ...l,
-        bookings: counts[String(l.id)] ?? l.bookings ?? 0,
-      }))
+      return items.map(l => {
+        const calculated = Math.max(
+          Number(l.bookings) || 0,
+          counts[String(l.id)] || 0,
+          counts[l.title] || 0
+        )
+        return {
+          ...l,
+          bookings: calculated,
+        }
+      })
     }
 
     // 1. Instant local read
@@ -123,25 +138,43 @@ export default function ProviderListings() {
     } catch {}
 
     // 2. Live backend fetch
-    fetchProviderListings(user.id).then(live => {
-      if (isMounted && Array.isArray(live) && live.length > 0) {
-        setListings(applyBookingCounts(live))
-      }
-    }).catch(err => console.warn('Could not load live provider listings:', err))
+    const syncFromBackend = () => {
+      fetchProviderListings(user.id).then(live => {
+        if (isMounted && Array.isArray(live) && live.length > 0) {
+          setListings(applyBookingCounts(live))
+        }
+      }).catch(err => console.warn('Could not load live provider listings:', err))
+    }
+
+    syncFromBackend()
 
     // 3. Re-apply counts when a new booking arrives
     const handleBookingUpdate = () => {
       setListings(prev => applyBookingCounts(prev))
+      syncFromBackend()
     }
     window.addEventListener('serviceq_bookings_updated', handleBookingUpdate)
     window.addEventListener('serviceq_listings_updated', handleBookingUpdate)
+    window.addEventListener('storage', handleBookingUpdate)
+
+    // 4. Cross-tab BroadcastChannel listener
+    let bc = null
+    try {
+      bc = new BroadcastChannel('serviceq_bookings')
+      bc.onmessage = handleBookingUpdate
+    } catch {}
+
+    // 5. Polling every 4 seconds for cross-browser / incognito updates
+    const poll = setInterval(handleBookingUpdate, 4000)
 
     return () => {
       isMounted = false
+      clearInterval(poll)
       window.removeEventListener('serviceq_bookings_updated', handleBookingUpdate)
       window.removeEventListener('serviceq_listings_updated', handleBookingUpdate)
+      window.removeEventListener('storage', handleBookingUpdate)
+      if (bc) bc.close()
     }
-
   }, [user?.id])
 
   // Wizard form state
@@ -749,10 +782,13 @@ export default function ProviderListings() {
               const lid = String(viewingListing.id)
               const allBk = (() => { try { return JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [] } catch { return [] } })()
               const custBk = (() => { try { return JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [] } catch { return [] } })()
+              const provBk = (() => { try { return JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user?.id}`)) || [] } catch { return [] } })()
+              const genBk = (() => { try { return JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || [] } catch { return [] } })()
+
               const seen = new Set()
               const recent = []
-              for (const b of [...allBk, ...custBk]) {
-                if (!seen.has(b.id) && (String(b.listingId) === lid || b.service === viewingListing.title)) {
+              for (const b of [...allBk, ...custBk, ...provBk, ...genBk]) {
+                if (!seen.has(b.id) && (String(b.listingId) === lid || b.service?.toLowerCase() === viewingListing.title?.toLowerCase())) {
                   seen.add(b.id)
                   recent.push(b)
                 }
@@ -760,6 +796,7 @@ export default function ProviderListings() {
               recent.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
               const top5 = recent.slice(0, 5)
               if (top5.length === 0) return null
+
               return (
                 <div className="border border-gray-100 rounded-xl overflow-hidden">
                   <div className="bg-gray-50 px-3 py-2 border-b border-gray-100">
