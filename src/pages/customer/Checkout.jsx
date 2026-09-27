@@ -88,7 +88,7 @@ export default function Checkout() {
         fee: order.fee || fee,
         amount: total,
         net: (order.subtotal || subtotal),
-        status: 'pending',
+        status: 'scheduled',
         paymentMethod: method,
         createdAt: new Date().toISOString(),
       })

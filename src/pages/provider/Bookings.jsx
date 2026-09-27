@@ -87,12 +87,12 @@ export default function ProviderBookings() {
       if (Array.isArray(liveResult)) {
         setBookings(liveResult)
 
-        // Notify if new bookings arrived
-        const newPending = liveResult.filter(b => b.status === 'pending').length
-        if (!silent && newPending > prevCountRef.current) {
-          toast.success(`${newPending} new booking${newPending > 1 ? 's' : ''} received!`)
+        // Notify if new scheduled bookings arrived (no pending approval step anymore)
+        const newScheduled = liveResult.filter(b => b.status === 'scheduled').length
+        if (!silent && newScheduled > prevCountRef.current) {
+          toast.success(`${newScheduled} new booking${newScheduled > 1 ? 's' : ''} received!`)
         }
-        prevCountRef.current = newPending
+        prevCountRef.current = newScheduled
         return liveResult
       }
     } catch (err) {
@@ -198,7 +198,7 @@ export default function ProviderBookings() {
 
   const handleTabChange = (newTab) => { setTab(newTab); setPage(1) }
 
-  const pendingCount = bookings.filter(b => b.status === 'pending').length
+  const scheduledCount = bookings.filter(b => b.status === 'scheduled').length
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
@@ -217,13 +217,13 @@ export default function ProviderBookings() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {pendingCount > 0 && (
+          {scheduledCount > 0 && (
             <button
-              onClick={() => handleTabChange('pending')}
-              className="flex items-center gap-2 bg-amber-50 border border-amber-300 text-amber-800 text-xs font-bold px-4 py-2 rounded-xl hover:bg-amber-100 transition-all animate-pulse"
+              onClick={() => handleTabChange('scheduled')}
+              className="flex items-center gap-2 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold px-4 py-2 rounded-xl hover:bg-emerald-100 transition-all animate-pulse"
             >
-              <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
-              {pendingCount} New Booking{pendingCount > 1 ? 's' : ''} Pending
+              <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+              {scheduledCount} Booking{scheduledCount > 1 ? 's' : ''} Scheduled
             </button>
           )}
           <button
@@ -321,19 +321,6 @@ export default function ProviderBookings() {
 
             {/* ── Action buttons ── */}
             <div className="flex gap-2 flex-wrap items-center">
-              {b.status === 'pending' && (
-                <>
-                  <button onClick={() => updateStatus(b.id, 'scheduled')} className="btn-primary btn-sm" style={{ background: '#059669' }}>
-                    ✅ Accept Booking
-                  </button>
-                  <button onClick={() => updateStatus(b.id, 'cancelled')} className="btn-secondary btn-sm text-red-600 hover:bg-red-50">
-                    ❌ Decline
-                  </button>
-                  <button onClick={() => toast(`Contact feature coming soon for ${b.customer}`)} className="btn-secondary btn-sm gap-1">
-                    <MessageCircle size={13} /> Contact
-                  </button>
-                </>
-              )}
               {b.status === 'scheduled' && (
                 <>
                   <button onClick={() => updateStatus(b.id, 'active')} className="btn-primary btn-sm bg-blue-600 hover:bg-blue-700 text-white">

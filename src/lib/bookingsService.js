@@ -105,7 +105,7 @@ export async function recordCustomerBooking(raw) {
     fee: Number(raw.fee) || Math.round((Number(raw.amount) || 0) * 0.1),
     amount: Number(raw.amount) || 0,
     net: Number(raw.net) || Math.round((Number(raw.amount) || 0) * 0.9),
-    status: raw.status || 'pending',
+    status: raw.status || 'scheduled',
     paymentMethod: raw.paymentMethod || 'Maya',
     createdAt: raw.createdAt || new Date().toISOString(),
   }
@@ -169,7 +169,7 @@ export async function recordCustomerBooking(raw) {
       target: `${booking.id} (${booking.service})`,
       desc: `${booking.customer} paid ₱${booking.amount.toLocaleString()} for "${booking.service}" to ${booking.provider}. Escrow held.`,
       before: { status: 'none' },
-      after: { status: 'pending' },
+      after: { status: 'scheduled' },
       ip: '127.0.0.1',
       ts: new Date().toISOString(),
     }, ...auditLog]))
@@ -910,7 +910,7 @@ export async function fetchBackendTransactions() {
           fee: Number(b.fee) || Math.round((Number(b.amount) || 0) * 0.1),
           net: Number(b.net) || Math.round((Number(b.amount) || 0) * 0.9),
           date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
-          status: b.status === 'completed' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
+          status: b.status === 'completed' || b.status === 'scheduled' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
         })
       }
     }
