@@ -123,8 +123,8 @@ function AppRoutes() {
       {/* ── Auth (guests only — redirect if already logged in) ── */}
       <Route path="/login"           element={<GuestOnly><LoginPage /></GuestOnly>} />
       <Route path="/register"        element={<GuestOnly><RegisterPage /></GuestOnly>} />
-      <Route path="/forgot-password" element={<GuestOnly><ForgotPasswordPage /></GuestOnly>} />
-      <Route path="/reset-password"  element={<GuestOnly><ForgotPasswordPage /></GuestOnly>} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password"  element={<ForgotPasswordPage />} />
 
       {/* ── Provider Onboarding (requires login) ── */}
       <Route path="/provider/onboarding"

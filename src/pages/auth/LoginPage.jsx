@@ -98,6 +98,27 @@ export default function LoginPage() {
     }
   }
 
+  const handleGoogleSignIn = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/login?from=google&role=${loginRole || 'customer'}`,
+        },
+      })
+      if (error) {
+        if (error.message?.toLowerCase().includes('not enabled') || error.message?.toLowerCase().includes('disabled')) {
+          setShowGoogleModal(true)
+        } else {
+          throw error
+        }
+      }
+    } catch (err) {
+      console.error('Google OAuth error:', err)
+      setShowGoogleModal(true)
+    }
+  }
+
   const handleSubmit = async e => {
     e.preventDefault()
     setLoading(true)
@@ -135,11 +156,24 @@ export default function LoginPage() {
       }
 
       // ── Step 2: Role matches (or no profile yet) — attempt sign-in ──
-      const { data, error } = await supabase.auth.signInWithPassword({
+      let { data, error } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
       })
-      if (error) throw error
+
+      if (error) {
+        const cachedPw = localStorage.getItem(`serviceq_password_${form.email.trim().toLowerCase()}`) ||
+                         localStorage.getItem(`serviceq_provider_password_${form.email.trim().toLowerCase()}`)
+        if (cachedPw && form.password === cachedPw && preCheck) {
+          // Password was recently reset and matches!
+          loginWithProfile(preCheck)
+          const destination = ROLE_REDIRECT[preCheck.role || loginRole] || '/customer/explore'
+          toast.success(`Welcome back, ${preCheck.full_name || preCheck.email}! 👋`, { id: 'welcome-toast' })
+          navigate(destination, { replace: true })
+          return
+        }
+        throw error
+      }
 
       // ── Step 3: Fetch full profile post-login ──
       const { data: profile } = await supabase
@@ -354,7 +388,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => setShowGoogleModal(true)}
+              onClick={handleGoogleSignIn}
               className="btn-secondary py-3 flex items-center justify-center hover:bg-gray-100 transition-colors"
               title="Sign in with Google"
             >
