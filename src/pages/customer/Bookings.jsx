@@ -9,17 +9,8 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 
-const BASE_MOCK_BOOKINGS = [
-  { id: 'SQ-A1B2C', service: 'Professional Home Cleaning', provider: 'Maria Santos', date: '2026-09-22', amount: 1100, status: 'scheduled' },
-  { id: 'SQ-D3E4F', service: 'Math & Science Tutoring',    provider: 'Engr. Cruz',   date: '2026-09-20', amount: 660,  status: 'active' },
-  { id: 'SQ-G5H6I', service: 'DSLR Camera Rental',         provider: 'LensHub PH',   date: '2026-09-02', amount: 1320, status: 'completed' },
-  { id: 'SQ-J7K8L', service: 'AC & Appliance Repair',      provider: 'Fix-It Crew',  date: '2026-08-29', amount: 385,  status: 'completed' },
-  { id: 'SQ-M9N0O', service: 'Sound System Rental',        provider: 'Events Pro',   date: '2026-08-20', amount: 3850, status: 'cancelled' },
-  { id: 'SQ-P1Q2R', service: 'Motorcycle Scooter Rental',  provider: 'MotoRent Cebu',date: '2026-08-15', amount: 450,  status: 'completed' },
-  { id: 'SQ-S3T4U', service: 'Sofa Shampooing Service',    provider: 'CleanCare PH', date: '2026-08-10', amount: 650,  status: 'completed' },
-  { id: 'SQ-V5W6X', service: 'MacBook Rental for Work',    provider: 'TechRent PH',  date: '2026-08-05', amount: 800,  status: 'completed' },
-  { id: 'SQ-Y7Z8A', service: 'Event Photography Session',  provider: 'Pixel Cebu',   date: '2026-09-25', amount: 2500, status: 'pending' },
-]
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 const TABS = [
   { id: 'all',       label: 'All' },
@@ -31,6 +22,7 @@ const TABS = [
 ]
 
 export default function CustomerBookings() {
+  const { user, profile } = useAuth()
   const [activeTab, setTab]           = useState('all')
   const [page, setPage]               = useState(1)
   const [cancelModal, setCancelModal] = useState(null)
@@ -51,6 +43,79 @@ export default function CustomerBookings() {
     return []
   })
 
+  // ── Sync with Supabase backend so provider accept / complete reflects live ──
+  useEffect(() => {
+    let isMounted = true
+
+    const syncCustomerBookings = async () => {
+      try {
+        const local = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        const localMap = new Map(local.map(b => [b.id, b]))
+
+        // Fetch latest cloud bookings from Supabase platform_settings
+        const { data: gRow } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_global_bookings')
+          .maybeSingle()
+
+        if (gRow?.value) {
+          const cloudList = typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value
+          if (Array.isArray(cloudList)) {
+            const userNameLower = (profile?.full_name || user?.user_metadata?.full_name || '').trim().toLowerCase()
+            const userEmail = (user?.email || '').trim().toLowerCase()
+            const userId = user?.id
+
+            for (const cb of cloudList) {
+              const isMine =
+                (userId && cb.customerId && String(cb.customerId) === String(userId)) ||
+                (userEmail && cb.customerEmail && cb.customerEmail.toLowerCase() === userEmail) ||
+                (userNameLower && cb.customer && cb.customer.toLowerCase() === userNameLower) ||
+                localMap.has(cb.id)
+
+              if (isMine) {
+                // Cloud status is authoritative (e.g. provider accepted or completed)
+                const existing = localMap.get(cb.id)
+                localMap.set(cb.id, { ...existing, ...cb })
+              }
+            }
+          }
+        }
+
+        const merged = Array.from(localMap.values())
+        merged.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
+
+        if (isMounted) {
+          setBookings(merged)
+          localStorage.setItem('serviceq_customer_bookings', JSON.stringify(merged))
+        }
+      } catch (err) {
+        console.warn('Customer bookings sync warning:', err)
+      }
+    }
+
+    syncCustomerBookings()
+
+    window.addEventListener('serviceq_bookings_updated', syncCustomerBookings)
+    window.addEventListener('storage', syncCustomerBookings)
+
+    let bc = null
+    try {
+      bc = new BroadcastChannel('serviceq_bookings')
+      bc.onmessage = syncCustomerBookings
+    } catch {}
+
+    const poll = setInterval(syncCustomerBookings, 3000)
+
+    return () => {
+      isMounted = false
+      clearInterval(poll)
+      window.removeEventListener('serviceq_bookings_updated', syncCustomerBookings)
+      window.removeEventListener('storage', syncCustomerBookings)
+      if (bc) bc.close()
+    }
+  }, [user?.id, user?.email, profile?.full_name])
+
   const PAGE_SIZE = 4
   const isDefaultAll = activeTab === 'all'
 
@@ -68,18 +133,35 @@ export default function CustomerBookings() {
   }
 
   // Real status update for cancellation
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!cancelReason) return toast.error('Please select a reason for cancellation')
     if (cancelReason === 'OTHERS' && !cancelNote.trim()) return toast.error('Please describe your reason')
 
     const targetId = cancelModal.id
-    setBookings(prev => {
-      const updated = prev.map(b => b.id === targetId ? { ...b, status: 'cancelled', cancelReason: cancelReason } : b)
-      try {
-        localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updated))
-      } catch {}
-      return updated
-    })
+    const updated = bookings.map(b => b.id === targetId ? { ...b, status: 'cancelled', cancelReason: cancelReason } : b)
+    setBookings(updated)
+
+    try {
+      localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updated))
+      const allBk = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      localStorage.setItem('serviceq_all_bookings', JSON.stringify(allBk.map(b => b.id === targetId ? { ...b, status: 'cancelled' } : b)))
+
+      // Update Supabase
+      const { data: gRow } = await supabase.from('platform_settings').select('value').eq('key', 'serviceq_global_bookings').maybeSingle()
+      if (gRow?.value) {
+        const cloudList = typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value
+        if (Array.isArray(cloudList)) {
+          const updatedCloud = cloudList.map(b => b.id === targetId ? { ...b, status: 'cancelled' } : b)
+          await supabase.from('platform_settings').upsert({
+            key: 'serviceq_global_bookings',
+            value: JSON.stringify(updatedCloud),
+            updated_at: new Date().toISOString()
+          })
+        }
+      }
+    } catch {}
+
+    window.dispatchEvent(new Event('serviceq_bookings_updated'))
 
     toast.success('Booking successfully cancelled.')
     setCancelModal(null)

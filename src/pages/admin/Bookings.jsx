@@ -1,36 +1,60 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Search } from 'lucide-react'
+import { Search, RefreshCw } from 'lucide-react'
 import { formatPHP, statusVariant, relativeTime } from '@/lib/utils'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import toast from 'react-hot-toast'
-
-const BOOKINGS = [
-  { id: 'SQ-A1B2', customer: 'Ana Reyes',     provider: 'Maria Santos', service: 'Home Cleaning',     date: '2026-09-10', amount: 1100, status: 'scheduled', dispute: false },
-  { id: 'SQ-C3D4', customer: 'Marco Lopez',   provider: 'Maria Santos', service: 'Deep Cleaning',     date: '2026-09-08', amount: 1320, status: 'active',    dispute: false },
-  { id: 'SQ-E5F6', customer: 'Grace Tan',     provider: 'TechRent PH',  service: 'Laptop Rental',     date: '2026-09-05', amount: 880,  status: 'completed', dispute: false },
-  { id: 'SQ-G7H8', customer: 'Rico Santos',   provider: 'Events Pro',   service: 'Sound System',      date: '2026-09-03', amount: 3850, status: 'cancelled',  dispute: true  },
-  { id: 'SQ-I9J0', customer: 'Joy DC',        provider: 'LensHub PH',   service: 'Camera Rental',     date: '2026-09-01', amount: 660,  status: 'completed', dispute: false },
-  { id: 'SQ-K1L2', customer: 'Carlo Mendoza', provider: 'MotoRent',     service: 'Motorcycle Rental', date: '2026-08-30', amount: 450,  status: 'scheduled', dispute: false },
-  { id: 'SQ-M3N4', customer: 'Elena Gomez',   provider: 'CleanCare PH', service: 'Sofa Shampooing',   date: '2026-08-28', amount: 750,  status: 'active',    dispute: false },
-  { id: 'SQ-O5P6', customer: 'David Lim',     provider: 'PowerPro Cebu',service: 'Generator Rental',  date: '2026-08-25', amount: 1200, status: 'completed', dispute: false },
-  { id: 'SQ-Q7R8', customer: 'Sophia Sy',     provider: 'Fix-It Crew',  service: 'Aircon Cleaning',   date: '2026-08-22', amount: 500,  status: 'completed', dispute: false },
-  { id: 'SQ-S9T0', customer: 'Mark Tan',      provider: 'SkyView PH',   service: 'Drone Kit Rental',  date: '2026-08-20', amount: 1100, status: 'cancelled',  dispute: false },
-]
+import { fetchBackendBookings, updateBookingStatusBackend } from '@/lib/bookingsService'
 
 export default function AdminBookings() {
-  const [search, setSearch]         = useState('')
-  const [page, setPage]             = useState(1)
+  const [search, setSearch]          = useState('')
+  const [page, setPage]              = useState(1)
   const [overrideModal, setOverride] = useState(null)
-  const [refundModal, setRefund]    = useState(null)
-  const [newStatus, setNewStatus]   = useState('')
-  const [refundAmt, setRefundAmt]   = useState('')
-  const [bookings, setBookings]     = useState(BOOKINGS)
+  const [refundModal, setRefund]     = useState(null)
+  const [newStatus, setNewStatus]    = useState('')
+  const [refundAmt, setRefundAmt]    = useState('')
+  const [bookings, setBookings]      = useState([])
+  const [loading, setLoading]        = useState(true)
 
   const PAGE_SIZE = 6
   const isDefaultAll = !search.trim()
+
+  const loadBookings = async (silent = false) => {
+    if (!silent) setLoading(true)
+    try {
+      const real = await fetchBackendBookings()
+      setBookings(Array.isArray(real) ? real : [])
+    } catch (err) {
+      console.warn('AdminBookings load error:', err)
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadBookings()
+
+    const handle = () => loadBookings(true)
+    window.addEventListener('serviceq_bookings_updated', handle)
+    window.addEventListener('storage', handle)
+
+    let bc = null
+    try {
+      bc = new BroadcastChannel('serviceq_bookings')
+      bc.onmessage = handle
+    } catch {}
+
+    const poll = setInterval(() => loadBookings(true), 5000)
+
+    return () => {
+      clearInterval(poll)
+      window.removeEventListener('serviceq_bookings_updated', handle)
+      window.removeEventListener('storage', handle)
+      if (bc) bc.close()
+    }
+  }, [])
 
   useEffect(() => { setPage(1) }, [search])
 
@@ -42,9 +66,10 @@ export default function AdminBookings() {
     ? filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
     : filtered
 
-  const handleOverride = () => {
+  const handleOverride = async () => {
     if (!newStatus) return toast.error('Select a status')
     setBookings(prev => prev.map(b => b.id === overrideModal.id ? { ...b, status: newStatus } : b))
+    await updateBookingStatusBackend(overrideModal.id, newStatus)
     toast.success(`Status overridden to: ${newStatus}`)
     setOverride(null); setNewStatus('')
   }
@@ -65,6 +90,13 @@ export default function AdminBookings() {
           <h1 className="text-2xl font-bold text-gray-900">Booking &amp; Dispute Center</h1>
           <p className="text-xs text-gray-400 mt-0.5">{bookings.length} total bookings · {disputeCount} dispute{disputeCount !== 1 ? 's' : ''}</p>
         </div>
+        <button
+          onClick={() => loadBookings()}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-semibold rounded-xl transition shadow-xs"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
       </div>
 
       {/* Search */}
@@ -94,9 +126,23 @@ export default function AdminBookings() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {filtered.length === 0 ? (
+            {loading ? (
               <tr>
-                <td colSpan={8} className="p-10 text-center text-gray-400 text-sm">No bookings matching your search.</td>
+                <td colSpan={8} className="p-12 text-center text-gray-400">
+                  <p className="text-sm">Loading bookings from backend…</p>
+                </td>
+              </tr>
+            ) : filtered.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="p-12 text-center text-gray-400">
+                  <p className="text-3xl mb-2">📭</p>
+                  <p className="font-semibold text-gray-600 text-sm">
+                    {search ? 'No bookings matching your search.' : 'No bookings yet.'}
+                  </p>
+                  {!search && (
+                    <p className="text-xs text-gray-400 mt-1">Once customers complete checkout, bookings will appear here automatically.</p>
+                  )}
+                </td>
               </tr>
             ) : (
               displayed.map(b => (

@@ -17,28 +17,6 @@ import {
   fetchBackendTransactions
 } from '@/lib/bookingsService'
 
-const INIT_TRANSACTIONS = [
-  { id: 'TXN-001', customer: 'Ana Reyes',     provider: 'Maria Santos', service: 'Home Cleaning',    gross: 1100, fee: 110, net: 990,  date: '2026-09-05', status: 'successful' },
-  { id: 'TXN-002', customer: 'Marco Lopez',   provider: 'TechRent PH',  service: 'Laptop Rental',    gross: 880,  fee: 88,  net: 792,  date: '2026-09-04', status: 'successful' },
-  { id: 'TXN-003', customer: 'Grace Tan',     provider: 'Events Pro',   service: 'Sound System',     gross: 3850, fee: 385, net: 3465, date: '2026-09-03', status: 'pending' },
-  { id: 'TXN-004', customer: 'Rico Santos',   provider: 'LensHub PH',   service: 'Camera Rental',    gross: 660,  fee: 66,  net: 594,  date: '2026-09-02', status: 'refunded' },
-  { id: 'TXN-005', customer: 'Joy DC',        provider: 'Maria Santos', service: 'Deep Cleaning',    gross: 1320, fee: 132, net: 1188, date: '2026-09-01', status: 'successful' },
-  { id: 'TXN-006', customer: 'Ben Aguilar',   provider: 'MotoRent',     service: 'Motorcycle',       gross: 800,  fee: 80,  net: 720,  date: '2026-08-31', status: 'failed' },
-  { id: 'TXN-007', customer: 'Carlo Mendoza', provider: 'Fix-It Crew',  service: 'AC Repair',        gross: 750,  fee: 75,  net: 675,  date: '2026-08-30', status: 'successful' },
-  { id: 'TXN-008', customer: 'Elena Gomez',   provider: 'Lutong Sugbo', service: 'Catering Service', gross: 2500, fee: 250, net: 2250, date: '2026-08-29', status: 'successful' },
-  { id: 'TXN-009', customer: 'David Lim',     provider: 'PowerPro Cebu',service: 'Generator Rental', gross: 1200, fee: 120, net: 1080, date: '2026-08-28', status: 'pending' },
-  { id: 'TXN-010', customer: 'Sophia Sy',     provider: 'SkyView PH',   service: 'Drone Kit',        gross: 1100, fee: 110, net: 990,  date: '2026-08-27', status: 'successful' },
-]
-
-const WITHDRAWALS = [
-  { id: 'WD-001', provider: 'Maria Santos', method: 'GCash', amount: 3500,  requested: '2026-09-06', status: 'pending_review' },
-  { id: 'WD-002', provider: 'TechRent PH',  method: 'Maya',  amount: 7800,  requested: '2026-09-05', status: 'verified' },
-  { id: 'WD-003', provider: 'Events Pro',   method: 'BDO',   amount: 12000, requested: '2026-09-04', status: 'approved' },
-  { id: 'WD-004', provider: 'LensHub PH',   method: 'GCash', amount: 2100,  requested: '2026-09-03', status: 'processing' },
-  { id: 'WD-005', provider: 'Engr. Cruz',   method: 'BPI',   amount: 4500,  requested: '2026-09-02', status: 'completed' },
-  { id: 'WD-006', provider: 'MotoRent',     method: 'GCash', amount: 1800,  requested: '2026-09-01', status: 'rejected' },
-]
-
 const WITHDRAWAL_FLOW = ['pending_review', 'verified', 'approved', 'processing', 'completed']
 const wdVariant = s => ({ pending_review: 'warning', verified: 'info', approved: 'brand', processing: 'info', completed: 'success', rejected: 'danger' }[s] ?? 'neutral')
 
@@ -58,8 +36,9 @@ export default function AdminFinancials() {
           ids.add(b.id)
         }
       }
-      if (merged.length > 0) {
-        return merged.map(b => ({
+      return merged
+        .filter(b => b && b.id && !/^TXN-00\d$/.test(b.id))
+        .map(b => ({
           id: b.id,
           customer: b.customer || 'Customer',
           provider: b.provider || 'Provider',
@@ -70,19 +49,18 @@ export default function AdminFinancials() {
           date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
           status: b.status === 'completed' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
         }))
-      }
     } catch {}
-    return INIT_TRANSACTIONS
+    return []
   }
 
   const loadWithdrawalsLocal = () => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
-      if (Array.isArray(stored) && stored.length > 0) {
-        return stored
+      if (Array.isArray(stored)) {
+        return stored.filter(w => w && w.id && !/^WD-00[1-6]$/.test(w.id))
       }
     } catch {}
-    return WITHDRAWALS
+    return []
   }
 
   const [transactions, setTransactions] = useState(loadTransactionsLocal)
@@ -97,16 +75,16 @@ export default function AdminFinancials() {
       try {
         // Transactions from backend
         const txns = await fetchBackendTransactions()
-        if (Array.isArray(txns) && txns.length > 0) {
-          setTransactions(txns)
+        if (Array.isArray(txns)) {
+          setTransactions(txns.filter(t => !/^TXN-00\d$/.test(t.id)))
         } else {
           setTransactions(loadTransactionsLocal())
         }
 
         // Withdrawals from backend
         const wds = await fetchBackendWithdrawals()
-        if (Array.isArray(wds) && wds.length > 0) {
-          setWithdrawals(wds)
+        if (Array.isArray(wds)) {
+          setWithdrawals(wds.filter(w => !/^WD-00[1-6]$/.test(w.id)))
         } else {
           setWithdrawals(loadWithdrawalsLocal())
         }
@@ -236,7 +214,15 @@ export default function AdminFinancials() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {displayedTxns.map(t => (
+                {displayedTxns.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="p-14 text-center text-gray-400">
+                      <p className="text-3xl mb-2">📊</p>
+                      <p className="font-semibold text-gray-600 text-sm">No transactions yet</p>
+                      <p className="text-xs text-gray-400 mt-1">Completed customer bookings will appear here automatically.</p>
+                    </td>
+                  </tr>
+                ) : displayedTxns.map(t => (
                   <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                     <td className="p-4 font-mono text-xs text-gray-500 font-semibold">{t.id}</td>
                     <td className="p-4 font-medium text-gray-900">{t.customer}</td>
@@ -288,7 +274,15 @@ export default function AdminFinancials() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {withdrawals.map(w => {
+              {withdrawals.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-14 text-center text-gray-400">
+                    <p className="text-3xl mb-2">💸</p>
+                    <p className="font-semibold text-gray-600 text-sm">No withdrawal requests</p>
+                    <p className="text-xs text-gray-400 mt-1">When providers submit withdrawal requests, they will appear here.</p>
+                  </td>
+                </tr>
+              ) : withdrawals.map(w => {
                 const next = nextStatus(w.status)
                 const actionLabel = { pending_review: 'Verify', verified: 'Approve', approved: 'Process', processing: 'Complete' }[w.status]
                 return (

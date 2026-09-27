@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
@@ -6,22 +6,8 @@ import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import toast from 'react-hot-toast'
-import { Flag, Eye, Trash2 } from 'lucide-react'
-
-const LISTINGS = [
-  { id: '1',  title: 'Home Cleaning Service',   provider: 'Maria Santos', category: 'Cleaning',   price: 500,  status: 'active',   reports: 0 },
-  { id: '2',  title: 'Laptop Rental (MacBook)', provider: 'TechRent PH',  category: 'Gadgets',    price: 800,  status: 'active',   reports: 0 },
-  { id: '3',  title: 'Sound System Rental',     provider: 'Events Pro',   category: 'Events',     price: 3500, status: 'pending',  reports: 0 },
-  { id: '4',  title: 'Motorcycle for Rent',     provider: 'MotoRent',     category: 'Vehicles',   price: 400,  status: 'active',   reports: 2 },
-  { id: '5',  title: 'DSLR Camera Rental',      provider: 'LensHub PH',   category: 'Gadgets',    price: 600,  status: 'active',   reports: 1 },
-  { id: '6',  title: 'Studio Unit for Rent',    provider: 'Urban Living', category: 'Properties', price: 7500, status: 'inactive', reports: 0 },
-  { id: '7',  title: 'Catering Services',       provider: 'Lutong Pinoy', category: 'Services',   price: 250,  status: 'pending',  reports: 0 },
-  { id: '8',  title: 'Suspicious Item Listing', provider: 'Unknown Shop', category: 'Rental',     price: 99,   status: 'active',   reports: 5 },
-  { id: '9',  title: 'Aircon Cleaning & Repair',provider: 'CoolAir Cebu', category: 'Repairs',    price: 450,  status: 'active',   reports: 0 },
-  { id: '10', title: 'Generator 3500W Rental',  provider: 'PowerPro Cebu',category: 'Equipment',  price: 1200, status: 'active',   reports: 0 },
-  { id: '11', title: 'Deep Carpet Shampooing',  provider: 'CleanCare PH', category: 'Cleaning',   price: 700,  status: 'active',   reports: 0 },
-  { id: '12', title: 'Drone 4K Video Kit',      provider: 'SkyView PH',   category: 'Gadgets',    price: 1100, status: 'pending',  reports: 0 },
-]
+import { Flag, Eye, Trash2, RefreshCw } from 'lucide-react'
+import { fetchAdminBackendListings, deleteListingBackend, updateListingStatus } from '@/lib/listingsService'
 
 const MOCK_REPORTS = [
   { id: 'r1', reporter: 'Ana Reyes', reason: 'Misleading description', date: '2026-09-05' },
@@ -52,16 +38,46 @@ const CAT_COLOR = {
 export default function AdminListings() {
   const [tab, setTab]         = useState('all')
   const [page, setPage]       = useState(1)
-  const [listings, setListings] = useState(LISTINGS)
+  const [listings, setListings] = useState([])
+  const [loading, setLoading] = useState(true)
   const [reportsModal, setReportsModal] = useState(null)
   const [viewListing, setViewListing]   = useState(null)
 
   const PAGE_SIZE = 6
   const isDefaultAll = tab === 'all'
 
+  const loadListings = async (silent = false) => {
+    if (!silent) setLoading(true)
+    try {
+      const real = await fetchAdminBackendListings()
+      setListings(Array.isArray(real) ? real.map(l => ({
+        ...l,
+        category: l.category || l.subCategory || 'General',
+        reports: l.reports || 0,
+      })) : [])
+    } catch (err) {
+      console.warn('AdminListings load error:', err)
+    } finally {
+      if (!silent) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadListings()
+    const handle = () => loadListings(true)
+    window.addEventListener('serviceq_listings_updated', handle)
+    window.addEventListener('storage', handle)
+    const poll = setInterval(() => loadListings(true), 8000)
+    return () => {
+      clearInterval(poll)
+      window.removeEventListener('serviceq_listings_updated', handle)
+      window.removeEventListener('storage', handle)
+    }
+  }, [])
+
   const visible = listings.filter(l => {
     if (tab === 'all')      return true
-    if (tab === 'reported') return l.reports > 0
+    if (tab === 'reported') return (l.reports || 0) > 0
     return l.status === tab
   })
 
@@ -71,12 +87,13 @@ export default function AdminListings() {
 
   const handleTabChange = newTab => { setTab(newTab); setPage(1) }
 
-  const action = (id, newStatus) => {
+  const action = async (id, newStatus) => {
     setListings(prev => prev.map(l => l.id === id ? { ...l, status: newStatus } : l))
+    await updateListingStatus(id, newStatus)
     toast.success(`Listing ${newStatus}`)
   }
 
-  const remove = id => {
+  const remove = async id => {
     const listing = listings.find(l => l.id === id)
     if (listing) {
       try {
@@ -96,17 +113,28 @@ export default function AdminListings() {
       } catch {}
     }
     setListings(prev => prev.filter(l => l.id !== id))
+    await deleteListingBackend(id)
     toast.success('Listing deleted and logged to Audit Log')
   }
+
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Listing Moderation</h1>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {listings.length} total listings · {listings.filter(l => l.reports > 0).length} reported · {listings.filter(l => l.status === 'pending').length} pending review
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Listing Moderation</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {listings.length} total listings · {listings.filter(l => (l.reports || 0) > 0).length} reported · {listings.filter(l => l.status === 'pending').length} pending review
+          </p>
+        </div>
+        <button
+          onClick={() => loadListings()}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-semibold rounded-xl transition shadow-xs"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
       </div>
 
       <Tabs
@@ -115,7 +143,7 @@ export default function AdminListings() {
           count: t.id === 'all'
             ? listings.length
             : t.id === 'reported'
-            ? listings.filter(l => l.reports > 0).length
+            ? listings.filter(l => (l.reports || 0) > 0).length
             : listings.filter(l => l.status === t.id).length,
         }))}
         active={tab}
@@ -136,11 +164,22 @@ export default function AdminListings() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {visible.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="p-12 text-center text-gray-400">
+                  <p className="text-sm">Loading listings from backend…</p>
+                </td>
+              </tr>
+            ) : visible.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-12 text-center text-gray-400">
                   <p className="text-3xl mb-2">📭</p>
-                  <p className="text-sm">No listings in this category</p>
+                  <p className="font-semibold text-gray-600 text-sm">
+                    {tab === 'all' ? 'No provider listings yet.' : `No ${tab} listings.`}
+                  </p>
+                  {tab === 'all' && (
+                    <p className="text-xs text-gray-400 mt-1">Provider listings will appear here once providers publish their services.</p>
+                  )}
                 </td>
               </tr>
             ) : (

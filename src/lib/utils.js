@@ -45,8 +45,8 @@ export function statusVariant(status) {
   const map = {
     pending:   'warning',
     scheduled: 'info',
-    active:    'success',
-    completed: 'neutral',
+    active:    'info',
+    completed: 'success',
     cancelled: 'danger',
     approved:  'success',
     rejected:  'danger',

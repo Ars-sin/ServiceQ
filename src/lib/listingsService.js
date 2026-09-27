@@ -117,7 +117,7 @@ export function loadCachedListings() {
  * Asynchronously fetches and merges listings from Supabase backend
  * (both the `listings` table and `platform_settings` global catalog).
  */
-export async function fetchBackendListings() {
+export async function fetchBackendListings(includeBase = true) {
   const seenIds = new Set()
   const backendItems = []
 
@@ -179,12 +179,33 @@ export async function fetchBackendListings() {
     }
   } catch {}
 
-  // 4. Fill in Base Listings
-  for (const item of BASE_LISTINGS) {
-    const norm = normalizeListing(item)
-    if (norm && !seenIds.has(norm.id)) {
-      seenIds.add(norm.id)
-      backendItems.push(norm)
+  // 4. Also check provider-scoped listings in localStorage
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('serviceq_provider_listings_')) {
+        const pList = JSON.parse(localStorage.getItem(key)) || []
+        if (Array.isArray(pList)) {
+          for (const item of pList) {
+            const norm = normalizeListing(item)
+            if (norm && !seenIds.has(norm.id) && norm.status !== 'archived') {
+              seenIds.add(norm.id)
+              backendItems.push(norm)
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 5. Fill in Base Listings only if requested (for customer browse)
+  if (includeBase) {
+    for (const item of BASE_LISTINGS) {
+      const norm = normalizeListing(item)
+      if (norm && !seenIds.has(norm.id)) {
+        seenIds.add(norm.id)
+        backendItems.push(norm)
+      }
     }
   }
 
@@ -195,6 +216,14 @@ export async function fetchBackendListings() {
   } catch {}
 
   return backendItems
+}
+
+/**
+ * Fetches strictly real listings from backend for Admin Listing Moderation.
+ * Excludes all default mock items.
+ */
+export async function fetchAdminBackendListings() {
+  return fetchBackendListings(false)
 }
 
 /**
@@ -395,6 +424,7 @@ export async function saveProviderListing(rawListing, userId) {
  * Toggles or updates status of a listing (e.g. active <-> inactive).
  */
 export async function updateListingStatus(listingId, newStatus, userId) {
+  const strId = String(listingId)
   const pUserId = userId || 'anonymous_provider'
   const localKey = `serviceq_provider_listings_${pUserId}`
 
@@ -403,26 +433,102 @@ export async function updateListingStatus(listingId, newStatus, userId) {
     currentListings = JSON.parse(localStorage.getItem(localKey)) || []
   } catch {}
 
-  const target = currentListings.find(l => String(l.id) === String(listingId))
+  const target = currentListings.find(l => String(l.id) === strId)
   if (target) {
     target.status = newStatus
     target.updatedAt = new Date().toISOString()
     return saveProviderListing(target, pUserId)
   }
 
-  // If not found in provider-scoped list, check custom listings
+  // Check custom listings
   let customListings = []
   try {
     customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
   } catch {}
-  const customTarget = customListings.find(l => String(l.id) === String(listingId))
+  const customTarget = customListings.find(l => String(l.id) === strId)
   if (customTarget) {
     customTarget.status = newStatus
     customTarget.updatedAt = new Date().toISOString()
     return saveProviderListing(customTarget, pUserId)
   }
 
+  // Update directly in Supabase platform_settings
+  try {
+    const { data: globalRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_LISTINGS_KEY)
+      .maybeSingle()
+
+    if (globalRow?.value) {
+      const list = JSON.parse(globalRow.value) || []
+      const found = list.find(l => String(l.id) === strId)
+      if (found) {
+        found.status = newStatus
+        found.updatedAt = new Date().toISOString()
+        await supabase.from('platform_settings').upsert({
+          key: GLOBAL_LISTINGS_KEY,
+          value: JSON.stringify(list),
+          updated_at: new Date().toISOString()
+        })
+        window.dispatchEvent(new Event('serviceq_listings_updated'))
+        return true
+      }
+    }
+  } catch (err) {
+    console.warn('updateListingStatus Supabase error:', err)
+  }
+
   return false
+}
+
+/**
+ * Deletes a listing from local cache and Supabase platform_settings.
+ */
+export async function deleteListingBackend(listingId) {
+  const strId = String(listingId)
+
+  // 1. Remove from custom listings
+  try {
+    const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+    localStorage.setItem('serviceq_custom_listings', JSON.stringify(custom.filter(l => String(l.id) !== strId)))
+  } catch {}
+
+  // 2. Remove from provider-scoped localStorage
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('serviceq_provider_listings_')) {
+        const list = JSON.parse(localStorage.getItem(key)) || []
+        localStorage.setItem(key, JSON.stringify(list.filter(l => String(l.id) !== strId)))
+      }
+    }
+  } catch {}
+
+  window.dispatchEvent(new Event('serviceq_listings_updated'))
+
+  // 3. Remove from Supabase platform_settings
+  try {
+    const { data: globalRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_LISTINGS_KEY)
+      .maybeSingle()
+
+    if (globalRow?.value) {
+      const parsed = JSON.parse(globalRow.value) || []
+      const filtered = parsed.filter(l => String(l.id) !== strId)
+      await supabase.from('platform_settings').upsert({
+        key: GLOBAL_LISTINGS_KEY,
+        value: JSON.stringify(filtered),
+        updated_at: new Date().toISOString()
+      })
+    }
+  } catch (err) {
+    console.warn('deleteListingBackend Supabase error:', err)
+  }
+
+  return true
 }
 
 /**

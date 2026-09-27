@@ -387,6 +387,8 @@ export async function fetchProviderBookings(userId, providerName) {
  * Updates a booking's status across local storage and Supabase backend.
  */
 export async function updateBookingStatusBackend(bookingId, newStatus, userId) {
+  let resolvedProviderId = userId || null
+
   // 1. Update local storage
   const keys = ['serviceq_all_bookings', 'serviceq_customer_bookings', 'serviceq_provider_bookings']
   if (userId) keys.push(`serviceq_provider_bookings_${userId}`)
@@ -394,12 +396,35 @@ export async function updateBookingStatusBackend(bookingId, newStatus, userId) {
   for (const k of keys) {
     try {
       const list = JSON.parse(localStorage.getItem(k)) || []
-      const updated = list.map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
+      const updated = list.map(b => {
+        if (b.id === bookingId) {
+          if (!resolvedProviderId && b.providerId) resolvedProviderId = b.providerId
+          return { ...b, status: newStatus }
+        }
+        return b
+      })
       localStorage.setItem(k, JSON.stringify(updated))
     } catch {}
   }
 
+  // Also update provider-specific storage if resolved
+  if (resolvedProviderId && resolvedProviderId !== userId) {
+    try {
+      const pKey = `serviceq_provider_bookings_${resolvedProviderId}`
+      const pList = JSON.parse(localStorage.getItem(pKey)) || []
+      const updated = pList.map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
+      localStorage.setItem(pKey, JSON.stringify(updated))
+    } catch {}
+  }
+
   window.dispatchEvent(new Event('serviceq_bookings_updated'))
+  window.dispatchEvent(new Event('storage'))
+
+  try {
+    const bc = new BroadcastChannel('serviceq_bookings')
+    bc.postMessage({ event: 'booking_status_updated', bookingId, status: newStatus })
+    bc.close()
+  } catch {}
 
   // 2. Update Supabase platform_settings
   try {
@@ -412,7 +437,13 @@ export async function updateBookingStatusBackend(bookingId, newStatus, userId) {
 
     if (gRow?.value) {
       const list = JSON.parse(gRow.value) || []
-      const updated = list.map(b => b.id === bookingId ? { ...b, status: newStatus } : b)
+      const updated = list.map(b => {
+        if (b.id === bookingId) {
+          if (!resolvedProviderId && b.providerId) resolvedProviderId = b.providerId
+          return { ...b, status: newStatus }
+        }
+        return b
+      })
       await supabase.from('platform_settings').upsert({
         key: GLOBAL_BOOKINGS_KEY,
         value: JSON.stringify(updated),
@@ -420,9 +451,9 @@ export async function updateBookingStatusBackend(bookingId, newStatus, userId) {
       })
     }
 
-    // Provider bookings
-    if (userId) {
-      const provKey = `serviceq_provider_bookings_${userId}`
+    // Provider bookings in Supabase
+    if (resolvedProviderId) {
+      const provKey = `serviceq_provider_bookings_${resolvedProviderId}`
       const { data: pRow } = await supabase
         .from('platform_settings')
         .select('value')
@@ -602,7 +633,7 @@ export async function fetchBackendWithdrawals(userId) {
   const merge = (arr) => {
     if (!Array.isArray(arr)) return
     for (const w of arr) {
-      if (w?.id && !seen.has(w.id)) {
+      if (w?.id && !seen.has(w.id) && !/^WD-00[1-6]$/.test(w.id)) {
         seen.add(w.id)
         combined.push(w)
       }
@@ -868,7 +899,7 @@ export async function fetchBackendTransactions() {
   const merge = (arr) => {
     if (!Array.isArray(arr)) return
     for (const b of arr) {
-      if (b?.id && !seen.has(b.id)) {
+      if (b?.id && !seen.has(b.id) && !/^TXN-00\d$/.test(b.id)) {
         seen.add(b.id)
         combined.push({
           id: b.id,
@@ -911,4 +942,66 @@ export async function fetchBackendTransactions() {
   combined.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
   return combined
 }
+
+const MOCK_ADMIN_BOOKING_IDS = new Set([
+  'SQ-A1B2', 'SQ-C3D4', 'SQ-E5F6', 'SQ-G7H8', 'SQ-I9J0',
+  'SQ-K1L2', 'SQ-M3N4', 'SQ-O5P6', 'SQ-Q7R8', 'SQ-S9T0'
+])
+
+/**
+ * Fetches all real bookings for Admin Bookings management console.
+ * Strictly excludes any default/mock bookings.
+ */
+export async function fetchBackendBookings() {
+  const seen = new Set()
+  const combined = []
+
+  const merge = (arr) => {
+    if (!Array.isArray(arr)) return
+    for (const b of arr) {
+      if (b?.id && !seen.has(b.id) && !MOCK_ADMIN_BOOKING_IDS.has(b.id)) {
+        seen.add(b.id)
+        combined.push({
+          id: b.id,
+          customer: b.customer || 'Customer',
+          provider: b.provider || 'Provider',
+          service: b.service || b.title || 'Service',
+          date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
+          amount: Number(b.amount) || Number(b.subtotal) || 0,
+          status: b.status || 'pending',
+          dispute: Boolean(b.dispute),
+          createdAt: b.createdAt || new Date().toISOString(),
+          paymentMethod: b.paymentMethod || 'Maya',
+          sessions: b.sessions || 1,
+        })
+      }
+    }
+  }
+
+  // 1. Read local storage
+  try {
+    merge(JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [])
+    merge(JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [])
+  } catch {}
+
+  // 2. Fetch Supabase platform_settings
+  try {
+    const { data: gRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_BOOKINGS_KEY)
+      .maybeSingle()
+
+    if (gRow?.value) {
+      const gList = JSON.parse(gRow.value) || []
+      merge(gList)
+    }
+  } catch (err) {
+    console.warn('fetchBackendBookings Supabase fetch error:', err)
+  }
+
+  combined.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
+  return combined
+}
+
 
