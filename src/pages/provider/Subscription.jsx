@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle, Zap, Eye, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import { SUBSCRIPTION_TIERS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
+import { useAuth } from '@/contexts/AuthContext'
 
 const FEATURES = [
   { label: 'Active Listings',      free: '3',   basic: '10',  premium: '50' },
@@ -15,12 +16,51 @@ const FEATURES = [
   { label: 'Custom Profile Badge', free: '✗',   basic: '✗',   premium: '✓' },
 ]
 
-const CURRENT_TIER = 'free'
-const LISTINGS_USED = 2
-
 export default function ProviderSubscription() {
+  const { user, profile } = useAuth()
   const [previewPlan, setPreviewPlan] = useState(null)
-  const current = SUBSCRIPTION_TIERS[CURRENT_TIER.toUpperCase()]
+  const [currentTier, setCurrentTier] = useState('free')
+  const [listingsCount, setListingsCount] = useState(0)
+
+  useEffect(() => {
+    // Dynamically calculate actual listing count for this provider
+    let count = 0
+    if (user?.id) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`))
+        if (Array.isArray(stored)) {
+          count = stored.filter(l => l.status !== 'archived').length
+        }
+      } catch {}
+    }
+    if (count === 0) {
+      try {
+        const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+        const mine = custom.filter(l => l.providerId === user?.id || (profile?.full_name && l.provider === profile.full_name))
+        if (mine.length > 0) count = mine.length
+      } catch {}
+    }
+    setListingsCount(count)
+
+    // Load active subscription tier
+    try {
+      const savedTier = localStorage.getItem(`serviceq_provider_tier_${user?.id}`)
+      if (savedTier && SUBSCRIPTION_TIERS[savedTier.toUpperCase()]) {
+        setCurrentTier(savedTier)
+      }
+    } catch {}
+  }, [user?.id, profile?.full_name])
+
+  const current = SUBSCRIPTION_TIERS[currentTier.toUpperCase()] || SUBSCRIPTION_TIERS.FREE
+
+  const handleUpgradeTier = (tier) => {
+    setCurrentTier(tier.id)
+    if (user?.id) {
+      localStorage.setItem(`serviceq_provider_tier_${user.id}`, tier.id)
+    }
+    toast.success(`Subscribed to ${tier.label} Plan! 🎉`)
+    setPreviewPlan(null)
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-8 w-full">
@@ -38,19 +78,19 @@ export default function ProviderSubscription() {
           </div>
         </div>
         <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="text-gray-600">Listings used: {LISTINGS_USED} / {current.maxListings}</span>
-          <span className="text-gray-500">{Math.round((LISTINGS_USED / current.maxListings) * 100)}%</span>
+          <span className="text-gray-600">Listings used: {listingsCount} / {current.maxListings}</span>
+          <span className="text-gray-500">{Math.round((listingsCount / current.maxListings) * 100)}%</span>
         </div>
         <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
           <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all"
-            style={{ width: `${(LISTINGS_USED / current.maxListings) * 100}%` }} />
+            style={{ width: `${Math.min(100, Math.round((listingsCount / current.maxListings) * 100))}%` }} />
         </div>
       </div>
 
       {/* Plan cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {Object.values(SUBSCRIPTION_TIERS).map(tier => {
-          const isActive = tier.id === CURRENT_TIER
+          const isActive = tier.id === currentTier
           return (
             <div
               key={tier.id}
@@ -104,7 +144,7 @@ export default function ProviderSubscription() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => toast.success(`Upgraded to ${tier.label}! 🎉`)}
+                    onClick={() => handleUpgradeTier(tier)}
                     className="w-full py-2.5 px-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm text-center shadow-sm transition-all flex items-center justify-center gap-1.5"
                   >
                     <Zap size={14} /> Upgrade to {tier.label}
@@ -206,13 +246,10 @@ export default function ProviderSubscription() {
               >
                 Close Preview
               </button>
-              {previewPlan.id !== CURRENT_TIER && (
+              {previewPlan.id !== currentTier && (
                 <button
                   type="button"
-                  onClick={() => {
-                    toast.success(`Subscribed to ${previewPlan.label} Plan! 🎉`)
-                    setPreviewPlan(null)
-                  }}
+                  onClick={() => handleUpgradeTier(previewPlan)}
                   className="btn-primary flex-1 text-xs font-bold"
                 >
                   <Zap size={14} className="mr-1" /> Subscribe Now

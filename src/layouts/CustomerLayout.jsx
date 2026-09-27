@@ -38,6 +38,13 @@ export default function CustomerLayout() {
     }
   }, [profile])
 
+  // Redirect providers if they attempt to enter customer portal
+  useEffect(() => {
+    if (role === 'provider') {
+      navigate('/provider/dashboard', { replace: true })
+    }
+  }, [role, navigate])
+
   // U2: Maintenance mode — redirect non-admins
   useEffect(() => {
     const maintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'

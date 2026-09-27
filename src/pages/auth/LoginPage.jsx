@@ -156,6 +156,23 @@ export default function LoginPage() {
       }
 
       const userRole = profile.role || 'customer'
+
+      // Strict Role Boundary: Prevent provider from logging in under customer tab and vice versa
+      if (loginRole === 'customer' && userRole === 'provider') {
+        await supabase.auth.signOut()
+        localStorage.removeItem('serviceq_auth_profile')
+        toast.error('This account is registered as a Provider. Please use the Provider tab to sign in.')
+        setLoginRole('provider')
+        return
+      }
+      if (loginRole === 'provider' && userRole === 'customer') {
+        await supabase.auth.signOut()
+        localStorage.removeItem('serviceq_auth_profile')
+        toast.error('This account is registered as a Customer. Please use the Customer tab to sign in.')
+        setLoginRole('customer')
+        return
+      }
+
       const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
       if (isMaintenance && userRole !== 'admin') {
         navigate('/maintenance', { replace: true })

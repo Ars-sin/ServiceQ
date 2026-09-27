@@ -117,7 +117,20 @@ export default function AdminUsers() {
         localStorage.setItem('serviceq_audit_log', JSON.stringify([entry, ...existing]))
       } catch {}
 
-      // 3. Update local state
+      // 3. Clear user caches
+      try {
+        if (userToDelete.email) {
+          localStorage.removeItem(`serviceq_provider_profile_email_${userToDelete.email.toLowerCase()}`)
+        }
+        if (userToDelete.id) {
+          localStorage.removeItem(`serviceq_provider_profile_${userToDelete.id}`)
+          localStorage.removeItem(`serviceq_provider_listings_${userToDelete.id}`)
+          localStorage.removeItem(`serviceq_provider_avatar_${userToDelete.id}`)
+          localStorage.removeItem(`provider_verified_${userToDelete.id}`)
+        }
+      } catch {}
+
+      // 4. Update local state
       setUsers(prev => prev.filter(u => u.id !== userToDelete.id))
       toast.success(`User "${userToDelete.name}" deleted successfully`)
 

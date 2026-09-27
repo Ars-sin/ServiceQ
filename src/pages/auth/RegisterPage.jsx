@@ -390,7 +390,46 @@ export default function RegisterPage() {
         },
       })
 
-      if (error) throw error
+      if (error) {
+        const isAlreadyRegistered = error.message?.toLowerCase().includes('already registered') ||
+                                    error.message?.toLowerCase().includes('already in use') ||
+                                    error.message?.toLowerCase().includes('user_already_exists')
+
+        if (isAlreadyRegistered) {
+          // Check if profile exists in profiles table
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('id, role, is_active')
+            .ilike('email', form.email.trim())
+            .maybeSingle()
+
+          // If a profile DOES exist, they are truly already registered
+          if (existingProfile && existingProfile.id) {
+            throw new Error(`This email is already registered as a ${existingProfile.role || 'user'}. Please sign in instead.`)
+          }
+
+          // If NO profile exists in profiles table, this was a DELETED user account!
+          // Recover/re-register them by triggering OTP verification
+          const otpRes = await supabase.auth.signInWithOtp({
+            email: form.email.trim(),
+            options: {
+              data: {
+                full_name: resolvedFullName,
+                role: role || 'customer',
+              }
+            }
+          })
+          if (otpRes.error) {
+            const resendRes = await supabase.auth.resend({
+              type: 'signup',
+              email: form.email.trim(),
+            })
+            if (resendRes.error) throw otpRes.error
+          }
+        } else {
+          throw error
+        }
+      }
 
       // Cache provider registration details so Provider Profile immediately reflects them (Slide 39)
       if (role === 'provider') {
@@ -511,6 +550,73 @@ export default function RegisterPage() {
       }
 
       if (verifyResult.error) throw verifyResult.error
+
+      const verifiedUser = verifyResult.data?.user
+      if (verifiedUser?.id) {
+        if (form.password) {
+          try {
+            await supabase.auth.updateUser({ password: form.password })
+          } catch {}
+        }
+
+        const resolvedFullName = getFullName()
+        const resolvedBusinessName = role === 'provider'
+          ? (isFreelancer ? resolvedFullName : (providerDetails.businessName.trim() || resolvedFullName))
+          : null
+        const resolvedCategory = role === 'provider'
+          ? (providerDetails.category === 'Other Local Service / Rental' && customCategory.trim()
+              ? `Other: ${customCategory.trim()}`
+              : providerDetails.category)
+          : null
+        const coverageList = providerDetails.serviceCoverage.map(c =>
+          c === 'Other Location in Cebu' && otherCoverageText.trim() ? otherCoverageText.trim() : c
+        )
+
+        const providerMetadata = role === 'provider' ? {
+          business_name: resolvedBusinessName,
+          category: resolvedCategory,
+          provider_type: resolvedCategory,
+          years_experience: providerDetails.yearsExp || 'Less than a year',
+          service_area: coverageList.join(', ') || (location.city ? `${location.city}, Metro Cebu` : 'Cebu City, Metro Cebu'),
+          status: 'under_verification',
+          payout_method: '',
+          payout_account_name: '',
+          payout_account_number: '',
+          payout_bank_name: '',
+        } : null
+
+        await supabase
+          .from('profiles')
+          .upsert({
+            id:          verifiedUser.id,
+            email:       cleanEmail,
+            full_name:   resolvedFullName,
+            phone:       form.phone.replace(/\D/g, ''),
+            role:        role || 'customer',
+            address:     location.address,
+            barangay:    location.barangay,
+            city:        location.city,
+            province:    location.province,
+            postal_code: location.postalCode,
+            avatar_url:  providerMetadata ? JSON.stringify(providerMetadata) : null,
+            is_active:   true,
+          }, { onConflict: 'id' })
+
+        if (role === 'provider') {
+          try {
+            await supabase.from('providers').upsert({
+              user_id: verifiedUser.id,
+              business_name: resolvedBusinessName,
+              business_description: `Category: ${resolvedCategory} | ${providerDetails.yearsExp} experience`,
+              provider_type: [providerDetails.providerType || 'service'],
+              years_experience: providerDetails.yearsExp === 'Less than a year' ? 0 : (parseInt(providerDetails.yearsExp) || 1),
+              service_area: coverageList.join(', ') || location.city || 'Cebu',
+              kyc_status: 'under_verification',
+              provider_status: 'active',
+            }, { onConflict: 'user_id' })
+          } catch {}
+        }
+      }
 
       toast.success('Email verified successfully! Welcome to ServiceQ 🎉', { id: 'welcome-toast' })
 

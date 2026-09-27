@@ -81,12 +81,54 @@ export default function ProviderProfile() {
     payoutBankName: '',
   })
 
+  const [avatarPhoto, setAvatarPhoto] = useState(() => {
+    try {
+      return localStorage.getItem(`serviceq_provider_avatar_${user?.id}`) || null
+    } catch {
+      return null
+    }
+  })
+
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      return toast.error('Please select an image file (PNG, JPG, JPEG)')
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return toast.error('Image must be under 5MB')
+    }
+
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result
+      if (!dataUrl) return
+      setAvatarPhoto(dataUrl)
+      if (user?.id) {
+        try {
+          localStorage.setItem(`serviceq_provider_avatar_${user.id}`, dataUrl)
+          window.dispatchEvent(new Event('serviceq_provider_avatar_updated'))
+        } catch {}
+      }
+      toast.success('Profile photo updated successfully!')
+    }
+    reader.readAsDataURL(file)
+  }
 
   // ─── Fetch real provider data from backend & registration caches ─────────
   const fetchProviderData = async () => {
     if (!user?.id) return
     setLoading(true)
+
+    // Load saved avatar photo if available
+    try {
+      const savedPhoto = localStorage.getItem(`serviceq_provider_avatar_${user.id}`)
+      if (savedPhoto) setAvatarPhoto(savedPhoto)
+    } catch {}
 
     try {
       // 1. Fetch fresh profile from Supabase
@@ -379,8 +421,12 @@ export default function ProviderProfile() {
       {/* ── Provider Avatar & Top Identity Card ───────────────────────── */}
       <div className="card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-gray-200/80 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-800 font-black text-3xl shadow-sm border border-emerald-200">
-            {getInitials(form.businessName || form.fullName || 'PR')}
+          <div className="w-20 h-20 rounded-2xl overflow-hidden bg-emerald-100 flex items-center justify-center text-emerald-800 font-black text-3xl shadow-sm border border-emerald-200 flex-shrink-0">
+            {avatarPhoto ? (
+              <img src={avatarPhoto} alt="Provider avatar" className="w-full h-full object-cover" />
+            ) : (
+              getInitials(form.businessName || form.fullName || 'PR')
+            )}
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -412,13 +458,13 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        <label className="btn-secondary btn-sm gap-1.5 cursor-pointer text-xs self-end sm:self-auto">
+        <label className="btn-secondary btn-sm gap-1.5 cursor-pointer text-xs self-end sm:self-auto hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition-colors">
           <Upload size={13} /> Change Photo
           <input
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={() => toast.success('Photo uploaded!')}
+            onChange={handlePhotoUpload}
           />
         </label>
       </div>

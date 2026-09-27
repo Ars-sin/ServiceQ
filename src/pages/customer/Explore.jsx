@@ -130,6 +130,52 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
   )
 }
 
+export function loadAllMergedListings() {
+  const merged = []
+  const seenIds = new Set()
+
+  // 1. Load custom listings from localStorage
+  try {
+    const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+    if (Array.isArray(custom)) {
+      for (const item of custom) {
+        if (item && item.id && !seenIds.has(String(item.id)) && item.status !== 'archived') {
+          seenIds.add(String(item.id))
+          merged.push(item)
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Scan all provider-specific listing keys in localStorage
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('serviceq_provider_listings_')) {
+        const provListings = JSON.parse(localStorage.getItem(key)) || []
+        if (Array.isArray(provListings)) {
+          for (const item of provListings) {
+            if (item && item.id && !seenIds.has(String(item.id)) && item.status !== 'archived') {
+              seenIds.add(String(item.id))
+              merged.push(item)
+            }
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Fallback to default mock listings
+  for (const item of ALL_LISTINGS) {
+    if (!seenIds.has(String(item.id))) {
+      seenIds.add(String(item.id))
+      merged.push(item)
+    }
+  }
+
+  return merged
+}
+
 export default function CustomerExplore() {
   const navigate = useNavigate()
   const { profile } = useAuth()
@@ -142,28 +188,11 @@ export default function CustomerExplore() {
   const [showFilters, setShowFilters]   = useState(false)
   const [favoriteIds, setFavoriteIds]   = useState(getFavoriteIds)
 
-  const [allListings, setAllListings] = useState(() => {
-    try {
-      const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
-      if (Array.isArray(custom) && custom.length > 0) {
-        const customIds = new Set(custom.map(c => String(c.id)))
-        return [...custom, ...ALL_LISTINGS.filter(l => !customIds.has(String(l.id)))]
-      }
-    } catch {}
-    return ALL_LISTINGS
-  })
+  const [allListings, setAllListings] = useState(loadAllMergedListings)
 
   useEffect(() => {
     const handleUpdate = () => {
-      try {
-        const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
-        if (Array.isArray(custom) && custom.length > 0) {
-          const customIds = new Set(custom.map(c => String(c.id)))
-          setAllListings([...custom, ...ALL_LISTINGS.filter(l => !customIds.has(String(l.id)))])
-        } else {
-          setAllListings(ALL_LISTINGS)
-        }
-      } catch {}
+      setAllListings(loadAllMergedListings())
     }
     window.addEventListener('serviceq_listings_updated', handleUpdate)
     window.addEventListener('storage', handleUpdate)
@@ -217,9 +246,13 @@ export default function CustomerExplore() {
         if (!matchTitle && !matchSub && !matchProv) return false
       }
 
-      // Type filter: All | Services | Rentals
-      if (selectedType !== 'all' && item.type !== selectedType) {
-        return false
+      // Type filter: All | Services | Rentals (robust singular & plural matching)
+      if (selectedType !== 'all') {
+        const itemType = (item.type || '').toLowerCase()
+        const isService = itemType.startsWith('service')
+        const isRental = itemType.startsWith('rental')
+        if (selectedType === 'services' && !isService) return false
+        if (selectedType === 'rentals' && !isRental) return false
       }
 
       // Min price filter

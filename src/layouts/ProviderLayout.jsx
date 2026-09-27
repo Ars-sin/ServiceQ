@@ -32,6 +32,13 @@ export default function ProviderLayout() {
     }
   }, [profile])
 
+  // Redirect customers if they attempt to enter provider portal
+  useEffect(() => {
+    if (role === 'customer') {
+      navigate('/customer/explore', { replace: true })
+    }
+  }, [role, navigate])
+
   // Maintenance mode — redirect non-admins
   useEffect(() => {
     const maintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'

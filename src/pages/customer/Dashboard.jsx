@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MapPin, Search, Star, ChevronRight, X, Sparkles, Home, Laptop, GraduationCap, Hammer, PartyPopper, Car, Package, Utensils, Wrench } from 'lucide-react'
 import { CATEGORIES } from '@/lib/constants'
 import { formatPHP } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { loadAllMergedListings } from './Explore'
 
 const MOCK_LISTINGS = [
   { id: '1', title: 'Professional Home Cleaning', categoryId: 'cleaning', category: 'Cleaning Services', price: 500, unit: 'per session', rating: 4.8, reviews: 42, distance: '0.8 km', provider: 'Maria Santos', tag: 'Top Rated' },
@@ -95,18 +96,32 @@ export default function CustomerDashboard() {
   const { profile } = useAuth()
   const [activeCategory, setActiveCategory] = useState('all')
   const [search, setSearch] = useState('')
+  const [allListings, setAllListings] = useState(loadAllMergedListings)
 
-  // Reactive filtering
-  const filteredListings = MOCK_LISTINGS.filter(l => {
-    // Search match
+  // Reload listings whenever a provider publishes something new
+  useEffect(() => {
+    const handleUpdate = () => setAllListings(loadAllMergedListings())
+    window.addEventListener('serviceq_listings_updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('serviceq_listings_updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [])
+
+  // Reactive filtering — uses dynamic allListings instead of static MOCK_LISTINGS
+  const filteredListings = allListings.filter(l => {
     const q = search.trim().toLowerCase()
     const matchesSearch = !q ||
-      l.title.toLowerCase().includes(q) ||
-      l.category.toLowerCase().includes(q) ||
-      l.provider.toLowerCase().includes(q)
+      l.title?.toLowerCase().includes(q) ||
+      l.category?.toLowerCase().includes(q) ||
+      l.provider?.toLowerCase().includes(q)
 
-    // Category match
-    const matchesCategory = activeCategory === 'all' || l.categoryId === activeCategory
+    // Category match — try both categoryId (mock) and category/subCategory (custom)
+    const matchesCategory = activeCategory === 'all' ||
+      l.categoryId === activeCategory ||
+      l.category?.toLowerCase() === activeCategory ||
+      l.subCategory?.toLowerCase() === activeCategory
 
     return matchesSearch && matchesCategory
   })
@@ -246,7 +261,7 @@ export default function CustomerDashboard() {
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MOCK_LISTINGS.slice(0, 6).map(l => (
+              {allListings.slice(0, 6).map(l => (
                 <ListingCard key={l.id} listing={l} onClick={() => navigate(`/customer/listings/${l.id}`)} />
               ))}
             </div>
@@ -264,7 +279,7 @@ export default function CustomerDashboard() {
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {MOCK_LISTINGS.slice(6, 12).map(l => (
+              {allListings.slice(6, 12).map(l => (
                 <ListingCard key={l.id} listing={l} onClick={() => navigate(`/customer/listings/${l.id}`)} />
               ))}
             </div>
