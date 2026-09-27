@@ -680,6 +680,33 @@ export async function fetchBackendWithdrawals(userId) {
   // Sort newest first
   combined.sort((a, b) => new Date(b.requested || b.date || 0) - new Date(a.requested || a.date || 0))
 
+  // 3. Two-way sync: If combined has valid withdrawals not yet in Supabase global list, push them to Supabase
+  try {
+    const { data: checkRow } = await supabase
+      .from('platform_settings')
+      .select('value')
+      .eq('key', GLOBAL_WITHDRAWALS_KEY)
+      .maybeSingle()
+
+    let cloudList = []
+    if (checkRow?.value) {
+      try { cloudList = JSON.parse(checkRow.value) || [] } catch {}
+    }
+    const cloudIds = new Set(cloudList.map(w => w.id))
+    const missingInCloud = combined.filter(w => !cloudIds.has(w.id))
+
+    if (missingInCloud.length > 0) {
+      const mergedCloud = [...missingInCloud, ...cloudList]
+      await supabase.from('platform_settings').upsert({
+        key: GLOBAL_WITHDRAWALS_KEY,
+        value: JSON.stringify(mergedCloud),
+        updated_at: new Date().toISOString()
+      })
+    }
+  } catch (syncErr) {
+    console.warn('Two-way withdrawal sync error:', syncErr)
+  }
+
   // Cache back to local storage
   try {
     localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(combined))
