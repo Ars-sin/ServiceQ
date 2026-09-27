@@ -194,20 +194,59 @@ export default function ProviderBookings() {
           </div>
         ) : displayed.map(b => (
           <motion.div key={b.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-            className="card flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm flex-shrink-0">
-              {b.customer.split(' ').map(w => w[0]).join('')}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant={statusVariant(b.status)} className="capitalize">{b.status}</Badge>
-                <span className="text-xs font-mono text-gray-400">{b.id}</span>
+            className="card flex flex-col gap-4 border border-gray-100 shadow-xs">
+
+            {/* ── Top row: customer identity + status ── */}
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm">
+                {(b.customer || 'C').split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2)}
               </div>
-              <p className="font-semibold text-gray-900">{b.customer}</p>
-              <p className="text-sm text-gray-500">{b.service} · {b.date} {b.time} · {b.duration}</p>
-              <p className="font-bold text-brand-600 mt-1">{formatPHP(b.amount)}</p>
-              {b.payout && <Badge variant="success" className="mt-1">Payout {b.payout}</Badge>}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <Badge variant={statusVariant(b.status)} className="capitalize text-xs">{b.status}</Badge>
+                  <span className="text-[11px] font-mono text-gray-400">{b.id}</span>
+                  {b.createdAt && (
+                    <span className="text-[11px] text-gray-400">
+                      {new Date(b.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+                <p className="font-bold text-gray-900 text-base">{b.customer || 'Customer'}</p>
+                {b.customerEmail && (
+                  <p className="text-xs text-gray-500">{b.customerEmail}</p>
+                )}
+              </div>
             </div>
+
+            {/* ── Booking detail chips ── */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Service / Item</p>
+                <p className="text-xs font-semibold text-gray-800 mt-0.5 truncate">{b.service || '—'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Scheduled Date</p>
+                <p className="text-xs font-semibold text-gray-800 mt-0.5">{b.date || '—'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+                <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Sessions / Days</p>
+                <p className="text-xs font-semibold text-gray-800 mt-0.5">{b.sessions || 1} session{(b.sessions || 1) > 1 ? 's' : ''}</p>
+              </div>
+              <div className="bg-emerald-50 rounded-xl p-2.5 border border-emerald-100">
+                <p className="text-[10px] text-emerald-700 font-medium uppercase tracking-wide">Total Paid</p>
+                <p className="text-sm font-extrabold text-emerald-800 mt-0.5">{formatPHP(b.amount)}</p>
+                {b.paymentMethod && (
+                  <p className="text-[10px] text-emerald-600 font-medium uppercase mt-0.5">{b.paymentMethod}</p>
+                )}
+              </div>
+            </div>
+
+            {/* ── Net earnings info ── */}
+            <div className="flex items-center justify-between text-xs text-gray-500 border-t border-gray-50 pt-2">
+              <span>Platform fee (10%): <strong className="text-red-500">−{formatPHP(b.fee || Math.round((b.amount || 0) * 0.1))}</strong></span>
+              <span>Your earnings: <strong className="text-emerald-700">{formatPHP(b.net || Math.round((b.amount || 0) * 0.9))}</strong></span>
+            </div>
+
             <div className="flex gap-2 flex-wrap items-center">
               {b.status === 'pending' && (
                 <>

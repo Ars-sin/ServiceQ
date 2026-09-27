@@ -75,21 +75,54 @@ export default function Checkout() {
       const customerName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'
       const newBooking = {
         id: bookingId,
+        listingId: String(order.id || id),           // track which listing was booked
         service: order.title,
         provider: order.provider || 'Verified Provider',
         providerId: order.providerId || null,
         customer: customerName,
+        customerEmail: user?.email || null,
         customerId: user?.id || null,
         date: order.date || new Date().toISOString().split('T')[0],
         sessions: order.sessions || sessions,
         subtotal: order.subtotal || subtotal,
         fee: order.fee || fee,
         amount: total,
-        net: (order.subtotal || subtotal), // Provider receives net without platform fee
+        net: (order.subtotal || subtotal),
         status: 'pending',
+        paymentMethod: method,
         createdAt: new Date().toISOString(),
       }
       localStorage.setItem('serviceq_customer_bookings', JSON.stringify([newBooking, ...existing]))
+
+      // ── Increment booking counter on the listing ──────────────────
+      try {
+        const listingId = String(order.id || id)
+        // Update in custom listings store
+        const customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+        const updatedCustom = customListings.map(l =>
+          String(l.id) === listingId ? { ...l, bookings: (Number(l.bookings) || 0) + 1 } : l
+        )
+        localStorage.setItem('serviceq_custom_listings', JSON.stringify(updatedCustom))
+
+        // Update in provider-scoped listings (if providerId known)
+        if (order.providerId) {
+          const provKey = `serviceq_provider_listings_${order.providerId}`
+          const provListings = JSON.parse(localStorage.getItem(provKey)) || []
+          const updatedProv = provListings.map(l =>
+            String(l.id) === listingId ? { ...l, bookings: (Number(l.bookings) || 0) + 1 } : l
+          )
+          localStorage.setItem(provKey, JSON.stringify(updatedProv))
+        }
+
+        // Persist to a booking-count store keyed by listingId for resilience
+        const countKey = `serviceq_listing_bookings_${listingId}`
+        const prevCount = Number(localStorage.getItem(countKey) || 0)
+        localStorage.setItem(countKey, String(prevCount + 1))
+
+        window.dispatchEvent(new Event('serviceq_listings_updated'))
+      } catch {}
+
+
 
       // Save to global all bookings store
       const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []

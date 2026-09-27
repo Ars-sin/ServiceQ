@@ -80,22 +80,68 @@ export default function ProviderListings() {
     if (!user?.id) return
     let isMounted = true
 
+    // ── Helper: compute live booking counts from all booking stores ──
+    const getLiveBookingCounts = () => {
+      const counts = {} // listingId -> count
+      try {
+        // 1. From dedicated per-listing counter keys (fastest, most accurate)
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && key.startsWith('serviceq_listing_bookings_')) {
+            const lid = key.replace('serviceq_listing_bookings_', '')
+            counts[lid] = Number(localStorage.getItem(key) || 0)
+          }
+        }
+        // 2. From all bookings — count by listingId (fills gaps if counter key missing)
+        const allBk = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+        const custBk = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        const seen = new Set()
+        for (const b of [...allBk, ...custBk]) {
+          if (b.listingId && !seen.has(b.id)) {
+            seen.add(b.id)
+            counts[String(b.listingId)] = (counts[String(b.listingId)] || 0) + 1
+          }
+        }
+      } catch {}
+      return counts
+    }
+
+    const applyBookingCounts = (items) => {
+      const counts = getLiveBookingCounts()
+      return items.map(l => ({
+        ...l,
+        bookings: counts[String(l.id)] ?? l.bookings ?? 0,
+      }))
+    }
+
     // 1. Instant local read
     try {
       const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${user.id}`))
       if (Array.isArray(stored) && stored.length > 0) {
-        setListings(stored)
+        setListings(applyBookingCounts(stored))
       }
     } catch {}
 
     // 2. Live backend fetch
     fetchProviderListings(user.id).then(live => {
       if (isMounted && Array.isArray(live) && live.length > 0) {
-        setListings(live)
+        setListings(applyBookingCounts(live))
       }
     }).catch(err => console.warn('Could not load live provider listings:', err))
 
-    return () => { isMounted = false }
+    // 3. Re-apply counts when a new booking arrives
+    const handleBookingUpdate = () => {
+      setListings(prev => applyBookingCounts(prev))
+    }
+    window.addEventListener('serviceq_bookings_updated', handleBookingUpdate)
+    window.addEventListener('serviceq_listings_updated', handleBookingUpdate)
+
+    return () => {
+      isMounted = false
+      window.removeEventListener('serviceq_bookings_updated', handleBookingUpdate)
+      window.removeEventListener('serviceq_listings_updated', handleBookingUpdate)
+    }
+
   }, [user?.id])
 
   // Wizard form state
@@ -319,7 +365,16 @@ export default function ProviderListings() {
                   </td>
                   <td className="p-4 text-gray-600 text-xs">{l.type}</td>
                   <td className="p-4 font-bold text-brand-600">{formatPHP(l.price)}<span className="text-xs text-gray-400 font-normal"> {l.unit}</span></td>
-                  <td className="p-4 text-gray-600 text-xs font-semibold">{l.bookings}</td>
+                  <td className="p-4">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                      (l.bookings || 0) > 0
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        : 'bg-gray-100 text-gray-500 border border-gray-200'
+                    }`}>
+                      {l.bookings || 0}
+                      <span className="font-normal text-[10px]">{(l.bookings || 0) === 1 ? 'booking' : 'bookings'}</span>
+                    </span>
+                  </td>
                   <td className="p-4"><Badge variant={statusVariant(l.status)} className="capitalize">{l.status}</Badge></td>
                   <td className="p-4" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
@@ -689,6 +744,53 @@ export default function ProviderListings() {
               </div>
             </div>
 
+            {/* ── Recent Bookers for this listing ── */}
+            {(() => {
+              const lid = String(viewingListing.id)
+              const allBk = (() => { try { return JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [] } catch { return [] } })()
+              const custBk = (() => { try { return JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [] } catch { return [] } })()
+              const seen = new Set()
+              const recent = []
+              for (const b of [...allBk, ...custBk]) {
+                if (!seen.has(b.id) && (String(b.listingId) === lid || b.service === viewingListing.title)) {
+                  seen.add(b.id)
+                  recent.push(b)
+                }
+              }
+              recent.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+              const top5 = recent.slice(0, 5)
+              if (top5.length === 0) return null
+              return (
+                <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="bg-gray-50 px-3 py-2 border-b border-gray-100">
+                    <p className="text-xs font-bold text-gray-700">Recent Bookers ({recent.length} total)</p>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {top5.map(b => (
+                      <div key={b.id} className="flex items-center gap-3 px-3 py-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                          {(b.customer || 'C').split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 truncate">{b.customer || 'Customer'}</p>
+                          <p className="text-[10px] text-gray-400">{b.date || 'N/A'} · {b.sessions || 1} session{(b.sessions||1)>1?'s':''}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-xs font-bold text-emerald-700">{formatPHP(b.amount)}</p>
+                          <span className={`text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded-full ${
+                            b.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                            b.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                            b.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>{b.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+
             <div className="space-y-2 text-xs text-gray-600 bg-emerald-50/50 border border-emerald-100 rounded-xl p-3.5">
               <div className="flex items-center gap-2">
                 <MapPin size={14} className="text-emerald-700 flex-shrink-0" />
@@ -703,6 +805,8 @@ export default function ProviderListings() {
                 <span>Active Dates: <strong>{viewingListing.availableFrom || 'Starting immediately'}</strong> {viewingListing.availableTo ? `until ${viewingListing.availableTo}` : '(Ongoing / No expiration)'}</span>
               </div>
             </div>
+
+
 
             <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100">
               <button
