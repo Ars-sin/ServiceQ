@@ -249,7 +249,7 @@ export default function ForgotPasswordPage() {
                   <button
                     type="submit"
                     disabled={loading || !email.trim()}
-                    className="btn-primary btn-lg flex-1 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn-primary flex-1 py-3 rounded-xl font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border border-transparent"
                   >
                     {loading
                       ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

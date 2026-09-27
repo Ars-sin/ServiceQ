@@ -108,7 +108,7 @@ export default function ProviderProfile() {
       // 3. User metadata
       const meta = user.user_metadata || {}
 
-      // 4. Local storage caches from registration
+      // 4. Local storage caches from registration (scoped strictly to user.id or user.email)
       let localCache = {}
       try {
         localCache = JSON.parse(localStorage.getItem(`serviceq_provider_profile_${user.id}`)) || {}
@@ -117,12 +117,9 @@ export default function ProviderProfile() {
       try {
         emailCache = JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${user.email?.toLowerCase()}`)) || {}
       } catch {}
-      let latestCache = {}
-      try {
-        latestCache = JSON.parse(localStorage.getItem('serviceq_latest_provider_registered')) || {}
-      } catch {}
 
-      const mergedCache = { ...latestCache, ...emailCache, ...localCache }
+      // Strictly merge ONLY this user's caches — never fall back to global latestCache
+      const mergedCache = { ...emailCache, ...localCache }
 
       let profileMeta = null
       try {
@@ -135,13 +132,23 @@ export default function ProviderProfile() {
       const effectivePhone = profData?.phone || meta.phone || mergedCache.phone || ''
       const effectiveCity = profData?.city || mergedCache.city || 'Cebu City'
 
-      // Business details (Slide 39: exact values entered by user)
-      const effectiveBusinessName = provData?.business_name || profileMeta?.business_name || meta.business_name || mergedCache.businessName || effectiveName
-      const effectiveCategory = profileMeta?.category || meta.category || mergedCache.category ||
-        (Array.isArray(provData?.provider_type) && provData?.provider_type[0]) || mergedCache.providerType || 'Services'
-      const effectiveYearsExp = profileMeta?.years_experience || meta.years_experience || mergedCache.yearsExp ||
-        (provData?.years_experience != null ? `${provData.years_experience} years` : '1 – 2 years')
-      const effectiveServiceArea = provData?.service_area || profileMeta?.service_area || meta.service_area || mergedCache.serviceArea || `${effectiveCity}, Metro Cebu`
+      // Business details: exact values entered during registration (Pages 23 & 24)
+      const effectiveBusinessName = profileMeta?.business_name || mergedCache.businessName || provData?.business_name || meta.business_name || effectiveName
+      const effectiveCategory = profileMeta?.category || mergedCache.category || meta.category ||
+        (Array.isArray(provData?.provider_type) && provData?.provider_type[0]) || mergedCache.providerType || ''
+      
+      let effectiveYearsExp = profileMeta?.years_experience || mergedCache.yearsExp || meta.years_experience
+      if (!effectiveYearsExp) {
+        if (provData?.years_experience === 0) {
+          effectiveYearsExp = 'Less than a year'
+        } else if (provData?.years_experience != null) {
+          effectiveYearsExp = `${provData.years_experience} years`
+        } else {
+          effectiveYearsExp = ''
+        }
+      }
+
+      const effectiveServiceArea = profileMeta?.service_area || mergedCache.serviceArea || provData?.service_area || meta.service_area || `${effectiveCity}, Metro Cebu`
 
       const effectiveStatus = provData?.status ||
         profileMeta?.status ||

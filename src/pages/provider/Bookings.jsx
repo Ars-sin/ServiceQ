@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { MessageCircle, CheckCircle, XCircle, CalendarCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -6,6 +6,7 @@ import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Pagination from '@/components/ui/Pagination'
+import { useAuth } from '@/contexts/AuthContext'
 
 const TABS = [
   { id: 'all', label: 'All' },
@@ -13,15 +14,18 @@ const TABS = [
 ]
 
 export default function ProviderBookings() {
+  const { user } = useAuth()
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
-  const [bookings, setBookings] = useState(() => {
+  const [bookings, setBookings] = useState([])
+
+  useEffect(() => {
+    if (!user?.id) return
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
-      if (Array.isArray(stored)) return stored
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`))
+      if (Array.isArray(stored)) setBookings(stored)
     } catch {}
-    return []
-  })
+  }, [user?.id])
 
   const PAGE_SIZE = 4
   const isDefaultAll = tab === 'all'
@@ -40,7 +44,7 @@ export default function ProviderBookings() {
   const updateStatus = (id, status) => {
     setBookings(prev => {
       const updated = prev.map(b => b.id === id ? { ...b, status } : b)
-      try { localStorage.setItem('serviceq_provider_bookings', JSON.stringify(updated)) } catch {}
+      try { localStorage.setItem(`serviceq_provider_bookings_${user?.id}`, JSON.stringify(updated)) } catch {}
       return updated
     })
     toast.success(`Booking ${status}`)

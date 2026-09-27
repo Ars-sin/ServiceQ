@@ -242,11 +242,19 @@ export default function CustomerBookings() {
             Any refund will be credited back to your original payment method in 1–3 business days according to the provider cancellation policy.
           </div>
 
-          <div className="flex gap-2 justify-end pt-2">
-            <button onClick={() => setCancelModal(null)} className="btn-ghost text-xs">
+          <div className="flex gap-3 justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setCancelModal(null)}
+              className="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 font-semibold text-xs transition-all shadow-xs"
+            >
               Keep Booking
             </button>
-            <button onClick={handleCancel} className="btn-danger text-xs">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-all shadow-sm"
+            >
               Confirm Cancellation
             </button>
           </div>

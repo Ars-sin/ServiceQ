@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp, Save, Loader, Pencil } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp, Save, Loader, Pencil, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { getFavoriteIds } from '@/lib/favorites'
@@ -50,6 +50,8 @@ export default function CustomerProfile() {
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving]       = useState(false)
   const [pwLoading, setPwLoading] = useState(false)
+  const [showNewPass, setShowNewPass] = useState(false)
+  const [showConfirmPass, setShowConfirmPass] = useState(false)
 
   // ── Profile form — seeded from Supabase profile ──────────────────
   const [profileForm, setProfileForm] = useState({
@@ -482,20 +484,40 @@ export default function CustomerProfile() {
                     </h3>
                     <p className="text-xs text-gray-400 mb-4">Password changes are applied immediately to your account.</p>
                     <form onSubmit={handlePasswordChange} className="space-y-3">
-                      <input
-                        type="password"
-                        placeholder="New Password (min 6 characters)"
-                        value={passwordForm.newPass}
-                        onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
-                      />
-                      <input
-                        type="password"
-                        placeholder="Confirm New Password"
-                        value={passwordForm.confirm}
-                        onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showNewPass ? 'text' : 'password'}
+                          placeholder="New Password (min 6 characters)"
+                          value={passwordForm.newPass}
+                          onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPass(!showNewPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <input
+                          type={showConfirmPass ? 'text' : 'password'}
+                          placeholder="Confirm New Password"
+                          value={passwordForm.confirm}
+                          onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPass(!showConfirmPass)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+
                       <div className="flex justify-end">
                         <button
                           type="submit"

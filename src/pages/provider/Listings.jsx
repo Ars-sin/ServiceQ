@@ -29,7 +29,7 @@ const INITIAL_FORM = {
   category: '',
   title: '',
   description: '',
-  price: '',
+  price: '0',
   unit: 'per session',
   minDuration: '1',
   maxDuration: '10',
@@ -68,6 +68,7 @@ export default function ProviderListings() {
   const [form, setForm] = useState(INITIAL_FORM)
 
   const handleOpenAdd = () => {
+    setForm(INITIAL_FORM)
     setShowAdd(true)
     setWizardStep(0)
   }
@@ -467,9 +468,11 @@ export default function ProviderListings() {
         <div className="flex justify-between items-center mt-6 pt-3 border-t border-gray-100">
           <button
             type="button"
-            onClick={() => setWizardStep(s => Math.max(0, s - 1))}
-            disabled={wizardStep === 0}
-            className="border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => {
+              if (wizardStep === 0) setShowAdd(false)
+              else setWizardStep(s => Math.max(0, s - 1))
+            }}
+            className="border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all"
           >
             <ArrowLeft size={14} /> Back
           </button>
@@ -482,10 +485,14 @@ export default function ProviderListings() {
                   setWizardStep(s => s + 1)
                 }
               }}
-              className="btn-primary text-xs flex items-center gap-1.5 px-4 py-2 rounded-xl font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-              style={{ background: '#059669' }}
+              className={`text-xs flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold shadow-sm transition-all ${
+                isStepValid(wizardStep)
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none'
+              }`}
             >
-              Next Step <ArrowRight size={14} />
+              <span>Next Step</span>
+              <ArrowRight size={14} />
             </button>
           )}
         </div>

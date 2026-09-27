@@ -22,7 +22,7 @@ export default function Checkout() {
   const { id } = useParams()
   const location = useLocation()
 
-  const [method, setMethod] = useState('gcash')
+  const [method, setMethod] = useState('')
   const [loading, setLoading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [bookingId] = useState(genBookingId())
@@ -61,6 +61,7 @@ export default function Checkout() {
   const { fee, total } = calcFees(subtotal)
 
   const handlePay = async () => {
+    if (!method) return toast.error('Please select a payment method')
     setLoading(true)
     await new Promise(r => setTimeout(r, 1000))
     setLoading(false)
@@ -85,6 +86,44 @@ export default function Checkout() {
     setConfirmed(true)
   }
 
+  const handleDownloadReceipt = () => {
+    const channelName = PAYMENT_METHODS.find(p => p.id === method)?.label || (method ? method.toUpperCase() : 'GCash')
+    const receiptContent = `================================================
+           SERVICEQ OFFICIAL RECEIPT            
+================================================
+Reference ID:    ${bookingId}
+Date Generated:  ${new Date().toLocaleString('en-PH')}
+
+Service:         ${order.title}
+Provider:        ${order.provider}
+Scheduled Date:  ${order.date}
+Sessions:        ${sessions}
+Payment Channel: ${channelName}
+Payment Status:  PAID (via ServiceQ Escrow)
+
+------------------------------------------------
+Subtotal:        PHP ${subtotal.toFixed(2)}
+Platform Fee:    PHP ${fee.toFixed(2)}
+------------------------------------------------
+TOTAL PAID:      PHP ${total.toFixed(2)}
+================================================
+Thank you for choosing ServiceQ!
+Trusted Local Services & Rentals in Cebu
+Support: support@serviceq.ph
+================================================`
+
+    const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `ServiceQ-Receipt-${bookingId}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success('Receipt file downloaded successfully!')
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -92,7 +131,14 @@ export default function Checkout() {
           <h1 className="text-2xl font-bold text-gray-900">Secure Checkout</h1>
           <p className="text-xs text-gray-500 mt-0.5">Complete your reservation securely via ServiceQ Escrow</p>
         </div>
-        <button onClick={() => navigate(-1)} className="text-xs text-gray-500 hover:text-gray-700">
+        <button
+          onClick={() => navigate(-1)}
+          className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
+            method
+              ? 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100 shadow-xs'
+              : 'border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+          }`}
+        >
           Cancel & Return
         </button>
       </div>
@@ -134,7 +180,7 @@ export default function Checkout() {
             {PAYMENT_METHODS.map(pm => (
               <label key={pm.id}
                 className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                  method === pm.id ? 'border-brand-500 bg-brand-50/70' : 'border-gray-200 hover:border-gray-300'
+                  method === pm.id ? 'border-brand-500 bg-brand-50/70 shadow-xs' : 'border-gray-200 hover:border-gray-300'
                 }`}>
                 <input type="radio" name="payment" value={pm.id} checked={method === pm.id}
                   onChange={() => setMethod(pm.id)} className="accent-brand-600" />
@@ -157,11 +203,13 @@ export default function Checkout() {
 
           <button
             onClick={handlePay}
-            disabled={loading}
-            className="btn-primary btn-lg w-full font-bold shadow-sm mt-2"
+            disabled={loading || !method}
+            className={`btn-primary btn-lg w-full font-bold shadow-sm mt-2 transition-all ${
+              !method ? '!bg-gray-200 !text-gray-400 !border-gray-200 cursor-not-allowed shadow-none' : ''
+            }`}
           >
             {loading ? (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Processing Payment...
               </span>
@@ -175,36 +223,46 @@ export default function Checkout() {
       {/* Confirmation Modal */}
       <Modal open={confirmed} onClose={() => navigate('/customer/bookings')} title="Booking Confirmed! 🎉" size="md">
         <div className="flex flex-col items-center text-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-            <CheckCircle size={36} className="text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Reference ID</p>
-            <p className="text-xl font-black text-gray-900 font-mono mt-0.5">{bookingId}</p>
+          <div id="printable-receipt" className="w-full flex flex-col items-center text-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+              <CheckCircle size={36} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold">Reference ID</p>
+              <p className="text-xl font-black text-gray-900 font-mono mt-0.5">{bookingId}</p>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 w-full text-left text-sm flex flex-col gap-2 border border-gray-100">
+              <div className="flex justify-between"><span className="text-gray-500">Service:</span><span className="font-semibold text-gray-900">{order.title}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Provider:</span><span className="font-medium text-gray-800">{order.provider}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Scheduled Date:</span><span>{order.date}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Payment Channel:</span><span className="capitalize font-medium">{method || 'GCash'}</span></div>
+              <div className="border-t border-gray-200/70 pt-2 flex justify-between font-bold"><span className="text-gray-900">Total Paid:</span><span className="text-brand-600">{formatPHP(total)}</span></div>
+            </div>
           </div>
 
-          <div className="bg-gray-50 rounded-xl p-4 w-full text-left text-sm flex flex-col gap-2 border border-gray-100">
-            <div className="flex justify-between"><span className="text-gray-500">Service:</span><span className="font-semibold text-gray-900">{order.title}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Provider:</span><span className="font-medium text-gray-800">{order.provider}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Scheduled Date:</span><span>{order.date}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">Payment Channel:</span><span className="capitalize font-medium">{method}</span></div>
-            <div className="border-t border-gray-200/70 pt-2 flex justify-between font-bold"><span className="text-gray-900">Total Paid:</span><span className="text-brand-600">{formatPHP(total)}</span></div>
-          </div>
-
-          <div className="flex flex-col gap-2 w-full pt-1">
+          <div className="flex flex-col gap-2 w-full pt-1 no-print">
             <button
               onClick={() => navigate('/customer/bookings')}
-              className="btn-primary w-full py-2.5 font-bold flex items-center justify-center gap-2 shadow-sm"
+              className="btn-primary w-full py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm"
             >
               Go to My Bookings <ArrowRight size={16} />
             </button>
 
             <div className="flex gap-2 w-full">
-              <button onClick={() => toast.success('Receipt downloaded to downloads folder!')} className="btn-secondary flex-1 text-xs gap-1.5 py-2">
-                <Download size={14} /> Download Receipt
+              <button
+                type="button"
+                onClick={handleDownloadReceipt}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 text-xs font-semibold shadow-xs transition-all"
+              >
+                <Download size={14} className="text-gray-600" /> Download Receipt
               </button>
-              <button onClick={() => window.print()} className="btn-ghost flex-1 text-xs gap-1.5 py-2">
-                <Printer size={14} /> Print
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 text-xs font-semibold shadow-xs transition-all"
+              >
+                <Printer size={14} className="text-gray-600" /> Print
               </button>
             </div>
           </div>

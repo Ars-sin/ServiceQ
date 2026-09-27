@@ -23,13 +23,15 @@ export default function ProviderDashboard() {
     } catch {}
   }, [user?.id])
 
-  const [bookings, setBookings] = useState(() => {
+  const [bookings, setBookings] = useState([])
+
+  useEffect(() => {
+    if (!user?.id) return
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
-      if (Array.isArray(stored)) return stored
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`))
+      if (Array.isArray(stored)) setBookings(stored)
     } catch {}
-    return []
-  })
+  }, [user?.id])
 
   useEffect(() => {
     async function checkVerification() {

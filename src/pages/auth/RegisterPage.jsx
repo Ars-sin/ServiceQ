@@ -417,6 +417,19 @@ export default function RegisterPage() {
 
       // Save initial profile details
       if (data?.user?.id) {
+        const providerMetadata = role === 'provider' ? {
+          business_name: resolvedBusinessName,
+          category: resolvedCategory,
+          provider_type: resolvedCategory,
+          years_experience: providerDetails.yearsExp || 'Less than a year',
+          service_area: coverageList.join(', ') || (location.city ? `${location.city}, Metro Cebu` : 'Cebu City, Metro Cebu'),
+          status: 'under_verification',
+          payout_method: '',
+          payout_account_name: '',
+          payout_account_number: '',
+          payout_bank_name: '',
+        } : null
+
         await supabase
           .from('profiles')
           .upsert({
@@ -430,6 +443,7 @@ export default function RegisterPage() {
             city:        location.city,
             province:    location.province,
             postal_code: location.postalCode,
+            avatar_url:  providerMetadata ? JSON.stringify(providerMetadata) : null,
           }, { onConflict: 'id' })
 
         // If registering as a provider, create initial provider entry
@@ -950,7 +964,7 @@ export default function RegisterPage() {
                   type="button"
                   disabled={!isStep0Valid}
                   onClick={nextStep}
-                  className={`btn-primary btn-lg w-full flex items-center justify-center gap-2 font-bold shadow-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`btn-primary w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed border border-transparent ${
                     role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                   }`}
                 >
@@ -1020,7 +1034,9 @@ export default function RegisterPage() {
                     {/* Service Coverage Area Checkboxes */}
                     <div className="form-group mt-2">
                       <div className="flex items-center justify-between mb-1.5">
-                        <label className="label mb-0">Cebu Service Coverage Areas</label>
+                        <label className="label mb-0">
+                          Cebu Service Coverage Areas <span className="text-red-500 font-bold">*</span>
+                        </label>
                         <button
                           type="button"
                           onClick={selectAllCoverage}
@@ -1091,7 +1107,7 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(0)}
-                    className="btn-secondary flex-1 py-3 flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
+                    className="btn-secondary flex-1 py-3 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
                   >
                     <ChevronLeft size={16} /> Back
                   </button>
@@ -1099,7 +1115,7 @@ export default function RegisterPage() {
                     type="button"
                     disabled={!isStep1Valid}
                     onClick={nextStep}
-                    className={`btn-primary btn-lg flex-1 flex items-center justify-center gap-2 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`btn-primary flex-1 py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border border-transparent ${
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
@@ -1146,23 +1162,29 @@ export default function RegisterPage() {
 
                   {/* Password requirement indicators (Slide 8 & 24) */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mt-2 text-[11px]">
-                    <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>
-                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasMinLength ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        hasMinLength ? (role === 'provider' ? 'bg-emerald-600 text-white' : 'bg-brand-600 text-white') : 'bg-gray-200 text-gray-400'
+                      }`}>
                         {hasMinLength ? '✓' : '•'}
                       </span>
-                      <span>At least 6 characters</span>
+                      <span className="text-gray-500 font-medium">At least 6 characters</span>
                     </div>
-                    <div className={`flex items-center gap-1.5 ${hasUpperLower ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>
-                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasUpperLower ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        hasUpperLower ? (role === 'provider' ? 'bg-emerald-600 text-white' : 'bg-brand-600 text-white') : 'bg-gray-200 text-gray-400'
+                      }`}>
                         {hasUpperLower ? '✓' : '•'}
                       </span>
-                      <span>Uppercase & lowercase</span>
+                      <span className="text-gray-500 font-medium">Uppercase & lowercase</span>
                     </div>
-                    <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 font-semibold' : 'text-gray-400'}`}>
-                      <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasNumber ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        hasNumber ? (role === 'provider' ? 'bg-emerald-600 text-white' : 'bg-brand-600 text-white') : 'bg-gray-200 text-gray-400'
+                      }`}>
                         {hasNumber ? '✓' : '•'}
                       </span>
-                      <span>At least 1 number</span>
+                      <span className="text-gray-500 font-medium">At least 1 number</span>
                     </div>
                   </div>
                 </div>
@@ -1193,10 +1215,12 @@ export default function RegisterPage() {
 
                   {/* Passwords match indicator */}
                   <div className="mt-1.5 flex items-center gap-1.5 text-xs">
-                    <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${passwordsMatch ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-400'}`}>
+                    <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                      passwordsMatch ? (role === 'provider' ? 'bg-emerald-600 text-white' : 'bg-brand-600 text-white') : 'bg-gray-200 text-gray-400'
+                    }`}>
                       {passwordsMatch ? '✓' : '•'}
                     </span>
-                    <span className={passwordsMatch ? 'text-emerald-600 font-semibold' : 'text-gray-400'}>
+                    <span className="text-gray-500 font-medium">
                       {passwordsMatch ? 'Passwords match' : 'Passwords must match'}
                     </span>
                   </div>
@@ -1246,11 +1270,11 @@ export default function RegisterPage() {
                   </label>
                 )}
 
-                {/* Email Verification Notice (Slide 8 & 24) */}
+                {/* Email Verification Notice */}
                 <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
                   <Mail size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
                   <p className="leading-relaxed">
-                    <strong>Email Verification Notice:</strong> The 6-digit confirmation code will be sent to your registered email address (<span className="font-semibold">{form.email || 'your email'}</span>), not your phone number.
+                    We'll send verification code to your registered email address <span className="font-semibold text-blue-950">{form.email || 'your email'}</span>.
                   </p>
                 </div>
 
@@ -1258,14 +1282,14 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="btn-secondary flex-1 py-3 flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
+                    className="btn-secondary flex-1 py-3 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
                   >
                     <ChevronLeft size={16} /> Back
                   </button>
                   <button
                     type="submit"
                     disabled={loading || !isStep2Valid}
-                    className={`btn-primary btn-lg flex-1 flex items-center justify-center gap-1.5 font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`btn-primary flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-1.5 font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed border border-transparent whitespace-nowrap ${
                       role === 'provider' ? '!bg-emerald-600 hover:!bg-emerald-700 text-white' : ''
                     }`}
                   >
@@ -1273,7 +1297,7 @@ export default function RegisterPage() {
                       <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Send Verification Code</span>
+                        <span className="whitespace-nowrap">Send Verification Code</span>
                         <ChevronRight size={16} />
                       </>
                     )}
