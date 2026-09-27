@@ -106,7 +106,7 @@ export default function RegisterPage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
         if (step === 3) {
-          toast.success('Email confirmed! Welcome to ServiceQ 🎉')
+          toast.success('Email confirmed! Welcome to ServiceQ 🎉', { id: 'welcome-toast' })
           navigate(role === 'provider' ? '/provider/onboarding' : '/customer/explore', { replace: true })
         }
       }
@@ -512,7 +512,7 @@ export default function RegisterPage() {
 
       if (verifyResult.error) throw verifyResult.error
 
-      toast.success('Email verified successfully! Welcome to ServiceQ 🎉')
+      toast.success('Email verified successfully! Welcome to ServiceQ 🎉', { id: 'welcome-toast' })
 
       if (role === 'provider') {
         setShowUnderReviewModal(true)

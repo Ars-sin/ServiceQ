@@ -28,8 +28,9 @@ export default function LoginPage() {
   const [showGoogleModal, setShowGoogleModal] = useState(false)
 
   // Listen for active OAuth session (e.g. redirected back from Google OAuth)
-  // Only runs once on mount — loginRole intentionally excluded from deps to prevent double-toast
+  // Only runs once on mount — deduplicated with id to prevent double-toast
   useEffect(() => {
+    const isOAuthRedirect = window.location.hash.includes('access_token') || searchParams.get('from') === 'google'
     let handled = false
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user?.email || handled) return
@@ -63,10 +64,12 @@ export default function LoginPage() {
           return
         }
         const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
-        toast.success(`Welcome back, ${profile.full_name || profile.email}!`)
+        if (isOAuthRedirect) {
+          toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
+        }
         navigate(destination, { replace: true })
       } else {
-        toast('Google verified! Please choose your account type to complete registration.', { icon: '✨' })
+        toast('Google verified! Please choose your account type to complete registration.', { icon: '✨', id: 'google-verified-toast' })
         navigate(`/register?email=${encodeURIComponent(session.user.email)}&name=${encodeURIComponent(session.user.user_metadata?.full_name || '')}&from=google`, { replace: true })
       }
     })
@@ -159,7 +162,7 @@ export default function LoginPage() {
         return
       }
       const destination = ROLE_REDIRECT[userRole] ?? '/customer/explore'
-      toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
+      toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
       navigate(destination, { replace: true })
     } catch (err) {
       if (err.message?.toLowerCase().includes('email not confirmed')) {

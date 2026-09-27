@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { formatPHP, relativeTime, statusVariant, cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 import { ALL_LISTINGS } from "@/pages/customer/Explore"
 
 const TYPE_BADGE = {
@@ -35,6 +36,7 @@ const STATUS_BADGE = {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -266,7 +268,7 @@ export default function Dashboard() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live Backend Sync
             </span>
           </div>
-          <p className="text-sm text-gray-400 mt-0.5">{today}</p>
+          <p className="text-sm text-gray-500 mt-0.5">Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}! Platform overview for {today}.</p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <button

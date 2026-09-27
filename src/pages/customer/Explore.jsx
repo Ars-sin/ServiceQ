@@ -11,6 +11,7 @@ import {
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
+import { useAuth } from '@/contexts/AuthContext'
 
 const TYPE_TABS = [
   { id: 'all',      label: 'All Listings', icon: LayoutGrid },
@@ -131,6 +132,7 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
 
 export default function CustomerExplore() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [search, setSearch]             = useState('')
   const [selectedType, setSelectedType] = useState('all') // 'all' | 'services' | 'rentals'
   const [sort, setSort]                 = useState('recommended')
@@ -272,7 +274,7 @@ export default function CustomerExplore() {
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">Explore Services & Rentals</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Discover verified providers, rentals, and services across Cebu
+            Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}! Discover verified providers, rentals, and services across Cebu
           </p>
         </div>
 

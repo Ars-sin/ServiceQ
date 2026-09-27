@@ -78,7 +78,7 @@ export default function GoogleSignInModal({
         }
 
         // Exists and matches portal → Direct log in!
-        toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
+        toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
         onSuccessLogin?.(profile)
         onClose()
       } else {

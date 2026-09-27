@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MapPin, Search, Star, ChevronRight, X, Sparkles, Home, Laptop, GraduationCap, Hammer, PartyPopper, Car, Package, Utensils, Wrench } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { CATEGORIES } from '@/lib/constants'
 import { formatPHP } from '@/lib/utils'
+import { useAuth } from '@/contexts/AuthContext'
 
 const MOCK_LISTINGS = [
   { id: '1', title: 'Professional Home Cleaning', categoryId: 'cleaning', category: 'Cleaning Services', price: 500, unit: 'per session', rating: 4.8, reviews: 42, distance: '0.8 km', provider: 'Maria Santos', tag: 'Top Rated' },
@@ -92,6 +92,7 @@ function ListingCard({ listing, onClick }) {
 
 export default function CustomerDashboard() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [activeCategory, setActiveCategory] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -117,7 +118,9 @@ export default function CustomerDashboard() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Discover</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}! 👋
+        </h1>
         <div className="flex items-center gap-2 mt-1">
           <MapPin size={14} className="text-brand-600" />
           <span className="text-sm font-medium text-gray-700">Cebu City, Philippines</span>
