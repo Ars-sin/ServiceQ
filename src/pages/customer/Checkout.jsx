@@ -7,6 +7,7 @@ import { formatPHP, calcFees, genBookingId } from '@/lib/utils'
 import { PAYMENT_METHODS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
+import { useAuth } from '@/contexts/AuthContext'
 
 const DEFAULT_ORDER = {
   id: '1',
@@ -19,6 +20,7 @@ const DEFAULT_ORDER = {
 
 export default function Checkout() {
   const navigate = useNavigate()
+  const { user, profile } = useAuth()
   const { id } = useParams()
   const location = useLocation()
 
@@ -69,16 +71,57 @@ export default function Checkout() {
     // Save newly booked item to local bookings store for immediate display in My Bookings
     try {
       const existing = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+      const customerName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'
       const newBooking = {
         id: bookingId,
         service: order.title,
         provider: order.provider || 'Verified Provider',
+        providerId: order.providerId || null,
+        customer: customerName,
+        customerId: user?.id || null,
         date: order.date || new Date().toISOString().split('T')[0],
+        sessions: order.sessions || sessions,
+        subtotal: order.subtotal || subtotal,
+        fee: order.fee || fee,
         amount: total,
+        net: (order.subtotal || subtotal), // Provider receives net without platform fee
         status: 'scheduled',
         createdAt: new Date().toISOString(),
       }
       localStorage.setItem('serviceq_customer_bookings', JSON.stringify([newBooking, ...existing]))
+
+      // Save to global all bookings store
+      const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      localStorage.setItem('serviceq_all_bookings', JSON.stringify([newBooking, ...allBookings.filter(b => b.id !== bookingId)]))
+
+      // Save directly to the specific provider's bookings
+      if (order.providerId) {
+        const provBookings = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${order.providerId}`)) || []
+        localStorage.setItem(`serviceq_provider_bookings_${order.providerId}`, JSON.stringify([newBooking, ...provBookings.filter(b => b.id !== bookingId)]))
+      }
+
+      // Also save to generic provider bookings for demo resilience
+      const genProvBookings = JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || []
+      localStorage.setItem('serviceq_provider_bookings', JSON.stringify([newBooking, ...genProvBookings.filter(b => b.id !== bookingId)]))
+
+      // Audit log entry for real-time admin view
+      const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+      const auditEntry = {
+        id: `a${Date.now()}`,
+        staff: 'Customer Escrow',
+        role: 'customer',
+        action: 'Booking Created & Paid',
+        target: `${bookingId} (${order.title})`,
+        desc: `${customerName} paid ₱${total.toLocaleString()} for "${order.title}" via ${method.toUpperCase()}. Escrow held.`,
+        before: { status: 'none' },
+        after: { status: 'scheduled' },
+        ip: '127.0.0.1',
+        ts: new Date().toISOString(),
+      }
+      localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...auditLog]))
+
+      window.dispatchEvent(new Event('serviceq_bookings_updated'))
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {
       console.warn('Local booking cache error:', e)
     }

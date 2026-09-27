@@ -141,9 +141,24 @@ export default function ProviderEarnings() {
 
     try {
       localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+      const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+      const auditEntry = {
+        id: `a${Date.now()}`,
+        staff: profile?.full_name || 'Provider',
+        role: 'provider',
+        action: 'Withdrawal Requested',
+        target: newWd.id,
+        desc: `${newWd.provider} requested payout of ${formatPHP(amount)} via ${newWd.method}.`,
+        before: { status: 'none' },
+        after: { status: 'pending_review' },
+        ip: '127.0.0.1',
+        ts: new Date().toISOString(),
+      }
+      localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...auditLog]))
     } catch {}
 
     window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+    window.dispatchEvent(new Event('storage'))
 
     toast.success(`Withdrawal of ${formatPHP(amount)} submitted! Pending admin review.`)
     setShowWithdraw(false)

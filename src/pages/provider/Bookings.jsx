@@ -14,18 +14,59 @@ const TABS = [
 ]
 
 export default function ProviderBookings() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
   const [bookings, setBookings] = useState([])
 
-  useEffect(() => {
-    if (!user?.id) return
+  const loadBookings = () => {
     try {
-      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`))
-      if (Array.isArray(stored)) setBookings(stored)
-    } catch {}
-  }, [user?.id])
+      const userBookings = user?.id ? (JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`)) || []) : []
+      const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      const genericBookings = JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || []
+
+      // Match bookings by providerId, provider name, or if user is owner
+      const relevantFromAll = allBookings.filter(b => {
+        if (b.providerId && user?.id && b.providerId === user.id) return true
+        if (profile?.full_name && b.provider && b.provider.toLowerCase() === profile.full_name.toLowerCase()) return true
+        return false
+      })
+
+      const combined = [...userBookings]
+      const ids = new Set(combined.map(b => b.id))
+
+      for (const b of relevantFromAll) {
+        if (!ids.has(b.id)) {
+          combined.push(b)
+          ids.add(b.id)
+        }
+      }
+
+      // If still empty and generic demo bookings exist, display them
+      if (combined.length === 0 && genericBookings.length > 0) {
+        for (const b of genericBookings) {
+          if (!ids.has(b.id)) {
+            combined.push(b)
+            ids.add(b.id)
+          }
+        }
+      }
+
+      setBookings(combined)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  useEffect(() => {
+    loadBookings()
+    window.addEventListener('serviceq_bookings_updated', loadBookings)
+    window.addEventListener('storage', loadBookings)
+    return () => {
+      window.removeEventListener('serviceq_bookings_updated', loadBookings)
+      window.removeEventListener('storage', loadBookings)
+    }
+  }, [user?.id, profile?.full_name])
 
   const PAGE_SIZE = 4
   const isDefaultAll = tab === 'all'
@@ -42,12 +83,60 @@ export default function ProviderBookings() {
   }
 
   const updateStatus = (id, status) => {
-    setBookings(prev => {
-      const updated = prev.map(b => b.id === id ? { ...b, status } : b)
-      try { localStorage.setItem(`serviceq_provider_bookings_${user?.id}`, JSON.stringify(updated)) } catch {}
-      return updated
-    })
-    toast.success(`Booking ${status}`)
+    const bookingToUpdate = bookings.find(b => b.id === id)
+    const updated = bookings.map(b => b.id === id ? { ...b, status } : b)
+    setBookings(updated)
+
+    try {
+      if (user?.id) {
+        localStorage.setItem(`serviceq_provider_bookings_${user.id}`, JSON.stringify(updated))
+      }
+      localStorage.setItem('serviceq_provider_bookings', JSON.stringify(updated))
+
+      // Update central all bookings
+      const all = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      const updatedAll = all.map(b => b.id === id ? { ...b, status } : b)
+      localStorage.setItem('serviceq_all_bookings', JSON.stringify(updatedAll))
+
+      // Update customer bookings
+      const cust = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+      const updatedCust = cust.map(b => b.id === id ? { ...b, status } : b)
+      localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updatedCust))
+
+      // If marked completed -> CREDIT PROVIDER BALANCE!
+      if (status === 'completed' && bookingToUpdate) {
+        const netAmt = Number(bookingToUpdate.net) || Math.round((Number(bookingToUpdate.amount) || 0) * 0.9)
+        const currentAvail = Number(localStorage.getItem('serviceq_provider_avail_balance') || 0)
+        const newAvail = currentAvail + netAmt
+        localStorage.setItem('serviceq_provider_avail_balance', String(newAvail))
+
+        // Also add transaction record
+        const txns = JSON.parse(localStorage.getItem('serviceq_provider_transactions')) || []
+        const newTxn = {
+          id: 'TXN-' + Date.now().toString(36).toUpperCase().slice(-5),
+          bookingId: id,
+          customer: bookingToUpdate.customer || 'Customer',
+          service: bookingToUpdate.service || 'Service',
+          gross: Number(bookingToUpdate.amount) || 0,
+          fee: Math.round((Number(bookingToUpdate.amount) || 0) * 0.1),
+          net: netAmt,
+          date: new Date().toISOString().split('T')[0],
+          payout: 'released',
+        }
+        localStorage.setItem('serviceq_provider_transactions', JSON.stringify([newTxn, ...txns]))
+
+        toast.success(`Booking completed! ${formatPHP(netAmt)} credited to your available balance.`)
+        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+      } else {
+        toast.success(`Booking status updated to ${status}`)
+      }
+
+      window.dispatchEvent(new Event('serviceq_bookings_updated'))
+      window.dispatchEvent(new Event('storage'))
+    } catch (e) {
+      console.error(e)
+    }
+
     setTab(status)
     setPage(1)
   }
@@ -93,21 +182,48 @@ export default function ProviderBookings() {
               <p className="font-bold text-brand-600 mt-1">{formatPHP(b.amount)}</p>
               {b.payout && <Badge variant="success" className="mt-1">Payout {b.payout}</Badge>}
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {b.status === 'pending' && (
-                <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1">
-                  <MessageCircle size={13} /> Contact
-                </button>
+                <>
+                  <button onClick={() => updateStatus(b.id, 'scheduled')} className="btn-primary btn-sm" style={{ background: '#059669' }}>
+                    Accept Booking
+                  </button>
+                  <button onClick={() => updateStatus(b.id, 'cancelled')} className="btn-secondary btn-sm text-red-600 hover:bg-red-50">
+                    Decline
+                  </button>
+                  <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1">
+                    <MessageCircle size={13} /> Contact
+                  </button>
+                </>
               )}
               {b.status === 'scheduled' && (
-                <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1">
-                  <MessageCircle size={13} /> Contact
-                </button>
+                <>
+                  <button onClick={() => updateStatus(b.id, 'active')} className="btn-primary btn-sm bg-blue-600 hover:bg-blue-700 text-white">
+                    Start Service / Item Handed Over
+                  </button>
+                  <button onClick={() => updateStatus(b.id, 'completed')} className="btn-primary btn-sm" style={{ background: '#059669' }}>
+                    Mark Complete / Returned
+                  </button>
+                  <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1">
+                    <MessageCircle size={13} /> Contact
+                  </button>
+                </>
               )}
-              {b.status === 'active' && <>
-                <button onClick={() => updateStatus(b.id, 'completed')} className="btn-primary btn-sm" style={{ background: '#059669' }}>Mark Complete</button>
-                <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1"><MessageCircle size={13} /> Contact</button>
-              </>}
+              {b.status === 'active' && (
+                <>
+                  <button onClick={() => updateStatus(b.id, 'completed')} className="btn-primary btn-sm" style={{ background: '#059669' }}>
+                    Mark Complete / Returned
+                  </button>
+                  <button onClick={() => toast(`Opening chat with ${b.customer}...`)} className="btn-secondary btn-sm gap-1">
+                    <MessageCircle size={13} /> Contact
+                  </button>
+                </>
+              )}
+              {b.status === 'completed' && (
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  Payment Released
+                </span>
+              )}
             </div>
           </motion.div>
         ))}

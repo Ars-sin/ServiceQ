@@ -31,8 +31,62 @@ export default function ListingDetail() {
   const { id } = useParams()
   const [selectedPhoto, setSelectedPhoto] = useState(0)
   const [fav, setFav] = useState(() => isFavorite(id))
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+  const tomorrow = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d
+  }, [])
+  const tomorrowStr = tomorrow.toISOString().split('T')[0]
+
+  const dayAfterTomorrow = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 2)
+    return d
+  }, [])
+  const dayAfterTomorrowStr = dayAfterTomorrow.toISOString().split('T')[0]
+
+  const [dateMode, setDateMode] = useState('single') // 'single' | 'multiple'
+  const [startDate, setStartDate] = useState(tomorrowStr)
+  const [endDate, setEndDate] = useState(dayAfterTomorrowStr)
   const [sessions, setSessions] = useState(1)
+
+  const minEndDateStr = useMemo(() => {
+    if (!startDate) return tomorrowStr
+    const d = new Date(startDate)
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().split('T')[0]
+  }, [startDate, tomorrowStr])
+
+  const handleStartDateChange = (newStart) => {
+    if (newStart < tomorrowStr) {
+      toast.error('Bookings must be scheduled at least 1 day in advance (starting from tomorrow).')
+      setStartDate(tomorrowStr)
+      return
+    }
+    setStartDate(newStart)
+    const nextDay = new Date(newStart)
+    nextDay.setDate(nextDay.getDate() + 1)
+    const nextDayStr = nextDay.toISOString().split('T')[0]
+    if (endDate <= newStart) {
+      setEndDate(nextDayStr)
+      if (dateMode === 'multiple') setSessions(2)
+    } else if (dateMode === 'multiple') {
+      const diffDays = Math.max(2, Math.round((new Date(endDate) - new Date(newStart)) / 86400000) + 1)
+      setSessions(diffDays)
+    }
+  }
+
+  const handleEndDateChange = (newEnd) => {
+    if (newEnd <= startDate) {
+      toast.error('Multiple dates selection requires the end date to be at least the next day.')
+      setEndDate(minEndDateStr)
+      setSessions(2)
+      return
+    }
+    setEndDate(newEnd)
+    const diffDays = Math.max(2, Math.round((new Date(newEnd) - new Date(startDate)) / 86400000) + 1)
+    setSessions(diffDays)
+  }
 
   // Sync favorites state
   useEffect(() => {
@@ -46,9 +100,18 @@ export default function ListingDetail() {
     }
   }, [id])
 
-  // Dynamically resolve listing from ALL_LISTINGS by id
+  // Dynamically resolve listing from custom listings + ALL_LISTINGS by id
   const listing = useMemo(() => {
-    const matched = ALL_LISTINGS.find(l => String(l.id) === String(id))
+    let all = ALL_LISTINGS
+    try {
+      const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+      if (Array.isArray(custom) && custom.length > 0) {
+        const customIds = new Set(custom.map(c => String(c.id)))
+        all = [...custom, ...ALL_LISTINGS.filter(l => !customIds.has(String(l.id)))]
+      }
+    } catch {}
+
+    const matched = all.find(l => String(l.id) === String(id))
     if (!matched) return DEFAULT_MOCK
 
     const initials = (matched.provider || 'SP')
@@ -67,19 +130,20 @@ export default function ListingDetail() {
       id: matched.id,
       title: matched.title,
       category: `${matched.category}${matched.subCategory ? ` · ${matched.subCategory}` : ''}`,
-      description: `${matched.title} provided by ${matched.provider}. Available for immediate booking with verified quality guarantee and secure digital payment via ServiceQ. Located ${matched.distance} km away in Metro Cebu.`,
+      description: matched.description || `${matched.title} provided by ${matched.provider}. Available for immediate booking with verified quality guarantee and secure digital payment via ServiceQ. Located ${matched.distance || '1.0'} km away in Metro Cebu.`,
       price: matched.price,
-      unit: matched.unit,
-      rating: matched.rating,
-      reviews: matched.reviews,
-      bookings: Math.round(matched.reviews * 2.8) || 45,
+      unit: matched.unit || 'per session',
+      rating: matched.rating || 5.0,
+      reviews: matched.reviews || 0,
+      bookings: Math.round((matched.reviews || 10) * 2.8) || 45,
       provider: {
-        name: matched.provider,
+        name: matched.provider || 'Verified Provider',
         avatar: initials,
-        rating: matched.rating,
+        rating: matched.rating || 5.0,
         verified: true,
         joined: 'January 2024',
       },
+      providerId: matched.providerId || null,
       photos: colorGradients,
     }
   }, [id])
@@ -89,15 +153,25 @@ export default function ListingDetail() {
 
   const handleBookNow = () => {
     if (!startDate) return toast.error('Please select a preferred date first')
+    if (startDate < tomorrowStr) {
+      return toast.error('Bookings must be scheduled at least 1 day in advance (starting from tomorrow).')
+    }
+    if (dateMode === 'multiple' && endDate <= startDate) {
+      return toast.error('Multiple dates selection requires the end date to be at least the next day.')
+    }
 
     const orderPayload = {
       id: listing.id,
       title: listing.title,
       category: listing.category,
       provider: listing.provider.name,
+      providerId: listing.providerId || null,
       price: listing.price,
       unit: listing.unit,
-      date: startDate,
+      date: dateMode === 'multiple' ? `${startDate} to ${endDate}` : startDate,
+      startDate,
+      endDate: dateMode === 'multiple' ? endDate : null,
+      dateMode,
       sessions,
       subtotal,
       fee,
@@ -204,20 +278,116 @@ export default function ListingDetail() {
               <span className="text-sm text-gray-400 ml-1">{listing.unit}</span>
             </div>
 
-            <div className="form-group">
-              <label className="label flex items-center gap-2"><Calendar size={14} />Select Preferred Date</label>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]} className="input" />
+            {/* Date Selection Mode (Single Day or Multiple Dates) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="label !mb-0 flex items-center gap-1.5 font-semibold text-gray-800">
+                  <Calendar size={14} className="text-brand-600" />
+                  Select Preferred Date
+                </label>
+                <div className="flex gap-1 bg-gray-100 p-0.5 rounded-lg text-[11px] font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateMode('single')
+                      setSessions(1)
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      dateMode === 'single' ? 'bg-white text-brand-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    Single Date
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDateMode('multiple')
+                      const diffDays = Math.max(2, Math.round((new Date(endDate) - new Date(startDate)) / 86400000) + 1)
+                      setSessions(diffDays)
+                    }}
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      dateMode === 'multiple' ? 'bg-white text-brand-700 shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                    }`}
+                  >
+                    Multiple Dates
+                  </button>
+                </div>
+              </div>
+
+              {dateMode === 'single' ? (
+                <div>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => handleStartDateChange(e.target.value)}
+                    min={tomorrowStr}
+                    className="input"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    • Earliest booking date is tomorrow ({tomorrowStr})
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5 bg-gray-50 border border-gray-200/70 rounded-xl p-3">
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-600 block mb-1">
+                      Start Date (Earliest: Tomorrow)
+                    </span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={e => handleStartDateChange(e.target.value)}
+                      min={tomorrowStr}
+                      className="input bg-white"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-600 block mb-1">
+                      End Date (Must be the next day or later)
+                    </span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={e => handleEndDateChange(e.target.value)}
+                      min={minEndDateStr}
+                      className="input bg-white"
+                    />
+                  </div>
+                  <div className="bg-brand-50/70 border border-brand-100 rounded-lg p-2 text-xs text-brand-800 flex items-center justify-between">
+                    <span>Duration:</span>
+                    <span className="font-bold">{sessions} consecutive days</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="form-group">
-              <label className="label flex items-center gap-2"><Clock size={14} />Quantity / Units / Sessions</label>
+              <label className="label flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><Clock size={14} />Quantity / Units / Sessions</span>
+                {dateMode === 'multiple' && (
+                  <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
+                    Auto-set by dates
+                  </span>
+                )}
+              </label>
               <div className="flex items-center gap-3">
-                <button onClick={() => setSessions(s => Math.max(1, s - 1))}
-                  className="w-9 h-9 rounded-lg border border-gray-200 hover:bg-gray-100 font-bold text-lg">−</button>
+                <button
+                  type="button"
+                  disabled={dateMode === 'multiple'}
+                  onClick={() => setSessions(s => Math.max(1, s - 1))}
+                  className="w-9 h-9 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
+                >
+                  −
+                </button>
                 <span className="font-bold text-lg w-8 text-center">{sessions}</span>
-                <button onClick={() => setSessions(s => s + 1)}
-                  className="w-9 h-9 rounded-lg border border-gray-200 hover:bg-gray-100 font-bold text-lg">+</button>
+                <button
+                  type="button"
+                  disabled={dateMode === 'multiple'}
+                  onClick={() => setSessions(s => s + 1)}
+                  className="w-9 h-9 rounded-lg border border-gray-200 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg"
+                >
+                  +
+                </button>
               </div>
             </div>
 

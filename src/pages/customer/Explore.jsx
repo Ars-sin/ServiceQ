@@ -140,6 +140,37 @@ export default function CustomerExplore() {
   const [showFilters, setShowFilters]   = useState(false)
   const [favoriteIds, setFavoriteIds]   = useState(getFavoriteIds)
 
+  const [allListings, setAllListings] = useState(() => {
+    try {
+      const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+      if (Array.isArray(custom) && custom.length > 0) {
+        const customIds = new Set(custom.map(c => String(c.id)))
+        return [...custom, ...ALL_LISTINGS.filter(l => !customIds.has(String(l.id)))]
+      }
+    } catch {}
+    return ALL_LISTINGS
+  })
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      try {
+        const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+        if (Array.isArray(custom) && custom.length > 0) {
+          const customIds = new Set(custom.map(c => String(c.id)))
+          setAllListings([...custom, ...ALL_LISTINGS.filter(l => !customIds.has(String(l.id)))])
+        } else {
+          setAllListings(ALL_LISTINGS)
+        }
+      } catch {}
+    }
+    window.addEventListener('serviceq_listings_updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('serviceq_listings_updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [])
+
   useEffect(() => {
     const handler = () => setFavoriteIds(getFavoriteIds())
     window.addEventListener('serviceq_favorites_updated', handler)
@@ -173,7 +204,7 @@ export default function CustomerExplore() {
   }, [search, selectedType, sort, minPrice, minRating, quickFilters])
 
   // Filter and sort listings
-  const filtered = ALL_LISTINGS
+  const filtered = allListings
     .filter(item => {
       // Search
       if (search.trim()) {

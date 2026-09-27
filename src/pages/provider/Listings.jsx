@@ -24,6 +24,9 @@ const TABS = [
 
 const WIZARD_STEPS = ['Type & Category', 'Details & Photos', 'Pricing', 'Location', 'Availability', 'Review & Publish']
 
+const tomorrowDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+const sixMonthsDateStr = new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0]
+
 const INITIAL_FORM = {
   type: '',
   category: '',
@@ -35,9 +38,12 @@ const INITIAL_FORM = {
   maxDuration: '10',
   location: '',
   serviceArea: '',
-  days: [],
+  days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
   hoursFrom: '08:00',
   hoursTo: '17:00',
+  availableFrom: tomorrowDateStr,
+  availableTo: sixMonthsDateStr,
+  ongoingAvailability: true,
 }
 
 export default function ProviderListings() {
@@ -50,6 +56,15 @@ export default function ProviderListings() {
   const [showKycModal, setShowKycModal] = useState(false)
   const [wizardStep, setWizardStep] = useState(0)
   const [viewingListing, setViewingListing] = useState(null)
+  const [editingAvailability, setEditingAvailability] = useState(null)
+  const [availForm, setAvailForm] = useState({
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    hoursFrom: '08:00',
+    hoursTo: '17:00',
+    availableFrom: tomorrowDateStr,
+    availableTo: sixMonthsDateStr,
+    ongoingAvailability: true,
+  })
   // Listings are scoped per-user so new providers always start fresh
   const [listings, setListings]     = useState([])
 
@@ -71,6 +86,64 @@ export default function ProviderListings() {
     setForm(INITIAL_FORM)
     setShowAdd(true)
     setWizardStep(0)
+  }
+
+  const openEditAvailability = (listing) => {
+    setEditingAvailability(listing)
+    setAvailForm({
+      days: Array.isArray(listing.days) && listing.days.length > 0 ? listing.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      hoursFrom: listing.hoursFrom || '08:00',
+      hoursTo: listing.hoursTo || '17:00',
+      availableFrom: listing.availableFrom || tomorrowDateStr,
+      availableTo: listing.availableTo || sixMonthsDateStr,
+      ongoingAvailability: listing.ongoingAvailability ?? !listing.availableTo,
+    })
+  }
+
+  const saveAvailability = () => {
+    if (!editingAvailability) return
+    setListings(prev => {
+      const updated = prev.map(l => l.id === editingAvailability.id ? {
+        ...l,
+        days: availForm.days,
+        hoursFrom: availForm.hoursFrom,
+        hoursTo: availForm.hoursTo,
+        availableFrom: availForm.availableFrom,
+        availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
+        ongoingAvailability: availForm.ongoingAvailability,
+      } : l)
+      try {
+        localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated))
+        const customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+        const updatedCustom = customListings.map(l => l.id === editingAvailability.id ? {
+          ...l,
+          days: availForm.days,
+          hoursFrom: availForm.hoursFrom,
+          hoursTo: availForm.hoursTo,
+          availableFrom: availForm.availableFrom,
+          availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
+          ongoingAvailability: availForm.ongoingAvailability,
+        } : l)
+        localStorage.setItem('serviceq_custom_listings', JSON.stringify(updatedCustom))
+        window.dispatchEvent(new Event('serviceq_listings_updated'))
+      } catch {}
+      return updated
+    })
+
+    if (viewingListing && viewingListing.id === editingAvailability.id) {
+      setViewingListing(v => ({
+        ...v,
+        days: availForm.days,
+        hoursFrom: availForm.hoursFrom,
+        hoursTo: availForm.hoursTo,
+        availableFrom: availForm.availableFrom,
+        availableTo: availForm.ongoingAvailability ? null : availForm.availableTo,
+        ongoingAvailability: availForm.ongoingAvailability,
+      }))
+    }
+
+    toast.success('Listing availability updated!')
+    setEditingAvailability(null)
   }
 
   // Slide 26: Listen for ?action=add from dashboard
@@ -123,22 +196,41 @@ export default function ProviderListings() {
       return toast.error('Please provide a listing title')
     }
 
+    const typeNormalized = (form.type || 'Service').toLowerCase().includes('rental') ? 'rentals' : 'services'
     const newListing = {
       id: String(Date.now()),
       title: form.title.trim(),
-      type: form.type || 'Service',
-      category: form.category || 'General',
+      type: typeNormalized,
+      category: form.category || 'Services',
+      subCategory: form.category || 'General',
       price: parseFloat(form.price) || 0,
-      unit: form.unit,
+      unit: form.unit || 'per session',
       status: 'active',
       bookings: 0,
       color: 'from-emerald-400 to-teal-400',
+      provider: profile?.full_name || 'Verified Provider',
+      providerId: user?.id,
+      distance: 1.0,
+      rating: 5.0,
+      reviews: 0,
+      days: form.days && form.days.length > 0 ? form.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      hoursFrom: form.hoursFrom || '08:00',
+      hoursTo: form.hoursTo || '17:00',
+      availableFrom: form.availableFrom,
+      availableTo: form.ongoingAvailability ? null : form.availableTo,
+      ongoingAvailability: form.ongoingAvailability,
+      location: form.location || 'Cebu City',
+      serviceArea: form.serviceArea || 'Metro Cebu',
+      description: form.description || form.title,
     }
 
     setListings(prev => {
       const updated = [newListing, ...prev]
       try {
         localStorage.setItem(`serviceq_provider_listings_${user?.id}`, JSON.stringify(updated))
+        const customListings = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+        localStorage.setItem('serviceq_custom_listings', JSON.stringify([newListing, ...customListings.filter(l => l.id !== newListing.id)]))
+        window.dispatchEvent(new Event('serviceq_listings_updated'))
       } catch {}
       return updated
     })
@@ -232,6 +324,13 @@ export default function ProviderListings() {
                         className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-emerald-700 transition-colors"
                       >
                         <Eye size={16} />
+                      </button>
+                      <button
+                        onClick={() => openEditAvailability(l)}
+                        title="Change Availability (Calendar & Schedule)"
+                        className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 transition-colors"
+                      >
+                        <Calendar size={16} />
                       </button>
                       <button
                         onClick={() => toggleStatus(l.id)}
@@ -417,6 +516,51 @@ export default function ProviderListings() {
                 </label>
               ))}
             </div>
+
+            {/* Calendar Availability Date Range (Month, Day, Year) */}
+            <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="label !mb-0 flex items-center gap-1.5 text-emerald-950 font-semibold">
+                  <Calendar size={14} className="text-emerald-600" />
+                  Active Calendar Availability (Month, Day, Year) *
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.ongoingAvailability}
+                    onChange={e => setForm(f => ({ ...f, ongoingAvailability: e.target.checked }))}
+                    className="accent-emerald-600"
+                  />
+                  <span>Ongoing / No Expiration</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="form-group !mb-0">
+                  <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available From (Month / Day / Year)</span>
+                  <input
+                    type="date"
+                    className="input bg-white"
+                    value={form.availableFrom}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={e => setForm(f => ({ ...f, availableFrom: e.target.value }))}
+                  />
+                </div>
+                {!form.ongoingAvailability && (
+                  <div className="form-group !mb-0">
+                    <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available Until (Month / Day / Year)</span>
+                    <input
+                      type="date"
+                      className="input bg-white"
+                      value={form.availableTo}
+                      min={form.availableFrom || new Date().toISOString().split('T')[0]}
+                      onChange={e => setForm(f => ({ ...f, availableTo: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="label">Operating From</label>
@@ -537,15 +681,26 @@ export default function ProviderListings() {
             <div className="space-y-2 text-xs text-gray-600 bg-emerald-50/50 border border-emerald-100 rounded-xl p-3.5">
               <div className="flex items-center gap-2">
                 <MapPin size={14} className="text-emerald-700 flex-shrink-0" />
-                <span>Service Area: <strong>Metro Cebu & Surrounding Cities</strong></span>
+                <span>Service Area: <strong>{viewingListing.serviceArea || 'Metro Cebu & Surrounding Cities'}</strong></span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-emerald-700 flex-shrink-0" />
-                <span>Operating Hours: <strong>8:00 AM – 5:00 PM</strong> (Mon - Sat)</span>
+                <span>Operating Hours: <strong>{viewingListing.hoursFrom || '08:00'} – {viewingListing.hoursTo || '17:00'}</strong> ({Array.isArray(viewingListing.days) ? viewingListing.days.join(', ') : 'Mon - Sat'})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar size={14} className="text-emerald-700 flex-shrink-0" />
+                <span>Active Dates: <strong>{viewingListing.availableFrom || 'Starting immediately'}</strong> {viewingListing.availableTo ? `until ${viewingListing.availableTo}` : '(Ongoing / No expiration)'}</span>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-gray-100">
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => openEditAvailability(viewingListing)}
+                className="btn-secondary flex-1 py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 text-emerald-700 border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/60"
+              >
+                <Calendar size={14} /> Change Availability
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -563,6 +718,130 @@ export default function ProviderListings() {
                 style={{ background: '#059669' }}
               >
                 Close Details
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Edit Availability Modal (Change Availability Even After Published) ── */}
+      <Modal
+        open={Boolean(editingAvailability)}
+        onClose={() => setEditingAvailability(null)}
+        title="Edit Listing Availability"
+        size="md"
+      >
+        {editingAvailability && (
+          <div className="flex flex-col gap-4">
+            <div className="border-b border-gray-100 pb-2">
+              <h4 className="font-bold text-gray-900 text-sm">{editingAvailability.title}</h4>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Update working days, active calendar dates (Month, Day, Year), and operating hours. These updates take effect immediately for customer bookings.
+              </p>
+            </div>
+
+            {/* Available Days */}
+            <div className="space-y-1.5">
+              <label className="label">Available Days *</label>
+              <div className="grid grid-cols-4 gap-2">
+                {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+                  <label key={d} className={`flex items-center gap-1.5 text-xs font-medium cursor-pointer p-2 rounded-lg border transition-all ${availForm.days.includes(d) ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
+                    <input
+                      type="checkbox"
+                      checked={availForm.days.includes(d)}
+                      onChange={e => {
+                        if (e.target.checked) setAvailForm(f => ({ ...f, days: [...f.days, d] }))
+                        else setAvailForm(f => ({ ...f, days: f.days.filter(x => x !== d) }))
+                      }}
+                      className="accent-emerald-600"
+                    />
+                    {d}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Calendar Availability Date Range (Month, Day, Year) */}
+            <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="label !mb-0 flex items-center gap-1.5 text-emerald-950 font-semibold">
+                  <Calendar size={14} className="text-emerald-600" />
+                  Active Calendar Availability (Month, Day, Year) *
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={availForm.ongoingAvailability}
+                    onChange={e => setAvailForm(f => ({ ...f, ongoingAvailability: e.target.checked }))}
+                    className="accent-emerald-600"
+                  />
+                  <span>Ongoing / No Expiration</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="form-group !mb-0">
+                  <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available From (Month / Day / Year)</span>
+                  <input
+                    type="date"
+                    className="input bg-white"
+                    value={availForm.availableFrom}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={e => setAvailForm(f => ({ ...f, availableFrom: e.target.value }))}
+                  />
+                </div>
+                {!availForm.ongoingAvailability && (
+                  <div className="form-group !mb-0">
+                    <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available Until (Month / Day / Year)</span>
+                    <input
+                      type="date"
+                      className="input bg-white"
+                      value={availForm.availableTo}
+                      min={availForm.availableFrom || new Date().toISOString().split('T')[0]}
+                      onChange={e => setAvailForm(f => ({ ...f, availableTo: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Operating Hours */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="form-group">
+                <label className="label">Operating From</label>
+                <input
+                  type="time"
+                  className="input"
+                  value={availForm.hoursFrom}
+                  onChange={e => setAvailForm(f => ({ ...f, hoursFrom: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label className="label">Operating To</label>
+                <input
+                  type="time"
+                  className="input"
+                  value={availForm.hoursTo}
+                  onChange={e => setAvailForm(f => ({ ...f, hoursTo: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setEditingAvailability(null)}
+                className="btn-secondary flex-1 py-2.5 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveAvailability}
+                className="btn-primary flex-1 py-2.5 text-xs font-bold"
+                style={{ background: '#059669' }}
+              >
+                Save Availability Changes
               </button>
             </div>
           </div>

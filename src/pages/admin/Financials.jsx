@@ -37,20 +37,68 @@ const wdVariant = s => ({ pending_review: 'warning', verified: 'info', approved:
 export default function AdminFinancials() {
   const [tab, setTab] = useState('ledger')
   const [page, setPage] = useState(1)
-  const [transactions, setTransactions] = useState(INIT_TRANSACTIONS)
-  const [withdrawals, setWithdrawals] = useState(() => {
+
+  const loadTransactions = () => {
+    try {
+      const all = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      const cust = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+      const merged = [...all]
+      const ids = new Set(merged.map(b => b.id))
+      for (const b of cust) {
+        if (!ids.has(b.id)) {
+          merged.push(b)
+          ids.add(b.id)
+        }
+      }
+      if (merged.length > 0) {
+        const mapped = merged.map(b => ({
+          id: b.id,
+          customer: b.customer || 'Customer',
+          provider: b.provider || 'Provider',
+          service: b.service || 'Service',
+          gross: Number(b.amount) || 0,
+          fee: Number(b.fee) || Math.round((Number(b.amount) || 0) * 0.1),
+          net: Number(b.net) || Math.round((Number(b.amount) || 0) * 0.9),
+          date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
+          status: b.status === 'completed' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
+        }))
+        return mapped
+      }
+    } catch {}
+    return INIT_TRANSACTIONS
+  }
+
+  const loadWithdrawals = () => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
       if (Array.isArray(stored) && stored.length > 0) {
-        const storedIds = new Set(stored.map(w => w.id))
-        return [...stored, ...WITHDRAWALS.filter(w => !storedIds.has(w.id))]
+        return stored
       }
     } catch {}
     return WITHDRAWALS
-  })
+  }
+
+  const [transactions, setTransactions] = useState(loadTransactions)
+  const [withdrawals, setWithdrawals] = useState(loadWithdrawals)
   const [txnFilter, setTxnFilter] = useState('all')
   const [rejectModal, setRejectModal] = useState(null)
   const [rejectNote, setRejectNote] = useState('')
+
+  // Live real-time sync with provider and customer actions
+  useEffect(() => {
+    const handleSync = () => {
+      setTransactions(loadTransactions())
+      setWithdrawals(loadWithdrawals())
+    }
+    window.addEventListener('serviceq_withdrawals_updated', handleSync)
+    window.addEventListener('serviceq_bookings_updated', handleSync)
+    window.addEventListener('storage', handleSync)
+    return () => {
+      window.removeEventListener('serviceq_withdrawals_updated', handleSync)
+      window.removeEventListener('serviceq_bookings_updated', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
+  }, [])
 
   const PAGE_SIZE = 6
   const isDefaultAll = txnFilter === 'all'
@@ -71,10 +119,43 @@ export default function AdminFinancials() {
       try {
         localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
         window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+        window.dispatchEvent(new Event('storage'))
       } catch {}
       return updated
     })
     toast.success(`Status updated to: ${status.replace('_', ' ')}`)
+  }
+
+  const approveWithdrawal = (id) => {
+    setWithdrawals(prev => {
+      const wd = prev.find(w => w.id === id)
+      const updated = prev.map(w => w.id === id ? { ...w, status: 'completed', approved_at: new Date().toISOString() } : w)
+      try {
+        localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
+        if (wd?.amount) {
+          const currPend = Number(localStorage.getItem('serviceq_provider_pending_balance') || 0)
+          localStorage.setItem('serviceq_provider_pending_balance', String(Math.max(0, currPend - Number(wd.amount))))
+        }
+        const auditLog = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+        const auditEntry = {
+          id: `a${Date.now()}`,
+          staff: 'Admin',
+          role: 'superadmin',
+          action: 'Withdrawal Approved & Paid',
+          target: id,
+          desc: `Admin approved payout of ₱${Number(wd?.amount || 0).toLocaleString()} for ${wd?.provider || 'Provider'} via ${wd?.method || 'Payout'}.`,
+          before: { status: wd?.status || 'pending' },
+          after: { status: 'completed' },
+          ip: '127.0.0.1',
+          ts: new Date().toISOString(),
+        }
+        localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...auditLog]))
+        window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+        window.dispatchEvent(new Event('storage'))
+      } catch {}
+      return updated
+    })
+    toast.success('Withdrawal approved and marked as paid out!')
   }
 
   const rejectWd = () => {
@@ -84,6 +165,7 @@ export default function AdminFinancials() {
       try {
         localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(updated))
         window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
+        window.dispatchEvent(new Event('storage'))
       } catch {}
       return updated
     })
@@ -215,8 +297,16 @@ export default function AdminFinancials() {
                       <Badge variant={wdVariant(w.status)} className="capitalize">{w.status.replace('_', ' ')}</Badge>
                     </td>
                     <td className="p-4">
-                      <div className="flex gap-2">
-                        {next && actionLabel && (
+                      <div className="flex gap-2 items-center">
+                        {w.status !== 'completed' && w.status !== 'rejected' && (
+                          <button
+                            onClick={() => approveWithdrawal(w.id)}
+                            className="btn-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1 text-xs font-semibold shadow-xs"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {next && actionLabel && w.status !== 'completed' && (
                           <button
                             onClick={() => advanceWd(w.id, next)}
                             className="btn-sm bg-brand-100 text-brand-700 hover:bg-brand-200 rounded-lg px-2 py-1 text-xs font-medium"
@@ -231,6 +321,11 @@ export default function AdminFinancials() {
                           >
                             Reject
                           </button>
+                        )}
+                        {w.status === 'completed' && (
+                          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                            Paid Out
+                          </span>
                         )}
                       </div>
                     </td>
