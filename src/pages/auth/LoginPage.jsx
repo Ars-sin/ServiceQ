@@ -98,25 +98,8 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/login?from=google&role=${loginRole || 'customer'}`,
-        },
-      })
-      if (error) {
-        if (error.message?.toLowerCase().includes('not enabled') || error.message?.toLowerCase().includes('disabled')) {
-          setShowGoogleModal(true)
-        } else {
-          throw error
-        }
-      }
-    } catch (err) {
-      console.error('Google OAuth error:', err)
-      setShowGoogleModal(true)
-    }
+  const handleGoogleSignIn = () => {
+    setShowGoogleModal(true)
   }
 
   const handleSubmit = async e => {

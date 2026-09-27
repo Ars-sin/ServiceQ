@@ -126,13 +126,9 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ForgotPasswordPage />} />
 
-      {/* ── Provider Onboarding (requires login) ── */}
+      {/* ── Provider Onboarding ── */}
       <Route path="/provider/onboarding"
-        element={
-          <ProtectedRoute requiredRole="provider">
-            <ProviderOnboarding />
-          </ProtectedRoute>
-        }
+        element={<ProviderOnboarding />}
       />
 
       {/* ── Customer Portal ── */}

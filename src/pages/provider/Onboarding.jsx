@@ -49,30 +49,49 @@ export default function ProviderOnboarding() {
 
   // O4: Auto-fill from registration data (profile, auth user, or cached registration)
   useEffect(() => {
-    let savedReg = null
+    let savedReg = {}
     try {
-      savedReg = JSON.parse(
-        sessionStorage.getItem('serviceq_reg_data') ||
-        localStorage.getItem('serviceq_latest_provider_registered') ||
-        localStorage.getItem('serviceq_auth_profile') ||
-        'null'
-      )
+      const s1 = JSON.parse(localStorage.getItem('serviceq_latest_provider_registered') || '{}')
+      const s2 = JSON.parse(sessionStorage.getItem('serviceq_reg_data') || '{}')
+      const s3 = user?.id ? JSON.parse(localStorage.getItem(`serviceq_provider_profile_${user.id}`) || '{}') : {}
+      const s4 = user?.email ? JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${user.email.toLowerCase()}`) || '{}') : {}
+      const s5 = JSON.parse(localStorage.getItem('serviceq_auth_profile') || '{}')
+      savedReg = { ...s5, ...s1, ...s2, ...s3, ...s4 }
+    } catch {}
+
+    let meta = {}
+    try {
+      if (profile?.avatar_url && profile.avatar_url.startsWith('{')) {
+        meta = JSON.parse(profile.avatar_url)
+      }
     } catch {}
 
     const name  = profile?.full_name || user?.user_metadata?.full_name || savedReg?.fullName || (savedReg?.firstName ? `${savedReg.firstName} ${savedReg.lastName || ''}`.trim() : '')
     const email = profile?.email || user?.email || savedReg?.email
     const phone = profile?.phone || user?.user_metadata?.phone || savedReg?.phone
-    const bName = profile?.business_name || user?.user_metadata?.business_name || savedReg?.businessName
+    const bName = meta?.business_name || profile?.business_name || user?.user_metadata?.business_name || savedReg?.businessName || name
+    const pType = meta?.provider_type || user?.user_metadata?.provider_type?.[0] || savedReg?.providerType || 'services'
+    const normPType = pType === 'rental' || pType === 'rental_items' ? 'rental_items' : pType === 'rental_props' ? 'rental_props' : pType === 'both' ? 'both' : 'services'
+    const desc = meta?.description || savedReg?.description || (savedReg?.category ? `Specializing in ${savedReg.category}` : '')
+    const years = meta?.years_experience || user?.user_metadata?.years_experience || savedReg?.yearsExp || '1'
+    const serviceArea = meta?.service_area || user?.user_metadata?.service_area || savedReg?.serviceArea || (savedReg?.city ? `${savedReg.city}, Metro Cebu` : 'Cebu City, Metro Cebu')
 
-    if (name || email || phone || bName) {
-      setForm(f => ({
-        ...f,
-        fullName:     name  || f.fullName,
-        email:        email || f.email,
-        phone:        phone || f.phone,
-        businessName: bName || f.businessName,
-      }))
-    }
+    setForm(f => ({
+      ...f,
+      fullName:     name  || f.fullName,
+      email:        email || f.email,
+      phone:        phone || f.phone,
+      businessName: bName || f.businessName,
+      providerType: normPType || f.providerType || 'services',
+      description:  desc || f.description,
+      yearsExp:     years ? String(years).replace(/\D/g, '') || '1' : f.yearsExp,
+      serviceArea:  serviceArea || f.serviceArea,
+      hoursFrom:    meta?.hours_from || f.hoursFrom || '08:00',
+      hoursTo:      meta?.hours_to || f.hoursTo || '17:00',
+      accountName:  f.accountName || name || bName,
+      gcashNum:     f.gcashNum || phone,
+      mayaNum:      f.mayaNum || phone,
+    }))
 
     const addr = profile?.address || savedReg?.address
     const brgy = profile?.barangay || savedReg?.barangay
@@ -89,6 +108,17 @@ export default function ProviderOnboarding() {
         province:   prov || loc.province,
         postalCode: zip  || loc.postalCode,
       }))
+    }
+
+    // Auto-preview existing avatar image if available
+    if (!photoPreview) {
+      if (profile?.avatar_url && !profile.avatar_url.startsWith('{')) {
+        setPhotoPreview(profile.avatar_url)
+      } else if (user?.user_metadata?.avatar_url) {
+        setPhotoPreview(user.user_metadata.avatar_url)
+      } else if (user?.user_metadata?.picture) {
+        setPhotoPreview(user.user_metadata.picture)
+      }
     }
   }, [profile, user])
 
@@ -211,56 +241,32 @@ export default function ProviderOnboarding() {
   const allAgreed = agreed.terms && agreed.agreement && agreed.fee
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar stepper (Desktop) */}
-      <aside className="hidden md:flex flex-col w-64 bg-white border-r border-gray-100 p-6 gap-6 flex-shrink-0">
-        <div className="flex flex-col gap-1 mb-4">
-          <div className="flex items-center gap-2">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Top Header */}
+      <header className="bg-white border-b border-gray-100 py-3.5 px-4 sm:px-8 sticky top-0 z-20 shadow-xs">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
             <img src="/logo.png" alt="ServiceQ" className="h-8 w-8 object-contain" />
-            <span className="font-bold text-gray-900">ServiceQ</span>
+            <span className="font-bold text-gray-900 text-base">ServiceQ</span>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full ml-1">
+              Provider Onboarding
+            </span>
           </div>
-          <div className="text-xs text-gray-400">Provider Setup</div>
-        </div>
-        {STEPS.map((s, i) => (
-          <div key={s} className="flex items-start gap-3">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-all mt-0.5 ${
-              i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-emerald-600 text-white ring-4 ring-emerald-100' : 'bg-gray-100 text-gray-400'
-            }`}>{i < step ? <CheckCircle size={14} /> : i + 1}</div>
-            <div>
-              <div className={`text-sm font-medium ${i === step ? 'text-emerald-700 font-semibold' : i < step ? 'text-gray-700' : 'text-gray-400'}`}>{s}</div>
-              <div className="text-xs text-gray-400">Step {i + 1}</div>
-            </div>
-          </div>
-        ))}
-
-        {/* Sidebar Exit */}
-        <div className="mt-auto pt-6 border-t border-gray-100">
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors py-2 px-2.5 rounded-lg hover:bg-gray-50 w-full"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 transition-colors py-1.5 px-3 rounded-lg hover:bg-gray-100"
           >
             <ArrowLeft size={14} /> Back to Home
           </button>
         </div>
-      </aside>
+      </header>
 
       {/* Main — Centered Form Container (O1) */}
-      <div className="flex-1 flex flex-col items-center justify-start p-6 md:p-10 w-full overflow-y-auto">
-        <div className="w-full max-w-2xl flex flex-col flex-1">
+      <main className="flex-1 flex flex-col items-center justify-start py-8 px-4 sm:px-6 w-full overflow-y-auto">
+        <div className="w-full max-w-2xl mx-auto flex flex-col flex-1">
           {/* Centered Top Progress Bar (O3) */}
           <div className="w-full flex flex-col items-center mb-6">
-            <div className="w-full flex items-center justify-between mb-4 md:hidden">
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-gray-900"
-              >
-                <ArrowLeft size={14} /> Back to Home
-              </button>
-              <span className="text-xs font-semibold text-emerald-700">Step {step + 1} of {STEPS.length}</span>
-            </div>
-
             {/* Stepper Dots & Line */}
             <div className="w-full max-w-md flex items-center justify-between gap-1 mb-3">
               {STEPS.map((s, i) => (
@@ -269,6 +275,7 @@ export default function ProviderOnboarding() {
                     className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
                       i < step ? 'bg-emerald-500 text-white' : i === step ? 'bg-emerald-600 text-white ring-4 ring-emerald-100' : 'bg-gray-200 text-gray-500'
                     }`}
+                    title={s}
                   >
                     {i < step ? '✓' : i + 1}
                   </div>
@@ -331,46 +338,75 @@ export default function ProviderOnboarding() {
                       <input type="date" className="input" value={form.dob} onChange={e => set('dob', e.target.value)} />
                     </div>
 
-                    {/* O2: Profile Photo Upload Preview */}
-                    <div className="form-group">
-                      <label className="label flex items-center justify-between">
-                        <span>Profile Photo</span>
-                        {!photoPreview && <span className="text-xs text-amber-600 font-medium">Required</span>}
+                    {/* Image Upload Preview (O2) */}
+                    <div className="form-group sm:col-span-2">
+                      <label className="label flex items-center justify-between mb-2">
+                        <span>Profile Photo / Business Logo</span>
+                        {!photoPreview && <span className="text-xs text-amber-600 font-medium">Recommended</span>}
                       </label>
-                      {photoPreview ? (
-                        <div className="flex items-center gap-3 p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl">
-                          <img src={photoPreview} alt="Preview" className="w-12 h-12 rounded-lg object-cover border border-emerald-300 shadow-xs" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-emerald-900">Photo attached ✓</p>
-                            <p className="text-[10px] text-emerald-700">Will be shown on your profile.</p>
+                      <div className="flex flex-col sm:flex-row items-center gap-4 p-4 bg-gray-50/80 border border-gray-200 rounded-2xl">
+                        {photoPreview ? (
+                          <div className="relative group flex-shrink-0">
+                            <img
+                              src={photoPreview}
+                              alt="Profile Preview"
+                              className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-emerald-500 shadow-md"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPhotoPreview(null)}
+                              className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white p-1 rounded-full shadow-md transition-transform hover:scale-110"
+                              title="Remove photo"
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setPhotoPreview(null)}
-                            className="text-xs text-rose-600 hover:text-rose-700 p-1"
-                            title="Remove"
-                          >
-                            <X size={16} />
-                          </button>
+                        ) : (
+                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gray-100 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 flex-shrink-0">
+                            <Image size={28} />
+                            <span className="text-[10px] mt-1 font-medium">No photo</span>
+                          </div>
+                        )}
+
+                        <div className="flex-1 flex flex-col gap-2 text-center sm:text-left min-w-0">
+                          <div>
+                            <p className="text-xs font-semibold text-gray-800">
+                              {photoPreview ? 'Profile photo attached ✓' : 'Upload your photo or business logo'}
+                            </p>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              This photo will appear on your provider profile, search cards, and customer chats.
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 justify-center sm:justify-start">
+                            <label className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-gray-300 hover:border-emerald-500 text-gray-700 hover:text-emerald-700 rounded-xl text-xs font-semibold cursor-pointer shadow-xs transition-colors">
+                              <Upload size={14} />
+                              <span>{photoPreview ? 'Change Photo' : 'Choose Photo'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={e => {
+                                  const file = e.target.files?.[0]
+                                  if (file) {
+                                    setPhotoPreview(URL.createObjectURL(file))
+                                    toast.success('Profile photo attached!')
+                                  }
+                                }}
+                              />
+                            </label>
+                            {photoPreview && (
+                              <button
+                                type="button"
+                                onClick={() => setPhotoPreview(null)}
+                                className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2.5 py-2 rounded-lg hover:bg-rose-50 transition-colors"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <label className="input flex items-center justify-center gap-2 cursor-pointer border-dashed hover:border-emerald-500 transition-colors">
-                          <Upload size={14} className="text-gray-400" />
-                          <span className="text-gray-500 text-xs font-medium">Upload photo...</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={e => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                setPhotoPreview(URL.createObjectURL(file))
-                                toast.success('Profile photo attached!')
-                              }
-                            }}
-                          />
-                        </label>
-                      )}
+                      </div>
                     </div>
 
                     {!user && (
@@ -659,18 +695,23 @@ export default function ProviderOnboarding() {
             </button>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Success Modal */}
       <Modal open={done} onClose={() => {}} title="Application Submitted! 🎉" size="sm">
         <div className="flex flex-col items-center text-center gap-4">
           <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center text-3xl">⏳</div>
           <div>
-            <h3 className="font-bold text-gray-900">Under Verification</h3>
-            <p className="text-sm text-gray-500 mt-1">Your application is being reviewed. We'll notify you via email within 1–3 business days.</p>
+            <h3 className="font-bold text-gray-900">Application Under Verification</h3>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              Your provider profile and credentials have been received for review. You can now access your provider dashboard, explore features, and prepare your listings!
+            </p>
           </div>
-          <button onClick={() => navigate('/provider/dashboard')} className="btn-primary w-full" style={{ background: '#059669' }}>
-            Go to Dashboard
+          <button
+            onClick={() => navigate('/provider/dashboard', { replace: true })}
+            className="btn-primary w-full py-2.5 !bg-emerald-600 hover:!bg-emerald-700 text-white font-bold rounded-xl shadow-sm"
+          >
+            Go to Provider Dashboard →
           </button>
         </div>
       </Modal>

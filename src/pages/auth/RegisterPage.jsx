@@ -34,9 +34,11 @@ const PROVIDER_CATEGORIES = [
 ]
 
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const { loginWithProfile } = useAuth()
   const [searchParams] = useSearchParams()
   const initialRole  = searchParams.get('role') === 'provider' ? 'provider' : 'customer'
   const initialEmail = searchParams.get('email') || ''
@@ -625,24 +627,56 @@ export default function RegisterPage() {
           payout_bank_name: '',
         } : null
 
+        const profileObj = {
+          id:          verifiedUser.id,
+          email:       cleanEmail,
+          full_name:   resolvedFullName,
+          phone:       form.phone.replace(/\D/g, ''),
+          role:        role || 'customer',
+          address:     location.address,
+          barangay:    location.barangay,
+          city:        location.city,
+          province:    location.province,
+          postal_code: location.postalCode,
+          avatar_url:  providerMetadata ? JSON.stringify(providerMetadata) : null,
+          is_active:   true,
+        }
+
         await supabase
           .from('profiles')
-          .upsert({
-            id:          verifiedUser.id,
-            email:       cleanEmail,
-            full_name:   resolvedFullName,
-            phone:       form.phone.replace(/\D/g, ''),
-            role:        role || 'customer',
-            address:     location.address,
-            barangay:    location.barangay,
-            city:        location.city,
-            province:    location.province,
-            postal_code: location.postalCode,
-            avatar_url:  providerMetadata ? JSON.stringify(providerMetadata) : null,
-            is_active:   true,
-          }, { onConflict: 'id' })
+          .upsert(profileObj, { onConflict: 'id' })
 
         if (role === 'provider') {
+          const cachedProviderData = {
+            fullName: resolvedFullName,
+            email: cleanEmail,
+            phone: form.phone.replace(/\D/g, ''),
+            businessName: resolvedBusinessName,
+            description: '',
+            category: resolvedCategory,
+            providerType: resolvedCategory || (providerDetails.providerType === 'rental' ? 'Rentals' : 'Services'),
+            yearsExp: providerDetails.yearsExp || 'Less than a year',
+            serviceArea: coverageList.join(', ') || (location.city ? `${location.city}, Metro Cebu` : 'Cebu City, Metro Cebu'),
+            address: location.address,
+            barangay: location.barangay,
+            city: location.city || 'Cebu City',
+            province: location.province || 'Cebu',
+            postalCode: location.postalCode || '6000',
+            idType: '',
+            idNumber: '',
+            payoutMethod: '',
+            payoutAccountName: '',
+            payoutAccountNumber: '',
+            status: 'under_verification'
+          }
+
+          try {
+            localStorage.setItem(`serviceq_provider_profile_${verifiedUser.id}`, JSON.stringify(cachedProviderData))
+            localStorage.setItem(`serviceq_provider_profile_email_${cleanEmail}`, JSON.stringify(cachedProviderData))
+            localStorage.setItem('serviceq_latest_provider_registered', JSON.stringify(cachedProviderData))
+            sessionStorage.setItem('serviceq_reg_data', JSON.stringify(cachedProviderData))
+          } catch {}
+
           try {
             await supabase.from('providers').upsert({
               user_id: verifiedUser.id,
@@ -656,12 +690,16 @@ export default function RegisterPage() {
             }, { onConflict: 'user_id' })
           } catch {}
         }
+
+        if (loginWithProfile) {
+          loginWithProfile(profileObj)
+        }
       }
 
       toast.success('Email verified successfully! Welcome to ServiceQ 🎉', { id: 'welcome-toast' })
 
       if (role === 'provider') {
-        setShowUnderReviewModal(true)
+        navigate('/provider/onboarding', { replace: true })
       } else {
         navigate('/customer/explore', { replace: true })
       }
@@ -703,25 +741,8 @@ export default function RegisterPage() {
   }
 
   // ── Google OAuth Sign-In / Sign-Up ────────────────────────────────────
-  const handleGoogleSignIn = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/login?from=google&role=${role || 'customer'}`,
-        },
-      })
-      if (error) {
-        if (error.message?.toLowerCase().includes('not enabled') || error.message?.toLowerCase().includes('disabled')) {
-          setShowGoogleModal(true)
-        } else {
-          throw error
-        }
-      }
-    } catch (err) {
-      console.error('Google OAuth error:', err)
-      setShowGoogleModal(true)
-    }
+  const handleGoogleSignIn = () => {
+    setShowGoogleModal(true)
   }
 
   return (
@@ -1697,10 +1718,18 @@ export default function RegisterPage() {
         isOpen={showGoogleModal}
         onClose={() => setShowGoogleModal(false)}
         loginRole={role}
-        onSuccessLogin={() => navigate(role === 'provider' ? '/provider/dashboard' : '/customer/explore')}
-        onProceedRegister={(email) => {
+        onSuccessLogin={(p) => {
+          if (p) loginWithProfile(p)
+          navigate(p?.role === 'provider' ? '/provider/dashboard' : '/customer/explore', { replace: true })
+        }}
+        onProceedRegister={({ email: regEmail, role: chosenRole }) => {
           setShowGoogleModal(false)
-          setForm(prev => ({ ...prev, email }))
+          if (chosenRole && chosenRole !== role) {
+            setRole(chosenRole)
+          }
+          if (regEmail) {
+            setForm(prev => ({ ...prev, email: regEmail }))
+          }
         }}
       />
     </div>
