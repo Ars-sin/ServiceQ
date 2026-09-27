@@ -164,6 +164,13 @@ export default function Checkout() {
       window.dispatchEvent(new Event('serviceq_bookings_updated'))
       window.dispatchEvent(new Event('storage'))
 
+      // ── Broadcast to provider tab immediately (cross-tab) ──
+      try {
+        const bc = new BroadcastChannel('serviceq_bookings')
+        bc.postMessage({ event: 'new_booking', bookingId, service: order.title })
+        bc.close()
+      } catch {}
+
     } catch (e) {
       console.warn('Local booking cache error:', e)
     }
