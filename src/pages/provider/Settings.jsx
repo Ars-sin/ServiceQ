@@ -281,40 +281,52 @@ export default function ProviderSettings() {
                     <div className="lg:col-span-5 bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col justify-center">
                       <p className="text-xs font-bold text-gray-700 mb-2.5">Your new password must have:</p>
                       <ul className="space-y-2 text-xs">
-                        <li className={`flex items-center gap-2 ${hasMinLength ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>
-                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasMinLength ? 'bg-emerald-100 text-emerald-700' : 'border border-gray-300'}`}>
-                            {hasMinLength ? '✓' : ''}
+                        <li className="flex items-center gap-2 text-gray-700 font-medium">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
+                            hasMinLength ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>
+                            {hasMinLength ? <Check size={10} strokeWidth={3} /> : '•'}
                           </span>
                           At least 6 characters
                         </li>
-                        <li className={`flex items-center gap-2 ${hasUppercase ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>
-                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasUppercase ? 'bg-emerald-100 text-emerald-700' : 'border border-gray-300'}`}>
-                            {hasUppercase ? '✓' : ''}
+                        <li className="flex items-center gap-2 text-gray-700 font-medium">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
+                            hasUppercase ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>
+                            {hasUppercase ? <Check size={10} strokeWidth={3} /> : '•'}
                           </span>
                           One uppercase letter (A–Z)
                         </li>
-                        <li className={`flex items-center gap-2 ${hasLowercase ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>
-                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasLowercase ? 'bg-emerald-100 text-emerald-700' : 'border border-gray-300'}`}>
-                            {hasLowercase ? '✓' : ''}
+                        <li className="flex items-center gap-2 text-gray-700 font-medium">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
+                            hasLowercase ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>
+                            {hasLowercase ? <Check size={10} strokeWidth={3} /> : '•'}
                           </span>
                           One lowercase letter (a–z)
                         </li>
-                        <li className={`flex items-center gap-2 ${hasNumber ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>
-                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasNumber ? 'bg-emerald-100 text-emerald-700' : 'border border-gray-300'}`}>
-                            {hasNumber ? '✓' : ''}
+                        <li className="flex items-center gap-2 text-gray-700 font-medium">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
+                            hasNumber ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>
+                            {hasNumber ? <Check size={10} strokeWidth={3} /> : '•'}
                           </span>
                           One number (0–9)
                         </li>
-                        <li className={`flex items-center gap-2 ${hasSpecial ? 'text-emerald-700 font-semibold' : 'text-gray-500'}`}>
-                          <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${hasSpecial ? 'bg-emerald-100 text-emerald-700' : 'border border-gray-300'}`}>
-                            {hasSpecial ? '✓' : ''}
+                        <li className="flex items-center gap-2 text-gray-700 font-medium">
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
+                            hasSpecial ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-400'
+                          }`}>
+                            {hasSpecial ? <Check size={10} strokeWidth={3} /> : '•'}
                           </span>
                           One special character (e.g. !@#)
                         </li>
                         {passwordForm.confirm && (
-                          <li className={`flex items-center gap-2 pt-1 border-t border-gray-200 ${passwordsMatch ? 'text-emerald-700 font-semibold' : 'text-red-500'}`}>
-                            <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] ${passwordsMatch ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>
-                              {passwordsMatch ? '✓' : '×'}
+                          <li className="flex items-center gap-2 pt-1 border-t border-gray-200 text-gray-700 font-medium">
+                            <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 transition-all ${
+                              passwordsMatch ? 'bg-emerald-600 text-white' : 'bg-red-500 text-white'
+                            }`}>
+                              {passwordsMatch ? <Check size={10} strokeWidth={3} /> : <X size={10} strokeWidth={3} />}
                             </span>
                             {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
                           </li>
@@ -328,7 +340,12 @@ export default function ProviderSettings() {
                     <button
                       type="button"
                       onClick={handleCancelPassword}
-                      className="btn-secondary text-xs px-5 py-2.5 font-semibold"
+                      disabled={!passwordForm.current.trim()}
+                      className={`text-xs px-5 py-2.5 rounded-xl font-semibold transition-all border ${
+                        passwordForm.current.trim()
+                          ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:scale-95 cursor-pointer shadow-xs'
+                          : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
                     >
                       Cancel
                     </button>
