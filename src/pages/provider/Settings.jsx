@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Lock, Mail, Bell, Shield, Eye, EyeOff, Loader, CheckCircle2, Circle,
@@ -11,7 +12,8 @@ import Badge from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
 
 export default function ProviderSettings() {
-  const { user, profile } = useAuth()
+  const navigate = useNavigate()
+  const { user, profile, signOut } = useAuth()
   const [activeSection, setActiveSection] = useState('account') // 'account' | 'notifications' | 'help'
 
   const [pwLoading, setPwLoading]       = useState(false)
@@ -66,8 +68,15 @@ export default function ProviderSettings() {
           throw error
         }
       }
-      toast.success('Password updated successfully!')
+      toast.success('Password updated successfully! Signing out...')
       setPasswordForm({ current: '', newPass: '', confirm: '' })
+      setTimeout(async () => {
+        try {
+          if (signOut) await signOut()
+          else await supabase.auth.signOut()
+        } catch {}
+        navigate('/login?role=provider', { replace: true })
+      }, 1000)
     } catch (err) {
       toast.error(err.message || 'Failed to update password')
     } finally {

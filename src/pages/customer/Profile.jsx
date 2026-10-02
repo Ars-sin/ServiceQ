@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp, Save, Loader, Pencil, Eye, EyeOff } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp, Save, Loader, Pencil, Eye, EyeOff, CheckCircle2, Circle, X } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { getFavoriteIds } from '@/lib/favorites'
@@ -45,11 +46,13 @@ function formatMemberSince(dateString) {
 }
 
 export default function CustomerProfile() {
+  const navigate = useNavigate()
   const { user, profile } = useAuth()
   const [activeTab, setActiveTab] = useState('Profile')
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving]       = useState(false)
   const [pwLoading, setPwLoading] = useState(false)
+  const [showCurrentPass, setShowCurrentPass] = useState(false)
   const [showNewPass, setShowNewPass] = useState(false)
   const [showConfirmPass, setShowConfirmPass] = useState(false)
 
@@ -92,19 +95,21 @@ export default function CustomerProfile() {
   // ── Calculate dynamic stats for customer (Slide 13: default 0 for new users) ──
   const bookingCount = useMemo(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_customer_bookings'))
+      const key = user?.id ? `serviceq_customer_bookings_${user.id}` : 'serviceq_customer_bookings'
+      const stored = JSON.parse(localStorage.getItem(key))
       if (Array.isArray(stored)) return stored.filter(b => b.status !== 'cancelled').length
     } catch {}
     return 0
-  }, [])
+  }, [user?.id])
 
   const reviewCount = useMemo(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_customer_bookings'))
+      const key = user?.id ? `serviceq_customer_bookings_${user.id}` : 'serviceq_customer_bookings'
+      const stored = JSON.parse(localStorage.getItem(key))
       if (Array.isArray(stored)) return stored.filter(b => b.reviewed).length
     } catch {}
     return 0
-  }, [])
+  }, [user?.id])
 
   const savedCount = useMemo(() => {
     return getFavoriteIds().length
@@ -113,7 +118,8 @@ export default function CustomerProfile() {
   // ── Derive transactions from user's actual bookings (Slide 14: default empty) ──
   const transactions = useMemo(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_customer_bookings'))
+      const key = user?.id ? `serviceq_customer_bookings_${user.id}` : 'serviceq_customer_bookings'
+      const stored = JSON.parse(localStorage.getItem(key))
       if (Array.isArray(stored) && stored.length > 0) {
         return stored.map(b => ({
           id: b.id,
@@ -125,13 +131,24 @@ export default function CustomerProfile() {
       }
     } catch {}
     return []
-  }, [])
+  }, [user?.id])
+
+  // ── Password requirements validation (SQI-10) ──
+  const newPass = passwordForm.newPass || ''
+  const hasMinLength = newPass.length >= 8
+  const hasUppercase = /[A-Z]/.test(newPass)
+  const hasLowercase = /[a-z]/.test(newPass)
+  const hasNumber    = /[0-9]/.test(newPass)
+  const hasSpecial   = /[^A-Za-z0-9]/.test(newPass)
+  const passwordsMatch = Boolean(passwordForm.confirm && newPass === passwordForm.confirm)
 
   const isPasswordValid = Boolean(
-    passwordForm.newPass &&
-    passwordForm.newPass.length >= 6 &&
-    passwordForm.confirm &&
-    passwordForm.newPass === passwordForm.confirm
+    hasMinLength &&
+    hasUppercase &&
+    hasLowercase &&
+    hasNumber &&
+    hasSpecial &&
+    passwordsMatch
   )
 
   // ── Save profile to Supabase ───────────────────────────────────────
@@ -164,18 +181,18 @@ export default function CustomerProfile() {
     }
   }
 
-  // ── Change password via Supabase Auth ─────────────────────────────
+  // ── Change password via Supabase Auth (SQI-10) ────────────────────
   const handlePasswordChange = async (e) => {
     e.preventDefault()
-    if (!passwordForm.newPass || !passwordForm.confirm) return toast.error('Please fill all fields.')
-    if (passwordForm.newPass !== passwordForm.confirm)   return toast.error('New passwords do not match.')
-    if (passwordForm.newPass.length < 6)                 return toast.error('Password must be at least 6 characters.')
+    if (!isPasswordValid) return toast.error('Please meet all password requirements before updating.')
     setPwLoading(true)
     try {
       const { error } = await supabase.auth.updateUser({ password: passwordForm.newPass })
       if (error) throw error
-      toast.success('Password updated successfully!')
+      toast.success('Password updated successfully! Please sign in with your new password.')
       setPasswordForm({ current: '', newPass: '', confirm: '' })
+      await supabase.auth.signOut()
+      navigate('/login?role=customer')
     } catch (err) {
       toast.error(err.message ?? 'Password update failed.')
     } finally {
@@ -477,119 +494,164 @@ export default function CustomerProfile() {
               {/* ── Settings ─────────────────────────────────────── */}
               {activeTab === 'Settings' && (
                 <div className="space-y-6">
-                  {/* Change Password (Slide 15: disabled until valid & match) */}
+                  {/* Change Password (SQI-10: Password requirements & filled button when valid) */}
                   <div className="bg-white rounded-2xl border border-gray-100 p-6">
                     <h3 className="font-bold text-gray-900 mb-1 flex items-center gap-2">
                       <Lock className="w-4 h-4 text-brand-600" /> Change Password
                     </h3>
-                    <p className="text-xs text-gray-400 mb-4">Password changes are applied immediately to your account. Use a strong password with at least 6 characters.</p>
-                    <form onSubmit={handlePasswordChange} className="space-y-4">
-                      {/* New Password with strength meter */}
-                      <div>
-                        <label className="text-xs font-semibold text-gray-700 mb-1.5 block">New Password</label>
-                        <div className="relative">
-                          <input
-                            type={showNewPass ? 'text' : 'password'}
-                            placeholder="New Password (min 6 characters)"
-                            value={passwordForm.newPass}
-                            onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
-                            className={`w-full border rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 transition ${
-                              passwordForm.newPass.length > 0
-                                ? passwordForm.newPass.length >= 6
-                                  ? 'border-emerald-400 focus:ring-emerald-300'
-                                  : 'border-red-300 focus:ring-red-200'
-                                : 'border-gray-200 focus:ring-brand-400'
-                            }`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowNewPass(!showNewPass)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                          >
-                            {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        </div>
-                        {/* Strength bar */}
-                        {passwordForm.newPass.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            <div className="flex gap-1">
-                              {[1, 2, 3, 4].map(lvl => {
-                                const len = passwordForm.newPass.length
-                                const strength = len < 6 ? 1 : len < 9 ? 2 : len < 12 ? 3 : 4
-                                return (
-                                  <div
-                                    key={lvl}
-                                    className={`h-1.5 flex-1 rounded-full transition-all ${
-                                      lvl <= strength
-                                        ? strength === 1 ? 'bg-red-400'
-                                          : strength === 2 ? 'bg-orange-400'
-                                          : strength === 3 ? 'bg-yellow-400'
-                                          : 'bg-emerald-500'
-                                        : 'bg-gray-200'
-                                    }`}
-                                  />
-                                )
-                              })}
+                    <p className="text-xs text-gray-400 mb-5">
+                      Password changes are applied immediately to your account. Please satisfy all requirements below.
+                    </p>
+
+                    <form onSubmit={handlePasswordChange} className="space-y-5">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        {/* Inputs column */}
+                        <div className="lg:col-span-7 space-y-4">
+                          {/* New Password */}
+                          <div>
+                            <label className="text-xs font-semibold text-gray-700 mb-1.5 block">New Password</label>
+                            <div className="relative">
+                              <input
+                                type={showNewPass ? 'text' : 'password'}
+                                placeholder="Enter new password (min. 8 characters)"
+                                value={passwordForm.newPass}
+                                onChange={e => setPasswordForm(p => ({ ...p, newPass: e.target.value }))}
+                                className={`w-full border rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 transition ${
+                                  passwordForm.newPass.length > 0
+                                    ? hasMinLength && hasUppercase && hasLowercase && hasNumber && hasSpecial
+                                      ? 'border-emerald-400 focus:ring-emerald-300'
+                                      : 'border-amber-300 focus:ring-amber-200'
+                                    : 'border-gray-200 focus:ring-brand-400'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowNewPass(!showNewPass)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
                             </div>
-                            <p className={`text-[11px] font-medium ${
-                              passwordForm.newPass.length < 6 ? 'text-red-500'
-                              : passwordForm.newPass.length < 9 ? 'text-orange-500'
-                              : passwordForm.newPass.length < 12 ? 'text-yellow-600'
-                              : 'text-emerald-600'
-                            }`}>
-                              {passwordForm.newPass.length < 6 ? '⚠ Too short (min 6 chars)'
-                               : passwordForm.newPass.length < 9 ? '🔸 Weak'
-                               : passwordForm.newPass.length < 12 ? '🔶 Good'
-                               : '✅ Strong'}
-                            </p>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Confirm Password with match indicator */}
-                      <div>
-                        <label className="text-xs font-semibold text-gray-700 mb-1.5 block">Confirm New Password</label>
-                        <div className="relative">
-                          <input
-                            type={showConfirmPass ? 'text' : 'password'}
-                            placeholder="Confirm New Password"
-                            value={passwordForm.confirm}
-                            onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
-                            className={`w-full border rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 transition ${
-                              passwordForm.confirm.length > 0
-                                ? passwordForm.newPass === passwordForm.confirm
-                                  ? 'border-emerald-400 focus:ring-emerald-300'
-                                  : 'border-red-300 focus:ring-red-200'
-                                : 'border-gray-200 focus:ring-brand-400'
-                            }`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowConfirmPass(!showConfirmPass)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                          >
-                            {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
+                          {/* Confirm Password */}
+                          <div>
+                            <label className="text-xs font-semibold text-gray-700 mb-1.5 block">Confirm New Password</label>
+                            <div className="relative">
+                              <input
+                                type={showConfirmPass ? 'text' : 'password'}
+                                placeholder="Confirm new password"
+                                value={passwordForm.confirm}
+                                onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))}
+                                className={`w-full border rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 transition ${
+                                  passwordForm.confirm.length > 0
+                                    ? passwordsMatch
+                                      ? 'border-emerald-400 focus:ring-emerald-300'
+                                      : 'border-red-300 focus:ring-red-200'
+                                    : 'border-gray-200 focus:ring-brand-400'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowConfirmPass(!showConfirmPass)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                {showConfirmPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        {passwordForm.confirm.length > 0 && (
-                          <p className={`text-[11px] font-medium mt-1.5 ${
-                            passwordForm.newPass === passwordForm.confirm ? 'text-emerald-600' : 'text-red-500'
-                          }`}>
-                            {passwordForm.newPass === passwordForm.confirm ? '✅ Passwords match' : '✗ Passwords do not match'}
-                          </p>
-                        )}
+
+                        {/* Requirements Box (SQI-10) */}
+                        <div className="lg:col-span-5 bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col justify-center">
+                          <p className="text-xs font-semibold text-gray-600 mb-2.5">Your new password must have:</p>
+                          <ul className="space-y-2 text-xs">
+                            <li className="flex items-center gap-2 text-gray-600">
+                              {hasMinLength ? (
+                                <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                              ) : (
+                                <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                              )}
+                              <span>At least 8 characters</span>
+                            </li>
+                            <li className="flex items-center gap-2 text-gray-600">
+                              {hasUppercase ? (
+                                <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                              ) : (
+                                <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                              )}
+                              <span>One uppercase letter (A–Z)</span>
+                            </li>
+                            <li className="flex items-center gap-2 text-gray-600">
+                              {hasLowercase ? (
+                                <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                              ) : (
+                                <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                              )}
+                              <span>One lowercase letter (a–z)</span>
+                            </li>
+                            <li className="flex items-center gap-2 text-gray-600">
+                              {hasNumber ? (
+                                <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                              ) : (
+                                <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                              )}
+                              <span>One number (0–9)</span>
+                            </li>
+                            <li className="flex items-center gap-2 text-gray-600">
+                              {hasSpecial ? (
+                                <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                              ) : (
+                                <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                              )}
+                              <span>One special character (e.g. !@#$)</span>
+                            </li>
+                            {passwordForm.confirm && (
+                              <li className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                                {passwordsMatch ? (
+                                  <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                                ) : (
+                                  <X size={15} className="text-red-500 flex-shrink-0" />
+                                )}
+                                <span className={passwordsMatch ? 'text-emerald-600 font-semibold' : 'text-red-500 font-semibold'}>
+                                  {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                                </span>
+                              </li>
+                            )}
+                          </ul>
+                        </div>
                       </div>
 
-                      <div className="flex justify-end pt-1">
+                      {/* Action buttons (SQI-10: Filled button when requirements are met) */}
+                      <div className="flex items-center justify-start gap-3 pt-3 border-t border-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => setPasswordForm({ current: '', newPass: '', confirm: '' })}
+                          disabled={!passwordForm.newPass && !passwordForm.confirm}
+                          className={`text-xs px-5 py-2.5 rounded-xl font-semibold transition-all border ${
+                            passwordForm.newPass || passwordForm.confirm
+                              ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:scale-95 cursor-pointer shadow-xs'
+                              : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
+                        >
+                          Cancel
+                        </button>
                         <button
                           type="submit"
                           disabled={pwLoading || !isPasswordValid}
-                          className="btn-primary gap-2 min-w-[160px] disabled:opacity-50 disabled:cursor-not-allowed"
+                          className={`text-xs px-6 py-2.5 rounded-xl font-bold transition-all shadow-sm flex items-center gap-2 ${
+                            isPasswordValid && !pwLoading
+                              ? 'bg-brand-600 hover:bg-brand-700 text-white cursor-pointer active:scale-95'
+                              : 'border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
                         >
-                          {pwLoading
-                            ? <><Loader size={15} className="animate-spin" /> Updating…</>
-                            : 'Update Password'
-                          }
+                          {pwLoading ? (
+                            <>
+                              <Loader size={14} className="animate-spin" /> Updating…
+                            </>
+                          ) : (
+                            'Update Password'
+                          )}
                         </button>
                       </div>
                     </form>

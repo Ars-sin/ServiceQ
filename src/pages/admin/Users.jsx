@@ -117,8 +117,17 @@ export default function AdminUsers() {
         localStorage.setItem('serviceq_audit_log', JSON.stringify([entry, ...existing]))
       } catch {}
 
-      // 3. Clear user caches
+      // 3. Clear user caches and record deleted user identifier
       try {
+        const deletedUsers = JSON.parse(localStorage.getItem('serviceq_deleted_users')) || []
+        const userIdentifier = {
+          id: userToDelete.id,
+          name: userToDelete.name?.toLowerCase(),
+          email: userToDelete.email?.toLowerCase(),
+          deletedAt: new Date().toISOString()
+        }
+        localStorage.setItem('serviceq_deleted_users', JSON.stringify([...deletedUsers, userIdentifier]))
+
         if (userToDelete.email) {
           localStorage.removeItem(`serviceq_provider_profile_email_${userToDelete.email.toLowerCase()}`)
         }
@@ -128,6 +137,43 @@ export default function AdminUsers() {
           localStorage.removeItem(`serviceq_provider_avatar_${userToDelete.id}`)
           localStorage.removeItem(`provider_verified_${userToDelete.id}`)
         }
+
+        // Clean up bookings matching deleted user from local storage
+        const allBookings = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+        const custBookings = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        const isTargetBooking = (b) => {
+          const matchId = b.customerId === userToDelete.id || b.providerId === userToDelete.id
+          const matchName = b.customer?.toLowerCase() === userToDelete.name?.toLowerCase() || b.provider?.toLowerCase() === userToDelete.name?.toLowerCase()
+          const matchEmail = b.customerEmail?.toLowerCase() === userToDelete.email?.toLowerCase()
+          return matchId || matchName || matchEmail
+        }
+
+        const remainingAll = allBookings.filter(b => !isTargetBooking(b))
+        const remainingCust = custBookings.filter(b => !isTargetBooking(b))
+        localStorage.setItem('serviceq_all_bookings', JSON.stringify(remainingAll))
+        localStorage.setItem('serviceq_customer_bookings', JSON.stringify(remainingCust))
+
+        // Also clean up Supabase platform_settings serviceq_global_bookings
+        try {
+          const { data: gRow } = await supabase
+            .from('platform_settings')
+            .select('value')
+            .eq('key', 'serviceq_global_bookings')
+            .maybeSingle()
+
+          if (gRow?.value) {
+            const gList = JSON.parse(gRow.value) || []
+            const remainingG = gList.filter(b => !isTargetBooking(b))
+            await supabase.from('platform_settings').upsert({
+              key: 'serviceq_global_bookings',
+              value: JSON.stringify(remainingG),
+              updated_at: new Date().toISOString()
+            })
+          }
+        } catch {}
+
+        window.dispatchEvent(new Event('serviceq_bookings_updated'))
+        window.dispatchEvent(new Event('storage'))
       } catch {}
 
       // 4. Update local state

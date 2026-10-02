@@ -6,22 +6,25 @@ import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
 import { ALL_LISTINGS, getListingIcon } from '@/pages/customer/Explore'
+import { useAuth } from '@/contexts/AuthContext'
 import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
 import { loadCachedListings } from '@/lib/listingsService'
 
 export default function CustomerFavorites() {
   const navigate = useNavigate()
-  const [favoriteIds, setFavoriteIds] = useState(getFavoriteIds)
+  const { user } = useAuth()
+  const [favoriteIds, setFavoriteIds] = useState(() => getFavoriteIds(user?.id))
 
   useEffect(() => {
-    const handler = () => setFavoriteIds(getFavoriteIds())
+    const handler = () => setFavoriteIds(getFavoriteIds(user?.id))
+    handler()
     window.addEventListener('serviceq_favorites_updated', handler)
     window.addEventListener('storage', handler)
     return () => {
       window.removeEventListener('serviceq_favorites_updated', handler)
       window.removeEventListener('storage', handler)
     }
-  }, [])
+  }, [user?.id])
 
   // Resolve matching listings from merged catalog
   const favorites = useMemo(() => {
@@ -32,8 +35,8 @@ export default function CustomerFavorites() {
   }, [favoriteIds])
 
   const remove = (id) => {
-    toggleFavorite(id)
-    setFavoriteIds(getFavoriteIds())
+    toggleFavorite(id, user?.id)
+    setFavoriteIds(getFavoriteIds(user?.id))
     toast('Removed from favorites')
   }
 

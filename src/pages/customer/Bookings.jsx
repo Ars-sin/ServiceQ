@@ -32,12 +32,12 @@ export default function CustomerBookings() {
   const [rating, setRating]          = useState(0)
   const [comment, setComment]        = useState('')
 
-  // Load bookings from local storage (empty by default for new users)
+  // Load bookings scoped to the current authenticated customer (0 for newly registered customer)
   const [bookings, setBookings] = useState(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_customer_bookings'))
-      if (Array.isArray(stored)) {
-        return stored
+      if (user?.id) {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
+        if (Array.isArray(stored)) return stored
       }
     } catch {}
     return []
@@ -48,8 +48,15 @@ export default function CustomerBookings() {
     let isMounted = true
 
     const syncCustomerBookings = async () => {
+      if (!user?.id && !user?.email && !profile?.full_name) {
+        setBookings([])
+        return
+      }
       try {
-        const local = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        let local = []
+        if (user?.id) {
+          local = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`)) || []
+        }
         const localMap = new Map(local.map(b => [b.id, b]))
 
         // Fetch latest cloud bookings from Supabase platform_settings
@@ -70,8 +77,7 @@ export default function CustomerBookings() {
               const isMine =
                 (userId && cb.customerId && String(cb.customerId) === String(userId)) ||
                 (userEmail && cb.customerEmail && cb.customerEmail.toLowerCase() === userEmail) ||
-                (userNameLower && cb.customer && cb.customer.toLowerCase() === userNameLower) ||
-                localMap.has(cb.id)
+                (userNameLower && cb.customer && cb.customer.toLowerCase() === userNameLower)
 
               if (isMine) {
                 // Cloud status is authoritative (e.g. provider accepted or completed)
@@ -87,7 +93,9 @@ export default function CustomerBookings() {
 
         if (isMounted) {
           setBookings(merged)
-          localStorage.setItem('serviceq_customer_bookings', JSON.stringify(merged))
+          if (user?.id) {
+            localStorage.setItem(`serviceq_customer_bookings_${user.id}`, JSON.stringify(merged))
+          }
         }
       } catch (err) {
         console.warn('Customer bookings sync warning:', err)

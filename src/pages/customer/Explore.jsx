@@ -81,7 +81,7 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
               {listing.subCategory}
             </span>
           )}
-          {listing.tag && (
+          {listing.tag && (listing.tag !== 'Verified' || listing.isVerified || listing.provider_verified || listing.providerVerified) && (
             <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200">
               {listing.tag}
             </span>
@@ -96,7 +96,7 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
             {listing.title}
           </h3>
           <p className="text-xs text-gray-500 mb-3 flex items-center justify-between">
-            <span>{listing.provider}</span>
+            <span>{(listing.provider && listing.provider !== 'Verified Provider') ? listing.provider : 'Service Provider'}</span>
             <span className="text-gray-400 flex items-center gap-0.5 text-[11px]">
               <MapPin size={11} className="text-gray-400" /> {listing.distance} km away
             </span>
@@ -122,7 +122,7 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
 
 export default function CustomerExplore() {
   const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { user, profile } = useAuth()
   const [search, setSearch]             = useState('')
   const [selectedType, setSelectedType] = useState('all') // 'all' | 'services' | 'rentals'
   const [sort, setSort]                 = useState('recommended')
@@ -130,7 +130,7 @@ export default function CustomerExplore() {
   const [minRating, setMinRating]       = useState(0)
   const [quickFilters, setQuickFilters] = useState([])
   const [showFilters, setShowFilters]   = useState(false)
-  const [favoriteIds, setFavoriteIds]   = useState(getFavoriteIds)
+  const [favoriteIds, setFavoriteIds]   = useState(() => getFavoriteIds(user?.id))
 
   const [allListings, setAllListings] = useState(loadCachedListings)
 
@@ -167,18 +167,19 @@ export default function CustomerExplore() {
   }, [])
 
   useEffect(() => {
-    const handler = () => setFavoriteIds(getFavoriteIds())
+    const handler = () => setFavoriteIds(getFavoriteIds(user?.id))
+    handler()
     window.addEventListener('serviceq_favorites_updated', handler)
     window.addEventListener('storage', handler)
     return () => {
       window.removeEventListener('serviceq_favorites_updated', handler)
       window.removeEventListener('storage', handler)
     }
-  }, [])
+  }, [user?.id])
 
   const handleToggleFav = (id) => {
-    const isAdded = toggleFavorite(id)
-    setFavoriteIds(getFavoriteIds())
+    const isAdded = toggleFavorite(id, user?.id)
+    setFavoriteIds(getFavoriteIds(user?.id))
     toast(isAdded ? 'Added to favorites!' : 'Removed from favorites')
   }
 
@@ -191,7 +192,7 @@ export default function CustomerExplore() {
     quickFilters.length === 0
 
   const [page, setPage] = useState(1)
-  const PAGE_SIZE = 6
+  const PAGE_SIZE = 12
 
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
@@ -244,7 +245,18 @@ export default function CustomerExplore() {
       if (sort === 'price_desc') return priceB - priceA
       if (sort === 'rating')     return ratingB - ratingA
       if (sort === 'distance')   return distA - distB
-      return 0 // recommended default
+
+      // 'recommended' default: show custom / newly added listings first
+      const isCustomA = !BASE_LISTINGS.some(item => String(item.id) === String(a.id))
+      const isCustomB = !BASE_LISTINGS.some(item => String(item.id) === String(b.id))
+      if (isCustomA && !isCustomB) return -1
+      if (!isCustomA && isCustomB) return 1
+
+      const timeA = new Date(a.updatedAt || 0).getTime()
+      const timeB = new Date(b.updatedAt || 0).getTime()
+      if (timeA !== timeB) return timeB - timeA
+
+      return ratingB - ratingA
     })
 
   // Paginate only when default all (no filters on)

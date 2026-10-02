@@ -104,7 +104,7 @@ export default function ProviderProfile() {
     }
 
     const reader = new FileReader()
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target?.result
       if (!dataUrl) return
       setAvatarPhoto(dataUrl)
@@ -112,7 +112,13 @@ export default function ProviderProfile() {
         try {
           localStorage.setItem(`serviceq_provider_avatar_${user.id}`, dataUrl)
           window.dispatchEvent(new Event('serviceq_provider_avatar_updated'))
-        } catch {}
+          
+          // Persist to Supabase so it survives page reloads and refreshes (SQI-3)
+          await supabase.from('profiles').update({ avatar_url: dataUrl }).eq('id', user.id)
+          await supabase.from('providers').update({ avatar_url: dataUrl }).eq('user_id', user.id)
+        } catch (err) {
+          console.warn('Avatar photo save notice:', err)
+        }
       }
       toast.success('Profile photo updated successfully!')
     }
@@ -124,7 +130,7 @@ export default function ProviderProfile() {
     if (!user?.id) return
     setLoading(true)
 
-    // Load saved avatar photo if available
+    // Load saved avatar photo if available locally
     try {
       const savedPhoto = localStorage.getItem(`serviceq_provider_avatar_${user.id}`)
       if (savedPhoto) setAvatarPhoto(savedPhoto)
@@ -137,6 +143,12 @@ export default function ProviderProfile() {
         .select('*')
         .eq('id', user.id)
         .maybeSingle()
+
+      // Load avatar from Supabase profile if present (SQI-3)
+      if (profData?.avatar_url && (profData.avatar_url.startsWith('data:image') || profData.avatar_url.startsWith('http'))) {
+        setAvatarPhoto(profData.avatar_url)
+        try { localStorage.setItem(`serviceq_provider_avatar_${user.id}`, profData.avatar_url) } catch {}
+      }
 
       // 2. Fetch provider row if available
       const { data: provData } = await supabase

@@ -41,12 +41,16 @@ export function normalizeListing(raw) {
     status: raw.status || 'active',
     bookings: parseInt(raw.bookings || raw.total_bookings) || 0,
     color: raw.color || (type === 'rentals' ? 'from-emerald-400 to-teal-400' : 'from-blue-400 to-indigo-400'),
-    provider: raw.provider || raw.provider_name || raw.business_name || 'Verified Provider',
+    provider: (raw.provider && raw.provider !== 'Verified Provider')
+      ? raw.provider
+      : (raw.provider_name || raw.business_name || 'Service Provider'),
     providerId: raw.providerId || raw.provider_id || raw.userId || raw.user_id || null,
     distance: parseFloat(raw.distance) || 1.0,
     rating: parseFloat(raw.rating || raw.avg_rating) || 5.0,
     reviews: parseInt(raw.reviews || raw.reviews_count || raw.total_bookings) || 0,
-    tag: raw.tag || (raw.status === 'active' ? 'Verified' : ''),
+    tag: (raw.tag && raw.tag !== 'Verified')
+      ? raw.tag
+      : ((raw.isVerified || raw.provider_verified || raw.providerVerified) ? 'Verified' : ''),
     days: Array.isArray(raw.days) && raw.days.length > 0 ? raw.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     hoursFrom: raw.hoursFrom || raw.hours_from || '08:00',
     hoursTo: raw.hoursTo || raw.hours_to || '17:00',
@@ -229,7 +233,7 @@ export async function fetchAdminBackendListings() {
 /**
  * Loads provider-specific listings from localStorage and Supabase.
  */
-export async function fetchProviderListings(userId) {
+export async function fetchProviderListings(userId, profileName) {
   if (!userId) return []
   const localKey = `serviceq_provider_listings_${userId}`
   let localItems = []
@@ -239,6 +243,30 @@ export async function fetchProviderListings(userId) {
 
   const seenIds = new Set(localItems.map(l => String(l.id)))
   const merged = [...localItems]
+
+  const isMatchingItem = (item) => {
+    if (!item) return false
+    const pid = String(item.providerId || item.provider_id || item.userId || item.user_id || '')
+    if (pid && pid === String(userId)) return true
+    if (profileName && item.provider && typeof item.provider === 'string' && item.provider.toLowerCase().trim() === String(profileName).toLowerCase().trim()) return true
+    return false
+  }
+
+  // Check local custom listings for this provider
+  try {
+    const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+    if (Array.isArray(custom)) {
+      for (const item of custom) {
+        if (isMatchingItem(item)) {
+          const norm = normalizeListing(item)
+          if (norm && !seenIds.has(norm.id)) {
+            seenIds.add(norm.id)
+            merged.push(norm)
+          }
+        }
+      }
+    }
+  } catch {}
 
   // A. Check Supabase platform_settings for this specific provider
   try {
@@ -262,7 +290,7 @@ export async function fetchProviderListings(userId) {
     }
   } catch {}
 
-  // B. Check Supabase global catalog for listings with this providerId
+  // B. Check Supabase global catalog for listings with this providerId or name
   try {
     const { data: globalRow } = await supabase
       .from('platform_settings')
@@ -274,7 +302,7 @@ export async function fetchProviderListings(userId) {
       const parsed = JSON.parse(globalRow.value)
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
-          if (String(item.providerId || item.provider_id) === String(userId)) {
+          if (isMatchingItem(item)) {
             const norm = normalizeListing(item)
             if (norm && !seenIds.has(norm.id)) {
               seenIds.add(norm.id)

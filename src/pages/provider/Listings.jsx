@@ -139,8 +139,8 @@ export default function ProviderListings() {
 
     // 2. Live backend fetch
     const syncFromBackend = () => {
-      fetchProviderListings(user.id).then(live => {
-        if (isMounted && Array.isArray(live) && live.length > 0) {
+      fetchProviderListings(user.id, profile?.full_name || profile?.business_name || user?.user_metadata?.full_name).then(live => {
+        if (isMounted && Array.isArray(live)) {
           setListings(applyBookingCounts(live))
         }
       }).catch(err => console.warn('Could not load live provider listings:', err))
@@ -297,8 +297,10 @@ export default function ProviderListings() {
       status: 'active',
       bookings: 0,
       color: typeNormalized === 'rentals' ? 'from-emerald-400 to-teal-400' : 'from-blue-400 to-indigo-400',
-      provider: profile?.full_name || user?.user_metadata?.full_name || 'Verified Provider',
+      provider: profile?.full_name || profile?.business_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Service Provider',
       providerId: user?.id,
+      tag: (profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true') ? 'Verified' : '',
+      isVerified: !!(profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true'),
       distance: 1.0,
       rating: 5.0,
       reviews: 0,

@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   LayoutDashboard, Users, Briefcase, Package, CalendarCheck,
-  DollarSign, Shield, Settings, ScrollText, LogOut, Bell, Menu,
+  DollarSign, Shield, Settings, ScrollText, LogOut, Bell, Menu, User,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -17,12 +17,17 @@ const NAV = [
   { to: '/admin/staff',      label: 'Staff & Roles',icon: Shield },
   { to: '/admin/settings',   label: 'Settings',     icon: Settings },
   { to: '/admin/audit-log',  label: 'Audit Log',    icon: ScrollText },
+  { to: '/admin/profile',    label: 'Profile',      icon: User },
 ]
 
 export default function AdminLayout() {
-  const { signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const adminName = profile?.full_name || user?.user_metadata?.full_name || 'Admin User'
+  const adminEmail = user?.email || profile?.email || 'admin@serviceq.ph'
+  const adminInitials = adminName.slice(0, 2).toUpperCase()
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -58,15 +63,30 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        {/* Sign out */}
-        <div className="px-3 py-4 border-t border-gray-100">
-          <button
-            onClick={() => { signOut(); navigate('/login') }}
-            className="sidebar-link w-full text-red-500 hover:bg-red-50 hover:text-red-600"
-          >
-            <LogOut size={18} />
-            Sign Out
-          </button>
+        {/* User Profile & Sign out (SQI-27: Show Name & Registered Email instead of raw logout) */}
+        <div className="px-3 py-3 border-t border-gray-100 bg-gray-50/50">
+          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
+            <NavLink
+              to="/admin/profile"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity"
+            >
+              <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center flex-shrink-0">
+                {adminInitials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-gray-900 truncate leading-tight">{adminName}</p>
+                <p className="text-[11px] text-gray-400 truncate leading-tight">{adminEmail}</p>
+              </div>
+            </NavLink>
+            <button
+              onClick={() => { signOut(); navigate('/admin/login') }}
+              title="Sign Out"
+              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -89,11 +109,20 @@ export default function AdminLayout() {
             <Menu size={20} />
           </button>
           <div className="flex-1 lg:flex-none" />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
-              <Bell size={20} className="text-gray-500" />
+              <Bell size={18} className="text-gray-500" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full" />
             </button>
+            <NavLink
+              to="/admin/profile"
+              className="flex items-center gap-2 py-1 px-2.5 rounded-xl border border-gray-100 hover:border-gray-200 bg-gray-50/80 hover:bg-gray-100 transition-all text-xs font-semibold text-gray-700"
+            >
+              <div className="w-6 h-6 rounded-md bg-rose-600 text-white font-bold text-[10px] flex items-center justify-center">
+                {adminInitials}
+              </div>
+              <span className="hidden sm:inline">{adminName}</span>
+            </NavLink>
           </div>
         </header>
 

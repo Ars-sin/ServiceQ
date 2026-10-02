@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { fetchProviderListings } from '@/lib/listingsService'
+import { fetchProviderBookings } from '@/lib/bookingsService'
 export default function ProviderDashboard() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
@@ -32,11 +33,16 @@ export default function ProviderDashboard() {
 
   useEffect(() => {
     if (!user?.id) return
+    const provName = profile?.full_name || profile?.business_name
     try {
       const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`))
       if (Array.isArray(stored)) setBookings(stored)
     } catch {}
-  }, [user?.id])
+
+    fetchProviderBookings(user.id, provName).then(live => {
+      if (Array.isArray(live)) setBookings(live)
+    }).catch(() => {})
+  }, [user?.id, profile?.full_name])
 
   useEffect(() => {
     async function checkVerification() {

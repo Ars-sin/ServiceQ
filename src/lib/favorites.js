@@ -1,28 +1,35 @@
-const STORAGE_KEY = 'serviceq_customer_favorites'
-const DEFAULT_FAVORITES = []
-
-export function getFavoriteIds() {
+export function getFavoriteStorageKey(userId) {
+  if (userId) return `serviceq_customer_favorites_${userId}`
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const cachedProfile = JSON.parse(localStorage.getItem('serviceq_auth_profile') || '{}')
+    if (cachedProfile?.id) return `serviceq_customer_favorites_${cachedProfile.id}`
+  } catch {}
+  return 'serviceq_customer_favorites'
+}
+
+export function getFavoriteIds(userId) {
+  try {
+    const key = getFavoriteStorageKey(userId)
+    const raw = localStorage.getItem(key)
     if (raw !== null) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) return parsed
     }
   } catch {}
 
-  return DEFAULT_FAVORITES
+  return []
 }
 
-export function isFavorite(id) {
+export function isFavorite(id, userId) {
   if (!id) return false
-  const ids = getFavoriteIds()
+  const ids = getFavoriteIds(userId)
   return ids.includes(String(id))
 }
 
-export function toggleFavorite(id) {
+export function toggleFavorite(id, userId) {
   if (!id) return false
   const targetId = String(id)
-  const ids = getFavoriteIds()
+  const ids = getFavoriteIds(userId)
   let nextIds
   let isAdded = false
 
@@ -35,7 +42,8 @@ export function toggleFavorite(id) {
   }
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextIds))
+    const key = getFavoriteStorageKey(userId)
+    localStorage.setItem(key, JSON.stringify(nextIds))
   } catch {}
 
   window.dispatchEvent(new CustomEvent('serviceq_favorites_updated', {

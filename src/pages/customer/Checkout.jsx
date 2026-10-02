@@ -4,6 +4,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { CheckCircle, Printer, Download, ArrowRight, ShoppingBag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, calcFees, genBookingId } from '@/lib/utils'
+import { jsPDF } from 'jspdf'
 import { PAYMENT_METHODS } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
@@ -101,81 +102,109 @@ export default function Checkout() {
   }
 
   const handleDownloadReceipt = () => {
-    const channelName = PAYMENT_METHODS.find(p => p.id === method)?.label || (method ? method.toUpperCase() : 'GCash')
+    try {
+      const channelName = PAYMENT_METHODS.find(p => p.id === method)?.label || (method ? method.toUpperCase() : 'GCash')
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      })
 
-    // Build a clean HTML receipt for PDF-quality printing
-    const receiptHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ServiceQ Receipt – ${bookingId}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Arial', sans-serif; background: #fff; color: #111; padding: 40px; max-width: 480px; margin: auto; }
-    .header { text-align: center; border-bottom: 2px solid #059669; padding-bottom: 16px; margin-bottom: 20px; }
-    .header h1 { font-size: 22px; font-weight: 900; color: #059669; letter-spacing: 1px; }
-    .header p { font-size: 11px; color: #666; margin-top: 4px; }
-    .badge { display: inline-block; background: #d1fae5; color: #065f46; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 99px; margin-top: 8px; border: 1px solid #6ee7b7; }
-    .ref { text-align: center; margin: 16px 0; }
-    .ref .label { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
-    .ref .value { font-size: 20px; font-weight: 900; font-family: monospace; color: #111; margin-top: 2px; }
-    .section { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
-    .row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
-    .row .k { color: #6b7280; }
-    .row .v { font-weight: 600; color: #111; text-align: right; max-width: 60%; }
-    .divider { border: none; border-top: 1px dashed #d1d5db; margin: 8px 0; }
-    .total-row { display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; padding-top: 8px; }
-    .total-row .v { color: #059669; }
-    .footer { text-align: center; font-size: 10px; color: #9ca3af; margin-top: 20px; border-top: 1px solid #f3f4f6; padding-top: 14px; }
-    .paid-stamp { text-align: center; margin: 10px 0; }
-    .paid-stamp span { display: inline-block; border: 3px solid #059669; border-radius: 6px; color: #059669; font-size: 24px; font-weight: 900; padding: 2px 18px; letter-spacing: 4px; transform: rotate(-5deg); }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>ServiceQ</h1>
-    <p>Official Booking Receipt</p>
-    <span class="badge">PAYMENT CONFIRMED ✓</span>
-  </div>
-  <div class="ref">
-    <div class="label">Reference ID</div>
-    <div class="value">${bookingId}</div>
-    <div class="label" style="margin-top:4px">${new Date().toLocaleString('en-PH')}</div>
-  </div>
-  <div class="section">
-    <div class="row"><span class="k">Service</span><span class="v">${order.title}</span></div>
-    <div class="row"><span class="k">Provider</span><span class="v">${order.provider}</span></div>
-    <div class="row"><span class="k">Scheduled Date</span><span class="v">${order.date}</span></div>
-    <div class="row"><span class="k">Sessions / Qty</span><span class="v">${sessions}</span></div>
-    <div class="row"><span class="k">Payment Channel</span><span class="v">${channelName}</span></div>
-    <div class="row"><span class="k">Payment Status</span><span class="v" style="color:#059669">PAID via Escrow</span></div>
-  </div>
-  <div class="section">
-    <div class="row"><span class="k">Subtotal</span><span class="v">PHP ${subtotal.toFixed(2)}</span></div>
-    <div class="row"><span class="k">Platform Fee (10%)</span><span class="v">PHP ${fee.toFixed(2)}</span></div>
-    <hr class="divider"/>
-    <div class="total-row"><span>TOTAL PAID</span><span class="v">PHP ${total.toFixed(2)}</span></div>
-  </div>
-  <div class="paid-stamp"><span>PAID</span></div>
-  <div class="footer">
-    <p>Thank you for choosing ServiceQ!</p>
-    <p>Trusted Local Services &amp; Rentals in Cebu</p>
-    <p style="margin-top:6px">support@serviceq.ph &nbsp;|&nbsp; serviceq.ph</p>
-  </div>
-</body>
-</html>`
+      // Header Banner
+      doc.setFillColor(37, 99, 235)
+      doc.rect(0, 0, 210, 26, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(20)
+      doc.setFont('helvetica', 'bold')
+      doc.text('ServiceQ', 105, 12, { align: 'center' })
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Official Booking Receipt & Confirmation', 105, 19, { align: 'center' })
 
-    const blob = new Blob([receiptHtml], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `ServiceQ-Receipt-${bookingId}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    toast.success('Receipt downloaded as PDF!')
+      // Reference Details
+      doc.setTextColor(51, 65, 85)
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Booking Reference:', 20, 38)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(bookingId), 70, 38)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Date & Time:', 20, 46)
+      doc.setFont('helvetica', 'normal')
+      doc.text(new Date().toLocaleString('en-PH'), 70, 46)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Payment Status:', 20, 54)
+      doc.setTextColor(5, 150, 105)
+      doc.setFont('helvetica', 'bold')
+      doc.text('PAID via Escrow (Confirmed)', 70, 54)
+      doc.setTextColor(51, 65, 85)
+
+      // Service Details Box
+      doc.setFillColor(248, 250, 252)
+      doc.setDrawColor(226, 232, 240)
+      doc.roundedRect(20, 62, 170, 52, 3, 3, 'FD')
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Service Offering:', 26, 73)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(order.title || 'Service Offering'), 75, 73)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Service Provider:', 26, 82)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(order.provider || 'Service Provider'), 75, 82)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Scheduled Date:', 26, 91)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(order.date || 'Immediate'), 75, 91)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Sessions / Qty:', 26, 100)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(sessions), 75, 100)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Payment Channel:', 26, 108)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(channelName), 75, 108)
+
+      // Financial Breakdown Box
+      doc.setFillColor(248, 250, 252)
+      doc.roundedRect(20, 120, 170, 36, 3, 3, 'FD')
+
+      doc.setFont('helvetica', 'normal')
+      doc.text('Subtotal:', 26, 131)
+      doc.text(`PHP ${subtotal.toFixed(2)}`, 184, 131, { align: 'right' })
+
+      doc.text('Platform Service Fee (10%):', 26, 139)
+      doc.text(`PHP ${fee.toFixed(2)}`, 184, 139, { align: 'right' })
+
+      doc.setDrawColor(203, 213, 225)
+      doc.line(26, 144, 184, 144)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(37, 99, 235)
+      doc.text('TOTAL PAID:', 26, 151)
+      doc.text(`PHP ${total.toFixed(2)}`, 184, 151, { align: 'right' })
+
+      // Footer
+      doc.setTextColor(148, 163, 184)
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Thank you for trusting ServiceQ — Cebu\'s Premier Services & Rentals Platform.', 105, 172, { align: 'center' })
+      doc.text('Support: support@serviceq.ph | Cebu City, Philippines', 105, 177, { align: 'center' })
+
+      // Save PDF file
+      doc.save(`ServiceQ-Receipt-${bookingId}.pdf`)
+      toast.success('Official PDF receipt downloaded!')
+    } catch (err) {
+      console.error('PDF generation error:', err)
+      toast.error('Could not generate receipt PDF')
+    }
   }
 
   const handlePrintReceipt = () => {
@@ -381,16 +410,16 @@ export default function Checkout() {
               <button
                 type="button"
                 onClick={handleDownloadReceipt}
-                className="flex-1 py-2.5 px-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 flex items-center justify-center gap-2 text-xs font-bold shadow-xs transition-all"
+                className="flex-1 py-2.5 px-3 rounded-xl border border-brand-600 bg-white text-brand-600 hover:bg-brand-50 flex items-center justify-center gap-2 text-xs font-bold shadow-xs transition-all"
               >
-                <Download size={14} className="text-emerald-600" /> Download PDF
+                <Download size={14} className="text-brand-600" /> Download Receipt
               </button>
               <button
                 type="button"
                 onClick={handlePrintReceipt}
-                className="flex-1 py-2.5 px-3 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100 flex items-center justify-center gap-2 text-xs font-bold shadow-xs transition-all"
+                className="flex-1 py-2.5 px-3 rounded-xl border border-brand-600 bg-white text-brand-600 hover:bg-brand-50 flex items-center justify-center gap-2 text-xs font-bold shadow-xs transition-all"
               >
-                <Printer size={14} className="text-blue-600" /> Print Receipt
+                <Printer size={14} className="text-brand-600" /> Print Receipt
               </button>
             </div>
           </div>

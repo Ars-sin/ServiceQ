@@ -153,10 +153,10 @@ export default function ListingDetail() {
       reviews: matched.reviews || 0,
       bookings: Math.round((matched.reviews || 10) * 2.8) || 45,
       provider: {
-        name: matched.provider || 'Verified Provider',
+        name: (matched.provider && matched.provider !== 'Verified Provider') ? matched.provider : 'Service Provider',
         avatar: initials,
         rating: matched.rating || 5.0,
-        verified: true,
+        verified: !!(matched.isVerified || matched.provider_verified || matched.providerVerified),
         joined: 'January 2024',
       },
       providerId: matched.providerId || null,

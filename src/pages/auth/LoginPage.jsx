@@ -43,6 +43,35 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (profile?.role) {
+        // SQI-25: If user registered manually, they cannot log in using Google Sign-In
+        let isManualRegistration = false
+        const storedMethod = localStorage.getItem(`serviceq_auth_provider_${session.user.email.toLowerCase()}`)
+        if (storedMethod === 'email') {
+          isManualRegistration = true
+        } else if (storedMethod !== 'google') {
+          try {
+            const meta = profile.avatar_url ? JSON.parse(profile.avatar_url) : null
+            if (meta?.auth_provider === 'email') {
+              isManualRegistration = true
+            } else if (meta?.auth_provider !== 'google') {
+              isManualRegistration = true
+            }
+          } catch {
+            isManualRegistration = true
+          }
+        }
+
+        if (isManualRegistration && isOAuthRedirect) {
+          await supabase.auth.signOut()
+          window.history.replaceState(null, '', window.location.pathname)
+          setForm(f => ({ ...f, email: session.user.email }))
+          toast.error('This email was registered manually with password. Please log in using your email and password.', {
+            id: 'manual-login-error',
+            duration: 6000,
+          })
+          return
+        }
+
         // Check cross-role mismatch (read loginRole from the ref snapshot at mount time)
         if (loginRole === 'customer' && profile.role === 'provider') {
           await supabase.auth.signOut()
@@ -98,8 +127,23 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleSignIn = () => {
-    setShowGoogleModal(true)
+  const handleGoogleSignIn = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          queryParams: {
+            prompt: 'select_account',
+            access_type: 'offline',
+          },
+          redirectTo: `${window.location.origin}/login?from=google&role=${loginRole || 'customer'}`,
+        },
+      })
+      if (error) throw error
+    } catch (err) {
+      console.error('Google OAuth sign-in error:', err)
+      toast.error(err.message || 'Failed to start Google sign-in')
+    }
   }
 
   const handleSubmit = async e => {
@@ -189,6 +233,8 @@ export default function LoginPage() {
         setLoginRole('customer')
         return
       }
+
+      localStorage.setItem(`serviceq_auth_provider_${form.email.trim().toLowerCase()}`, 'email')
 
       const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
       if (isMaintenance && userRole !== 'admin') {

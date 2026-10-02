@@ -12,7 +12,8 @@ import {
   submitWithdrawalRequestBackend,
   fetchBackendWithdrawals,
   fetchProviderBalancesBackend,
-  saveProviderBalancesBackend
+  saveProviderBalancesBackend,
+  fetchProviderBookings
 } from '@/lib/bookingsService'
 
 const wdVariant = s => ({
@@ -31,10 +32,36 @@ export default function ProviderEarnings() {
   const [wAmount, setWAmount]           = useState('')
   const [wMethod, setWMethod]           = useState('gcash')
 
-  // Real-time Provider Bookings — reload on events
+  // Helper to derive transactions from bookings
+  const deriveTransactionsFromBookings = (bookingList) => {
+    if (!Array.isArray(bookingList)) return []
+    const paidOrActive = bookingList.filter(b => 
+      b && (b.status === 'completed' || b.status === 'active' || b.status === 'scheduled' || b.paid === true || b.paymentStatus === 'paid') &&
+      b.status !== 'cancelled'
+    )
+    return paidOrActive.map(b => {
+      const gross = Number(b.amount) || 0
+      const fee = Math.round(gross * 0.1)
+      const net = gross - fee
+      const dateStr = b.date || (b.createdAt ? new Date(b.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recent')
+      return {
+        id: b.id,
+        bookingId: b.id,
+        customer: b.customer || b.customer_name || 'Customer',
+        service: b.service || b.title || 'Service Offering',
+        gross,
+        fee,
+        net,
+        date: dateStr,
+        payout: b.status === 'completed' ? 'released' : 'pending',
+      }
+    })
+  }
+
+  // Real-time Provider Bookings
   const [bookings, setBookings] = useState(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user?.id}`))
       if (Array.isArray(stored)) return stored
     } catch {}
     return []
@@ -43,43 +70,17 @@ export default function ProviderEarnings() {
   // Dynamic transactions derived from completed bookings or stored transactions
   const [transactions, setTransactions] = useState(() => {
     try {
-      const storedTxns = JSON.parse(localStorage.getItem('serviceq_provider_transactions'))
+      const storedTxns = JSON.parse(localStorage.getItem(`serviceq_provider_transactions_${user?.id}`)) || JSON.parse(localStorage.getItem('serviceq_provider_transactions'))
       if (Array.isArray(storedTxns) && storedTxns.length > 0) return storedTxns
     } catch {}
-    return []
+    const initBookings = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user?.id}`)) || []
+    return deriveTransactionsFromBookings(initBookings)
   })
-
-  // Reload transactions and bookings when anything changes
-  useEffect(() => {
-    const reload = () => {
-      try {
-        const storedTxns = JSON.parse(localStorage.getItem('serviceq_provider_transactions'))
-        if (Array.isArray(storedTxns) && storedTxns.length > 0) {
-          setTransactions(storedTxns)
-        }
-        const stored = JSON.parse(localStorage.getItem('serviceq_provider_bookings'))
-        if (Array.isArray(stored)) setBookings(stored)
-      } catch {}
-    }
-    window.addEventListener('serviceq_bookings_updated', reload)
-    window.addEventListener('serviceq_withdrawals_updated', reload)
-    window.addEventListener('storage', reload)
-    return () => {
-      window.removeEventListener('serviceq_bookings_updated', reload)
-      window.removeEventListener('serviceq_withdrawals_updated', reload)
-      window.removeEventListener('storage', reload)
-    }
-  }, [])
-
-  // Revenue metrics
-  const grossRevenue = transactions.reduce((acc, t) => acc + (t.gross || 0), 0)
-  const platformFees = transactions.reduce((acc, t) => acc + (t.fee || 0), 0)
-  const netRevenue = transactions.reduce((acc, t) => acc + (t.net || 0), 0)
 
   // Persistent Available Balance (defaults to 0 for new providers)
   const [availBalance, setAvailBalance] = useState(() => {
     try {
-      const stored = localStorage.getItem('serviceq_provider_avail_balance')
+      const stored = localStorage.getItem(`serviceq_provider_avail_balance_${user?.id}`) || localStorage.getItem('serviceq_provider_avail_balance')
       if (stored !== null && !isNaN(Number(stored))) return Number(stored)
     } catch {}
     return 0
@@ -88,69 +89,82 @@ export default function ProviderEarnings() {
   // Persistent Pending Balance (defaults to 0 for new providers)
   const [pendingBalance, setPendingBalance] = useState(() => {
     try {
-      const stored = localStorage.getItem('serviceq_provider_pending_balance')
+      const stored = localStorage.getItem(`serviceq_provider_pending_balance_${user?.id}`) || localStorage.getItem('serviceq_provider_pending_balance')
       if (stored !== null && !isNaN(Number(stored))) return Number(stored)
     } catch {}
     return 0
   })
 
-  // Persistent Withdrawals List (defaults to [] for new providers)
+  // Persistent Withdrawals List (clean state: defaults to [] for new providers)
   const [withdrawals, setWithdrawals] = useState(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('serviceq_provider_withdrawals'))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_withdrawals_${user?.id}`))
       if (Array.isArray(stored)) return stored
     } catch {}
     return []
   })
 
-  // Sync state if updated from other components, tabs, or Supabase backend
+  // Sync state from provider bookings, cloud balances, and withdrawals
   useEffect(() => {
-    const handleSync = async () => {
+    let isMounted = true
+
+    const syncEarningsData = async () => {
+      if (!user?.id) return
       try {
-        const storedAvail = localStorage.getItem('serviceq_provider_avail_balance')
-        if (storedAvail !== null && !isNaN(Number(storedAvail))) setAvailBalance(Number(storedAvail))
-        const storedPend = localStorage.getItem('serviceq_provider_pending_balance')
-        if (storedPend !== null && !isNaN(Number(storedPend))) setPendingBalance(Number(storedPend))
+        const provName = profile?.full_name || profile?.business_name
+        const liveBk = await fetchProviderBookings(user.id, provName)
+        if (isMounted && Array.isArray(liveBk)) {
+          setBookings(liveBk)
+          const derived = deriveTransactionsFromBookings(liveBk)
+          setTransactions(derived)
 
-        // Cloud balance fetch
-        if (user?.id) {
-          const cloudBal = await fetchProviderBalancesBackend(user.id)
-          if (cloudBal) {
-            setAvailBalance(cloudBal.avail)
-            setPendingBalance(cloudBal.pend)
-            localStorage.setItem('serviceq_provider_avail_balance', String(cloudBal.avail))
-            localStorage.setItem('serviceq_provider_pending_balance', String(cloudBal.pend))
+          const compNet = derived.filter(t => t.payout === 'released').reduce((acc, t) => acc + t.net, 0)
+          const pendNet = derived.filter(t => t.payout === 'pending').reduce((acc, t) => acc + t.net, 0)
+
+          const liveWd = await fetchBackendWithdrawals(user.id)
+          if (isMounted && Array.isArray(liveWd)) {
+            setWithdrawals(liveWd)
           }
-        }
 
-        // Live backend sync for withdrawals
-        const live = await fetchBackendWithdrawals(user?.id)
-        if (Array.isArray(live)) setWithdrawals(live)
-      } catch {}
+          const totalWd = (Array.isArray(liveWd) ? liveWd : [])
+            .filter(w => w.status !== 'rejected')
+            .reduce((acc, w) => acc + Number(w.amount || 0), 0)
+
+          const calculatedAvail = Math.max(0, compNet - totalWd)
+          setAvailBalance(calculatedAvail)
+          setPendingBalance(pendNet)
+
+          localStorage.setItem(`serviceq_provider_avail_balance_${user.id}`, String(calculatedAvail))
+          localStorage.setItem(`serviceq_provider_pending_balance_${user.id}`, String(pendNet))
+        }
+      } catch (err) {
+        console.warn('Earnings sync error:', err)
+      }
     }
 
-    handleSync()
+    syncEarningsData()
 
-    window.addEventListener('storage', handleSync)
-    window.addEventListener('serviceq_withdrawals_updated', handleSync)
+    window.addEventListener('serviceq_bookings_updated', syncEarningsData)
+    window.addEventListener('serviceq_withdrawals_updated', syncEarningsData)
+    window.addEventListener('storage', syncEarningsData)
 
-    // Cross-tab BroadcastChannel
     let bc = null
     try {
       bc = new BroadcastChannel('serviceq_withdrawals')
-      bc.onmessage = handleSync
+      bc.onmessage = syncEarningsData
     } catch {}
 
-    // Polling every 4 seconds for backend updates (e.g. Admin approves withdrawal)
-    const poll = setInterval(handleSync, 4000)
+    const poll = setInterval(syncEarningsData, 4000)
 
     return () => {
+      isMounted = false
       clearInterval(poll)
-      window.removeEventListener('storage', handleSync)
-      window.removeEventListener('serviceq_withdrawals_updated', handleSync)
+      window.removeEventListener('serviceq_bookings_updated', syncEarningsData)
+      window.removeEventListener('serviceq_withdrawals_updated', syncEarningsData)
+      window.removeEventListener('storage', syncEarningsData)
       if (bc) bc.close()
     }
-  }, [user?.id])
+  }, [user?.id, profile?.full_name])
 
   const handleWithdraw = async () => {
     const amount = Number(wAmount)
@@ -186,6 +200,10 @@ export default function ProviderEarnings() {
     setTab('withdrawals')
   }
 
+  // Revenue metrics
+  const grossRevenue = transactions.reduce((acc, t) => acc + (t.gross || 0), 0)
+  const platformFees = transactions.reduce((acc, t) => acc + (t.fee || 0), 0)
+  const netRevenue = transactions.reduce((acc, t) => acc + (t.net || 0), 0)
 
   const TABS = [
     { id: 'transactions', label: `Transaction History (${transactions.length})` },

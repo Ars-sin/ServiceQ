@@ -17,15 +17,23 @@ const TABS = [
   }))
 ]
 
-// ── Read ALL bookings from every localStorage bucket ──────────────────────────
-function readAllBookings(userId) {
+// ── Read bookings strictly belonging to THIS provider ──────────────────────────
+function readAllBookings(userId, providerName) {
+  if (!userId && !providerName) return []
   const seen = new Set()
   const combined = []
+
+  const isForThisProvider = (b) => {
+    if (!b) return false
+    if (userId && b.providerId && String(b.providerId) === String(userId)) return true
+    if (providerName && b.provider && typeof b.provider === 'string' && b.provider.trim().toLowerCase() === providerName.trim().toLowerCase()) return true
+    return false
+  }
 
   const merge = (arr) => {
     if (!Array.isArray(arr)) return
     for (const b of arr) {
-      if (b?.id && !seen.has(b.id)) {
+      if (b?.id && !seen.has(b.id) && isForThisProvider(b)) {
         seen.add(b.id)
         combined.push(b)
       }
@@ -38,36 +46,42 @@ function readAllBookings(userId) {
       merge(JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${userId}`)) || [])
     }
 
-    // 2. Global all-bookings store
+    // 2. Global all-bookings store (filtered strictly to this provider)
     merge(JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [])
 
-    // 3. Customer bookings store
-    merge(JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [])
-
-    // 4. Generic provider bookings store
-    merge(JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || [])
-
-    // 5. Every provider-name-keyed bucket
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key && key.startsWith('serviceq_provider_bookings_name_')) {
-        merge(JSON.parse(localStorage.getItem(key)) || [])
-      }
+    // 3. Provider-name-keyed bucket
+    if (providerName) {
+      const nameKey = `serviceq_provider_bookings_name_${providerName.trim().toLowerCase().replace(/\s+/g, '_')}`
+      merge(JSON.parse(localStorage.getItem(nameKey)) || [])
     }
   } catch (e) {
     console.error('readAllBookings error:', e)
   }
 
+  // Filter out any bookings from deleted users
+  let finalBookings = combined
+  try {
+    const deletedUsers = JSON.parse(localStorage.getItem('serviceq_deleted_users') || '[]')
+    const deletedIds = new Set(deletedUsers.map(u => String(u.id)))
+    const deletedNames = new Set(deletedUsers.map(u => (u.full_name || '').toLowerCase().trim()))
+    finalBookings = combined.filter(b => {
+      if (b.customerId && deletedIds.has(String(b.customerId))) return false
+      if (b.customer && deletedNames.has(b.customer.toLowerCase().trim())) return false
+      return true
+    })
+  } catch {}
+
   // Newest first
-  combined.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
-  return combined
+  finalBookings.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+  return finalBookings
 }
 
 export default function ProviderBookings() {
   const { user, profile } = useAuth()
+  const providerName = profile?.full_name || profile?.business_name
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
-  const [bookings, setBookings] = useState(() => readAllBookings(user?.id))
+  const [bookings, setBookings] = useState(() => readAllBookings(user?.id, providerName))
   const [lastRefreshed, setLastRefreshed] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const prevCountRef = useRef(0)
@@ -75,15 +89,13 @@ export default function ProviderBookings() {
   // ── Core load function: instant local cache + live Supabase sync ───────────
   const loadBookings = useCallback(async (silent = true) => {
     // 1. Instant local read
-    const localResult = readAllBookings(user?.id)
-    if (localResult.length > 0) {
-      setBookings(localResult)
-    }
+    const localResult = readAllBookings(user?.id, providerName)
+    setBookings(localResult)
     setLastRefreshed(new Date())
 
     // 2. Live Supabase fetch (cross-browser / incognito truth)
     try {
-      const liveResult = await fetchProviderBookings(user?.id, profile?.full_name)
+      const liveResult = await fetchProviderBookings(user?.id, providerName)
       if (Array.isArray(liveResult)) {
         setBookings(liveResult)
 

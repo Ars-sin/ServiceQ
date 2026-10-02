@@ -113,6 +113,11 @@ export async function recordCustomerBooking(raw) {
   // ── A. LOCAL STORAGE SYNC ───────────────────────────────────────────────
   try {
     // 1. Customer bookings
+    if (booking.customerId) {
+      const cKey = `serviceq_customer_bookings_${booking.customerId}`
+      const cBk = JSON.parse(localStorage.getItem(cKey)) || []
+      localStorage.setItem(cKey, JSON.stringify([booking, ...cBk.filter(b => b.id !== booking.id)]))
+    }
     const custBk = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
     localStorage.setItem('serviceq_customer_bookings', JSON.stringify([booking, ...custBk.filter(b => b.id !== booking.id)]))
 
@@ -294,33 +299,37 @@ export async function recordCustomerBooking(raw) {
  * 3. Merging and deduplicating by booking ID
  */
 export async function fetchProviderBookings(userId, providerName) {
+  if (!userId && !providerName) return []
   const seen = new Set()
   const combined = []
+
+  const isForThisProvider = (b) => {
+    if (!b) return false
+    if (userId && b.providerId && String(b.providerId) === String(userId)) return true
+    if (providerName && b.provider && typeof b.provider === 'string' && b.provider.trim().toLowerCase() === providerName.trim().toLowerCase()) return true
+    return false
+  }
 
   const merge = (arr) => {
     if (!Array.isArray(arr)) return
     for (const b of arr) {
-      if (b?.id && !seen.has(b.id)) {
+      if (b?.id && !seen.has(b.id) && isForThisProvider(b)) {
         seen.add(b.id)
         combined.push(b)
       }
     }
   }
 
-  // ── 1. LOCAL STORAGE READ ─────────────────────────────────────────────
+  // ── 1. LOCAL STORAGE READ (Strictly isolated) ─────────────────────────
   if (userId) {
     merge(JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${userId}`)) || [])
   }
-  merge(JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [])
-  merge(JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || [])
-  merge(JSON.parse(localStorage.getItem('serviceq_provider_bookings')) || [])
-
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i)
-    if (key && key.startsWith('serviceq_provider_bookings_name_')) {
-      merge(JSON.parse(localStorage.getItem(key)) || [])
-    }
+  if (providerName) {
+    const nameKey = `serviceq_provider_bookings_name_${providerName.trim().toLowerCase().replace(/\s+/g, '_')}`
+    merge(JSON.parse(localStorage.getItem(nameKey)) || [])
   }
+  // Check global bookings only for items matching this provider
+  merge(JSON.parse(localStorage.getItem('serviceq_all_bookings')) || [])
 
   // ── 2. SUPABASE BACKEND FETCH ─────────────────────────────────────────
   try {
@@ -351,18 +360,8 @@ export async function fetchProviderBookings(userId, providerName) {
       try {
         const gList = JSON.parse(gRow.value)
         if (Array.isArray(gList)) {
-          const pNameLower = (providerName || '').trim().toLowerCase()
-          const matched = gList.filter(b => {
-            if (userId && b.providerId && String(b.providerId) === String(userId)) return true
-            if (pNameLower && b.provider && b.provider.toLowerCase() === pNameLower) return true
-            return false
-          })
+          const matched = gList.filter(isForThisProvider)
           merge(matched)
-
-          // If no specific match found yet (e.g. fresh test), include all recent bookings
-          if (combined.length === 0) {
-            merge(gList)
-          }
         }
       } catch {}
     }
@@ -370,17 +369,29 @@ export async function fetchProviderBookings(userId, providerName) {
     console.warn('Supabase fetchProviderBookings error:', err)
   }
 
-  // Cache back to local storage
-  combined.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+  // Filter out any bookings from deleted users
+  let finalBookings = combined
+  try {
+    const deletedUsers = JSON.parse(localStorage.getItem('serviceq_deleted_users') || '[]')
+    const deletedIds = new Set(deletedUsers.map(u => String(u.id)))
+    const deletedNames = new Set(deletedUsers.map(u => (u.full_name || '').toLowerCase().trim()))
+    finalBookings = combined.filter(b => {
+      if (b.customerId && deletedIds.has(String(b.customerId))) return false
+      if (b.customer && deletedNames.has(b.customer.toLowerCase().trim())) return false
+      return true
+    })
+  } catch {}
+
+  // Cache back to provider's local storage bucket
+  finalBookings.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 
   try {
     if (userId) {
-      localStorage.setItem(`serviceq_provider_bookings_${userId}`, JSON.stringify(combined))
+      localStorage.setItem(`serviceq_provider_bookings_${userId}`, JSON.stringify(finalBookings))
     }
-    localStorage.setItem('serviceq_all_bookings', JSON.stringify(combined))
   } catch {}
 
-  return combined
+  return finalBookings
 }
 
 /**
@@ -637,8 +648,8 @@ export async function fetchBackendWithdrawals(userId) {
     if (!Array.isArray(arr)) return
     for (const w of arr) {
       if (!w?.id || isMockOrTest(w.id)) continue
-      // If scoped to a specific provider, filter by providerId if available
-      if (userId && w.providerId && w.providerId !== userId) continue
+      // If scoped to a specific provider, strictly filter by providerId
+      if (userId && (!w.providerId || String(w.providerId) !== String(userId))) continue
 
       if (!seen.has(w.id)) {
         seen.add(w.id)
@@ -722,8 +733,9 @@ export async function fetchBackendWithdrawals(userId) {
 
   // 4. Update local storage with the authoritative status so stale 'pending_review' is replaced!
   try {
-    localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(combined))
-    if (userId) {
+    if (!userId) {
+      localStorage.setItem('serviceq_provider_withdrawals', JSON.stringify(combined))
+    } else {
       localStorage.setItem(`serviceq_provider_withdrawals_${userId}`, JSON.stringify(combined))
     }
   } catch {}
@@ -1040,8 +1052,28 @@ export async function fetchBackendBookings() {
     console.warn('fetchBackendBookings Supabase fetch error:', err)
   }
 
-  combined.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
-  return combined
+  // 3. Filter out any bookings from deleted customer/provider accounts (SQI-29)
+  let activeBookings = combined
+  try {
+    const deletedUsers = JSON.parse(localStorage.getItem('serviceq_deleted_users')) || []
+    if (deletedUsers.length > 0) {
+      const deletedIds = new Set(deletedUsers.map(u => u.id).filter(Boolean))
+      const deletedNames = new Set(deletedUsers.map(u => u.name?.toLowerCase()).filter(Boolean))
+      const deletedEmails = new Set(deletedUsers.map(u => u.email?.toLowerCase()).filter(Boolean))
+
+      activeBookings = combined.filter(b => {
+        if (b.customerId && deletedIds.has(b.customerId)) return false
+        if (b.providerId && deletedIds.has(b.providerId)) return false
+        if (b.customer && deletedNames.has(b.customer.toLowerCase())) return false
+        if (b.provider && deletedNames.has(b.provider.toLowerCase())) return false
+        if (b.customerEmail && deletedEmails.has(b.customerEmail.toLowerCase())) return false
+        return true
+      })
+    }
+  } catch {}
+
+  activeBookings.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
+  return activeBookings
 }
 
 
