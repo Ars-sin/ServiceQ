@@ -3,8 +3,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   LayoutDashboard, Users, Briefcase, Package, CalendarCheck,
   DollarSign, Shield, Settings, ScrollText, LogOut, Bell, Menu, User,
+  ChevronsUpDown,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 const NAV = [
@@ -17,17 +18,34 @@ const NAV = [
   { to: '/admin/staff',      label: 'Staff & Roles',icon: Shield },
   { to: '/admin/settings',   label: 'Settings',     icon: Settings },
   { to: '/admin/audit-log',  label: 'Audit Log',    icon: ScrollText },
-  { to: '/admin/profile',    label: 'Profile',      icon: User },
 ]
 
 export default function AdminLayout() {
   const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef(null)
 
-  const adminName = profile?.full_name || user?.user_metadata?.full_name || 'Admin User'
-  const adminEmail = user?.email || profile?.email || 'admin@serviceq.ph'
-  const adminInitials = adminName.slice(0, 2).toUpperCase()
+  const adminName = profile?.full_name || user?.user_metadata?.full_name || 'Bryce'
+  const adminEmail = user?.email || profile?.email || 'rutilander@gmail.com'
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleLogout = async () => {
+    setUserMenuOpen(false)
+    await signOut()
+    navigate('/admin/login', { replace: true })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -39,9 +57,9 @@ export default function AdminLayout() {
       )}>
         {/* Logo */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="ServiceQ" className="h-9 w-auto object-contain" />
-            <span className="font-bold text-lg text-gray-900">ServiceQ</span>
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="ServiceQ" className="h-8 w-auto object-contain" />
+            <span className="font-bold text-lg text-gray-900 tracking-tight">ServiceQ</span>
           </div>
           <span className="text-[10px] font-semibold text-rose-600 uppercase tracking-wide">Admin</span>
         </div>
@@ -63,30 +81,56 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        {/* User Profile & Sign out (SQI-27: Show Name & Registered Email instead of raw logout) */}
-        <div className="px-3 py-3 border-t border-gray-100 bg-gray-50/50">
-          <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white border border-gray-100 shadow-2xs">
-            <NavLink
-              to="/admin/profile"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity"
-            >
-              <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 font-bold text-xs flex items-center justify-center flex-shrink-0">
-                {adminInitials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-gray-900 truncate leading-tight">{adminName}</p>
-                <p className="text-[11px] text-gray-400 truncate leading-tight">{adminEmail}</p>
-              </div>
-            </NavLink>
-            <button
-              onClick={() => { signOut(); navigate('/admin/login') }}
-              title="Sign Out"
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
+        {/* User Profile Pill & Dropdown (SQI-27 matching sqi27_expected.png) */}
+        <div className="p-3 border-t border-gray-100 relative" ref={userMenuRef}>
+          {/* Dropdown Popover */}
+          {userMenuOpen && (
+            <div className="absolute bottom-full left-3 right-3 mb-2 bg-white rounded-2xl border border-gray-200/90 shadow-xl overflow-hidden z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setUserMenuOpen(false)
+                  setMobileOpen(false)
+                  navigate('/admin/profile')
+                }}
+                className="w-full px-4 py-3 flex items-center gap-3 text-slate-800 hover:bg-gray-50 transition-colors text-left"
+              >
+                <User size={19} className="text-slate-800" strokeWidth={1.8} />
+                <span className="text-sm font-medium text-slate-900">Profile</span>
+              </button>
+
+              <div className="h-px bg-gray-200 w-full" />
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full px-4 py-3 flex items-center gap-3 text-slate-800 hover:bg-gray-50 transition-colors text-left"
+              >
+                <LogOut size={19} className="text-slate-800" strokeWidth={1.8} />
+                <span className="text-sm font-medium text-slate-900">Logout</span>
+              </button>
+            </div>
+          )}
+
+          {/* User Pill Button */}
+          <button
+            type="button"
+            onClick={() => setUserMenuOpen((prev) => !prev)}
+            className="w-full flex items-center justify-between p-3 rounded-2xl bg-white border border-gray-200/80 hover:border-gray-300 hover:bg-gray-50/60 shadow-xs transition-all text-left group"
+          >
+            <div className="min-w-0 flex-1 pr-2">
+              <p className="text-sm font-bold text-slate-900 truncate leading-snug">
+                {adminName}
+              </p>
+              <p className="text-xs text-slate-600 truncate leading-snug">
+                {adminEmail}
+              </p>
+            </div>
+            <ChevronsUpDown
+              size={18}
+              className="text-slate-700 flex-shrink-0 group-hover:text-slate-900 transition-colors"
+            />
+          </button>
         </div>
       </aside>
 
@@ -116,12 +160,9 @@ export default function AdminLayout() {
             </button>
             <NavLink
               to="/admin/profile"
-              className="flex items-center gap-2 py-1 px-2.5 rounded-xl border border-gray-100 hover:border-gray-200 bg-gray-50/80 hover:bg-gray-100 transition-all text-xs font-semibold text-gray-700"
+              className="flex items-center gap-2 py-1.5 px-3 rounded-xl border border-gray-200/80 bg-gray-50 hover:bg-gray-100 transition-all text-xs font-semibold text-gray-800"
             >
-              <div className="w-6 h-6 rounded-md bg-rose-600 text-white font-bold text-[10px] flex items-center justify-center">
-                {adminInitials}
-              </div>
-              <span className="hidden sm:inline">{adminName}</span>
+              <span>{adminName}</span>
             </NavLink>
           </div>
         </header>
@@ -134,4 +175,3 @@ export default function AdminLayout() {
     </div>
   )
 }
-

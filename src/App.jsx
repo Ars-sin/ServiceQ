@@ -62,7 +62,12 @@ function ProtectedRoute({ children, requiredRole }) {
   if (loading) return <SplashScreen />
 
   // Not logged in → go to login
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    if (requiredRole === 'admin') {
+      return <Navigate to="/admin/login" replace />
+    }
+    return <Navigate to="/login" replace />
+  }
 
   // Maintenance mode — non-admins cannot access protected portals
   const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
