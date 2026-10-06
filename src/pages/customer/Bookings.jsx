@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { MessageCircle, Star, CheckCircle2 } from 'lucide-react'
+import { Star } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { CANCELLATION_REASONS } from '@/lib/constants'
@@ -43,23 +43,54 @@ export default function CustomerBookings() {
     return []
   })
 
-  // ── Sync with Supabase backend so provider accept / complete reflects live ──
+  // ── Sync with Supabase backend so provider accept / complete / new bookings reflect live ──
   useEffect(() => {
     let isMounted = true
 
     const syncCustomerBookings = async () => {
-      if (!user?.id && !user?.email && !profile?.full_name) {
+      const userId = user?.id ? String(user.id) : null
+      const userEmail = (user?.email || profile?.email || '').trim().toLowerCase()
+      const userName = (profile?.full_name || user?.user_metadata?.full_name || '').trim().toLowerCase()
+
+      if (!userId && !userEmail && !userName) {
         setBookings([])
         return
       }
-      try {
-        let local = []
-        if (user?.id) {
-          local = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`)) || []
-        }
-        const localMap = new Map(local.map(b => [b.id, b]))
 
-        // Fetch latest cloud bookings from Supabase platform_settings
+      const isBookingMine = (b) => {
+        if (!b) return false
+        if (userId && b.customerId && String(b.customerId) === userId) return true
+        if (userEmail && b.customerEmail && b.customerEmail.toLowerCase().trim() === userEmail) return true
+        if (userName && b.customer && b.customer.toLowerCase().trim() === userName) return true
+        return false
+      }
+
+      try {
+        const localMap = new Map()
+
+        // 1. User-scoped localStorage cache
+        if (userId) {
+          try {
+            const userStored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${userId}`)) || []
+            if (Array.isArray(userStored)) {
+              userStored.forEach(b => { if (b?.id) localMap.set(b.id, b) })
+            }
+          } catch {}
+        }
+
+        // 2. Fallback general customer cache in localStorage
+        try {
+          const genStored = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+          if (Array.isArray(genStored)) {
+            genStored.forEach(b => {
+              if (b?.id && isBookingMine(b) && !localMap.has(b.id)) {
+                localMap.set(b.id, b)
+              }
+            })
+          }
+        } catch {}
+
+        // 3. Supabase platform_settings (Global synchronized bookings)
         const { data: gRow } = await supabase
           .from('platform_settings')
           .select('value')
@@ -69,18 +100,8 @@ export default function CustomerBookings() {
         if (gRow?.value) {
           const cloudList = typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value
           if (Array.isArray(cloudList)) {
-            const userNameLower = (profile?.full_name || user?.user_metadata?.full_name || '').trim().toLowerCase()
-            const userEmail = (user?.email || '').trim().toLowerCase()
-            const userId = user?.id
-
             for (const cb of cloudList) {
-              const isMine =
-                (userId && cb.customerId && String(cb.customerId) === String(userId)) ||
-                (userEmail && cb.customerEmail && cb.customerEmail.toLowerCase() === userEmail) ||
-                (userNameLower && cb.customer && cb.customer.toLowerCase() === userNameLower)
-
-              if (isMine) {
-                // Cloud status is authoritative (e.g. provider accepted or completed)
+              if (cb?.id && isBookingMine(cb)) {
                 const existing = localMap.get(cb.id)
                 localMap.set(cb.id, { ...existing, ...cb })
               }
@@ -88,14 +109,57 @@ export default function CustomerBookings() {
           }
         }
 
-        const merged = Array.from(localMap.values())
+        // 4. Supabase `bookings` table (Direct database rows)
+        try {
+          if (userId || userEmail) {
+            let query = supabase.from('bookings').select('*')
+            if (userId && userEmail) {
+              query = query.or(`customer_id.eq.${userId},customer_email.ilike.${userEmail}`)
+            } else if (userId) {
+              query = query.eq('customer_id', userId)
+            } else {
+              query = query.ilike('customer_email', userEmail)
+            }
+            const { data: dbRows } = await query
+            if (Array.isArray(dbRows)) {
+              for (const r of dbRows) {
+                const norm = {
+                  id: r.id,
+                  bookingRef: r.booking_ref || r.id,
+                  service: r.service_title || r.service || 'Service',
+                  provider: r.provider_name || r.provider || 'Provider',
+                  date: r.booking_date || r.date || new Date().toISOString().split('T')[0],
+                  amount: Number(r.total_amount || r.amount || 0),
+                  status: r.status || 'scheduled',
+                  customerId: r.customer_id,
+                  customerEmail: r.customer_email,
+                  createdAt: r.created_at,
+                }
+                const existing = localMap.get(norm.id)
+                localMap.set(norm.id, { ...existing, ...norm })
+              }
+            }
+          }
+        } catch {}
+
+        // 5. Exclude any bookings from deleted users (SQI-29)
+        let merged = Array.from(localMap.values())
+        try {
+          const deletedUsers = JSON.parse(localStorage.getItem('serviceq_deleted_users')) || []
+          if (deletedUsers.length > 0) {
+            const deletedIds = new Set(deletedUsers.map(u => u.id).filter(Boolean))
+            merged = merged.filter(b => !(b.customerId && deletedIds.has(b.customerId)))
+          }
+        } catch {}
+
         merged.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
 
         if (isMounted) {
           setBookings(merged)
-          if (user?.id) {
-            localStorage.setItem(`serviceq_customer_bookings_${user.id}`, JSON.stringify(merged))
+          if (userId) {
+            localStorage.setItem(`serviceq_customer_bookings_${userId}`, JSON.stringify(merged))
           }
+          localStorage.setItem('serviceq_customer_bookings', JSON.stringify(merged))
         }
       } catch (err) {
         console.warn('Customer bookings sync warning:', err)
@@ -113,7 +177,7 @@ export default function CustomerBookings() {
       bc.onmessage = syncCustomerBookings
     } catch {}
 
-    const poll = setInterval(syncCustomerBookings, 3000)
+    const poll = setInterval(syncCustomerBookings, 2500)
 
     return () => {
       isMounted = false
@@ -150,11 +214,14 @@ export default function CustomerBookings() {
     setBookings(updated)
 
     try {
+      if (user?.id) {
+        localStorage.setItem(`serviceq_customer_bookings_${user.id}`, JSON.stringify(updated))
+      }
       localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updated))
       const allBk = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
       localStorage.setItem('serviceq_all_bookings', JSON.stringify(allBk.map(b => b.id === targetId ? { ...b, status: 'cancelled' } : b)))
 
-      // Update Supabase
+      // Update Supabase platform_settings
       const { data: gRow } = await supabase.from('platform_settings').select('value').eq('key', 'serviceq_global_bookings').maybeSingle()
       if (gRow?.value) {
         const cloudList = typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value
@@ -167,6 +234,11 @@ export default function CustomerBookings() {
           })
         }
       }
+
+      // Update Supabase bookings table if exists
+      try {
+        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', targetId)
+      } catch {}
     } catch {}
 
     window.dispatchEvent(new Event('serviceq_bookings_updated'))
@@ -177,17 +249,37 @@ export default function CustomerBookings() {
     setCancelNote('')
   }
 
-  const handleReview = () => {
+  const handleReview = async () => {
     if (!rating) return toast.error('Please select a rating')
 
     const targetId = reviewModal.id
-    setBookings(prev => {
-      const updated = prev.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating } : b)
-      try {
-        localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updated))
-      } catch {}
-      return updated
-    })
+    const updated = bookings.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating, comment } : b)
+    setBookings(updated)
+
+    try {
+      if (user?.id) {
+        localStorage.setItem(`serviceq_customer_bookings_${user.id}`, JSON.stringify(updated))
+      }
+      localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updated))
+      const allBk = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
+      localStorage.setItem('serviceq_all_bookings', JSON.stringify(allBk.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating } : b)))
+
+      // Update Supabase platform_settings
+      const { data: gRow } = await supabase.from('platform_settings').select('value').eq('key', 'serviceq_global_bookings').maybeSingle()
+      if (gRow?.value) {
+        const cloudList = typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value
+        if (Array.isArray(cloudList)) {
+          const updatedCloud = cloudList.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating } : b)
+          await supabase.from('platform_settings').upsert({
+            key: 'serviceq_global_bookings',
+            value: JSON.stringify(updatedCloud),
+            updated_at: new Date().toISOString()
+          })
+        }
+      }
+    } catch {}
+
+    window.dispatchEvent(new Event('serviceq_bookings_updated'))
 
     toast.success('Review submitted! Thank you.')
     setReviewModal(null)
@@ -216,8 +308,7 @@ export default function CustomerBookings() {
       <div className="flex flex-col gap-4">
         {filtered.length === 0 ? (
           <div className="card text-center py-16 text-gray-400 flex flex-col items-center justify-center gap-2">
-            <p className="text-4xl mb-1">📭</p>
-            <p className="font-semibold text-gray-700">No {activeTab} bookings</p>
+            <p className="font-semibold text-gray-700 text-base">No {activeTab} bookings</p>
             <p className="text-xs text-gray-400">You do not have any bookings in this status right now.</p>
           </div>
         ) : (
@@ -235,7 +326,7 @@ export default function CustomerBookings() {
                 </div>
                 <h3 className="font-bold text-gray-900 text-base">{b.service}</h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Provider: <span className="font-medium text-gray-700">{b.provider}</span> · 📅 {b.date}
+                  Provider: <span className="font-medium text-gray-700">{b.provider}</span> · Date: {b.date}
                 </p>
               </div>
 
@@ -246,16 +337,16 @@ export default function CustomerBookings() {
                   {(b.status === 'pending' || b.status === 'scheduled' || b.status === 'active') && (
                     <button
                       onClick={() => toast.success(`Opening chat with ${b.provider}...`)}
-                      className="btn-secondary btn-sm text-xs gap-1.5 font-semibold text-brand-700 border-brand-200 hover:bg-brand-50"
+                      className="btn-secondary btn-sm text-xs font-semibold text-brand-700 border-brand-200 hover:bg-brand-50"
                     >
-                      <MessageCircle size={13} /> Contact Provider
+                      Contact Provider
                     </button>
                   )}
 
                   {(b.status === 'pending' || b.status === 'scheduled') && (
                     <button
                       onClick={() => setCancelModal(b)}
-                      className="btn-danger btn-sm text-xs"
+                      className="btn-danger btn-sm text-xs font-medium"
                     >
                       Cancel Booking
                     </button>
@@ -264,15 +355,15 @@ export default function CustomerBookings() {
                   {b.status === 'completed' && !b.reviewed && (
                     <button
                       onClick={() => setReviewModal(b)}
-                      className="btn-secondary btn-sm text-xs gap-1 text-amber-700 border-amber-200 bg-amber-50/50"
+                      className="btn-secondary btn-sm text-xs text-amber-700 border-amber-200 bg-amber-50/50 font-medium"
                     >
-                      <Star size={12} className="fill-amber-400 text-amber-400" /> Review
+                      Review
                     </button>
                   )}
 
                   {b.reviewed && (
-                    <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Reviewed ({b.userRating}★)
+                    <span className="text-xs text-emerald-600 font-medium">
+                      Reviewed ({b.userRating}/5)
                     </span>
                   )}
                 </div>

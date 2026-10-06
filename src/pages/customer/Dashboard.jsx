@@ -45,10 +45,9 @@ function ListingCard({ listing, onClick }) {
     <motion.div whileHover={{ y: -4 }} className="card-hover overflow-hidden p-0 border border-gray-100"
       onClick={onClick}>
       {/* Visual Header */}
-      <div className="h-32 bg-brand-50 border-b border-gray-100 relative flex items-center justify-center">
-        <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center">
-          {getCategoryIcon(listing.categoryId)}
-        </div>
+      <div className={`h-32 ${listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? 'bg-cover bg-center' : 'bg-gradient-to-br from-brand-50 to-slate-100'} border-b border-gray-100 relative flex items-center justify-center overflow-hidden`}
+        style={listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? { backgroundImage: `url(${listing.photos[0]})` } : {}}
+      >
 
         <button onClick={e => { e.stopPropagation(); setFav(v => !v); toast(fav ? 'Removed from favorites' : 'Added to favorites!') }}
           className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition-colors"

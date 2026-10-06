@@ -52,10 +52,9 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
       onClick={onClick}
     >
       {/* Visual Header */}
-      <div className="h-32 bg-brand-50/70 border-b border-gray-100 relative flex items-center justify-center">
-        <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center p-2.5">
-          {getListingIcon(listing.subCategory)}
-        </div>
+      <div className={`h-32 ${listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? 'bg-cover bg-center' : 'bg-gradient-to-br from-brand-50/80 to-slate-100'} border-b border-gray-100 relative flex items-center justify-center overflow-hidden`}
+        style={listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? { backgroundImage: `url(${listing.photos[0]})` } : {}}
+      >
 
         <button
           onClick={e => {

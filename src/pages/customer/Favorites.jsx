@@ -5,7 +5,6 @@ import { Heart, Star, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import EmptyState from '@/components/ui/EmptyState'
-import { getListingIcon } from '@/pages/customer/Explore'
 import { useAuth } from '@/contexts/AuthContext'
 import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
 import { loadCachedListings } from '@/lib/listingsService'
@@ -82,10 +81,9 @@ export default function CustomerFavorites() {
                 onClick={() => navigate(`/customer/listings/${l.id}`)}
               >
                 {/* Visual Header */}
-                <div className="h-32 bg-brand-50/70 border-b border-gray-100 relative flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center p-2.5">
-                    {getListingIcon(l.subCategory)}
-                  </div>
+                <div className={`h-32 ${l.photos?.[0] && !l.photos[0].startsWith('from-') ? 'bg-cover bg-center' : 'bg-gradient-to-br from-brand-50/80 to-slate-100'} border-b border-gray-100 relative flex items-center justify-center overflow-hidden`}
+                  style={l.photos?.[0] && !l.photos[0].startsWith('from-') ? { backgroundImage: `url(${l.photos[0]})` } : {}}
+                >
 
                   <button
                     onClick={e => {

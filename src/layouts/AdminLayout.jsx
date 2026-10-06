@@ -16,7 +16,6 @@ const NAV = [
   { to: '/admin/bookings',   label: 'Bookings',     icon: CalendarCheck },
   { to: '/admin/financials', label: 'Financials',   icon: DollarSign },
   { to: '/admin/staff',      label: 'Staff & Roles',icon: Shield },
-  { to: '/admin/settings',   label: 'Settings',     icon: Settings },
   { to: '/admin/audit-log',  label: 'Audit Log',    icon: ScrollText },
 ]
 
@@ -103,11 +102,26 @@ export default function AdminLayout() {
 
               <button
                 type="button"
+                onClick={() => {
+                  setUserMenuOpen(false)
+                  setMobileOpen(false)
+                  navigate('/admin/settings')
+                }}
+                className="w-full px-4 py-3 flex items-center gap-3 text-slate-800 hover:bg-gray-50 transition-colors text-left"
+              >
+                <Settings size={19} className="text-slate-800" strokeWidth={1.8} />
+                <span className="text-sm font-medium text-slate-900">Settings</span>
+              </button>
+
+              <div className="h-px bg-gray-200 w-full" />
+
+              <button
+                type="button"
                 onClick={handleLogout}
                 className="w-full px-4 py-3 flex items-center gap-3 text-slate-800 hover:bg-gray-50 transition-colors text-left"
               >
                 <LogOut size={19} className="text-slate-800" strokeWidth={1.8} />
-                <span className="text-sm font-medium text-slate-900">Logout</span>
+                <span className="text-sm font-medium text-slate-900">Sign out</span>
               </button>
             </div>
           )}
