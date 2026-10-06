@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import toast from 'react-hot-toast'
-import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp, Save, Loader, Pencil, Eye, EyeOff, CheckCircle2, Circle, X } from 'lucide-react'
+import { User, Mail, Phone, MapPin, Bell, Lock, ChevronDown, ChevronUp, Save, Loader, Pencil, Eye, EyeOff, CheckCircle2, Circle, X, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { getFavoriteIds } from '@/lib/favorites'
+import Modal from '@/components/ui/Modal'
+import { deleteAccountCompletely } from '@/lib/accountDeletion'
 
 const TABS = ['Profile', 'Transaction History', 'Help & FAQ', 'Settings']
 
@@ -47,7 +49,7 @@ function formatMemberSince(dateString) {
 
 export default function CustomerProfile() {
   const navigate = useNavigate()
-  const { user, profile } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('Profile')
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving]       = useState(false)
@@ -55,6 +57,33 @@ export default function CustomerProfile() {
   const [showCurrentPass, setShowCurrentPass] = useState(false)
   const [showNewPass, setShowNewPass] = useState(false)
   const [showConfirmPass, setShowConfirmPass] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
+  const handleDeleteAccount = async () => {
+    if (!user) return
+    setDeletingAccount(true)
+    try {
+      await deleteAccountCompletely(
+        {
+          id: user.id,
+          email: user.email,
+          name: profileForm.fullName || profile?.full_name,
+          role: 'customer',
+        },
+        'Customer (Self)'
+      )
+      toast.success('Your account and all associated data have been permanently deleted.')
+      setShowDeleteModal(false)
+      if (signOut) await signOut()
+      else await supabase.auth.signOut()
+      navigate('/', { replace: true })
+    } catch (err) {
+      toast.error('Failed to delete account: ' + err.message)
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
 
   // ── Profile form — seeded from Supabase profile ──────────────────
   const [profileForm, setProfileForm] = useState({
@@ -688,6 +717,29 @@ export default function CustomerProfile() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Danger Zone: Delete Account */}
+                  <div className="bg-white rounded-2xl border border-red-100 p-6">
+                    <h3 className="font-bold text-red-600 mb-1 flex items-center gap-2">
+                      <Trash2 className="w-4 h-4 text-red-500" /> Danger Zone
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-4">
+                      Permanently delete your account and all associated bookings, reviews, and transaction history.
+                    </p>
+                    <div className="flex items-center justify-between pt-2 border-t border-red-50">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">Delete Account</p>
+                        <p className="text-xs text-gray-400">Once deleted, your account and data cannot be recovered.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteModal(true)}
+                        className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold transition-colors"
+                      >
+                        Delete Account
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -695,6 +747,36 @@ export default function CustomerProfile() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete Account Permanently" size="sm">
+        <div className="flex flex-col gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+            <Trash2 size={24} />
+          </div>
+          <div className="text-center">
+            <h3 className="font-bold text-gray-900 text-base">Permanently Delete Account?</h3>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              Are you sure you want to delete your account? All your profile information, bookings, transactions, and reviews will be permanently wiped from both our database and local storage. This action is irreversible.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="btn-secondary flex-1 text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={deletingAccount}
+              onClick={handleDeleteAccount}
+              className="btn-danger flex-1 text-xs"
+            >
+              {deletingAccount ? 'Deleting...' : 'Yes, Delete My Account'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

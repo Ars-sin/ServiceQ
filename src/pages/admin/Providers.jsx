@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, XCircle, AlertCircle, RefreshCw, Loader, ShieldCheck, Check } from 'lucide-react'
+import { CheckCircle, XCircle, AlertCircle, RefreshCw, Loader, Check, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
@@ -8,6 +8,7 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { supabase } from '@/lib/supabase'
+import { deleteAccountCompletely } from '@/lib/accountDeletion'
 
 export default function AdminProviders() {
   const [tab, setTab]           = useState('all')
@@ -19,6 +20,8 @@ export default function AdminProviders() {
   const [actionLoading, setActionLoading] = useState(null)
   const [providers, setProviders] = useState([])
   const [queue, setQueue]       = useState([])
+  const [deleteModal, setDeleteModal] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
   const PAGE_SIZE = 5
   const isDefaultAll = tab === 'all'
@@ -294,6 +297,25 @@ export default function AdminProviders() {
     }
   }
 
+  const handleDeleteProvider = async (providerToDelete) => {
+    if (!providerToDelete) return
+    setDeleting(true)
+    try {
+      await deleteAccountCompletely(providerToDelete, 'Admin')
+      setProviders(prev => prev.filter(p => p.id !== providerToDelete.id))
+      setQueue(prev => prev.filter(p => p.id !== providerToDelete.id))
+      toast.success(`Provider "${providerToDelete.name}" and all associated data permanently deleted`)
+      if (reviewItem?.id === providerToDelete.id) {
+        setReview(null)
+      }
+      setDeleteModal(null)
+    } catch (err) {
+      toast.error('Failed to delete provider: ' + err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const tabs = [
     { id: 'all', label: `All Providers (${providers.length})` },
     { id: 'kyc', label: `KYC Queue (${queue.length})` },
@@ -435,6 +457,14 @@ export default function AdminProviders() {
                               className="btn-ghost btn-sm text-xs text-gray-500 hover:text-gray-700"
                             >
                               Details
+                            </button>
+
+                            <button
+                              onClick={() => setDeleteModal(p)}
+                              className="btn-ghost btn-sm text-xs text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
+                              title="Delete Provider Account"
+                            >
+                              <Trash2 size={12} /> Delete
                             </button>
                           </div>
                         </td>
@@ -618,6 +648,34 @@ export default function AdminProviders() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+      </Modal>
+      {/* ── Delete Provider Confirmation Modal ── */}
+      <Modal open={!!deleteModal} onClose={() => setDeleteModal(null)} title="Delete Provider Account" size="sm">
+        {deleteModal && (
+          <div className="flex flex-col gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 size={24} />
+            </div>
+            <div className="text-center">
+              <h3 className="font-bold text-gray-900 text-base">Delete {deleteModal.name}?</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Are you sure you want to permanently remove this provider account (<strong>{deleteModal.email}</strong>)? All their listings, bookings, earnings, and database records will be wiped. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button onClick={() => setDeleteModal(null)} className="btn-secondary flex-1 text-xs">
+                Cancel
+              </button>
+              <button
+                disabled={deleting}
+                onClick={() => handleDeleteProvider(deleteModal)}
+                className="btn-danger flex-1 text-xs"
+              >
+                {deleting ? 'Deleting...' : 'Yes, Delete Provider'}
+              </button>
+            </div>
           </div>
         )}
       </Modal>

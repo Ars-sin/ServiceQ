@@ -9,8 +9,6 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
 // Customer portal
 import CustomerLayout       from '@/layouts/CustomerLayout'
 import CustomerExplore      from '@/pages/customer/Explore'
-import CustomerDashboard    from '@/pages/customer/Dashboard'
-import CustomerListings     from '@/pages/customer/Listings'
 import CustomerListingDetail from '@/pages/customer/ListingDetail'
 import CustomerCheckout     from '@/pages/customer/Checkout'
 import CustomerBookings     from '@/pages/customer/Bookings'

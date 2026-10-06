@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Lock, Mail, Bell, Shield, Eye, EyeOff, Loader, CheckCircle2, Circle,
-  User, HelpCircle, ChevronRight, Check, X, Phone, MessageSquare
+  Lock, Mail, Bell, Eye, EyeOff, Loader, CheckCircle2, Circle,
+  User, HelpCircle, ChevronRight, Check, X, Phone, MessageSquare, Trash2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import Badge from '@/components/ui/Badge'
+import Modal from '@/components/ui/Modal'
+import { deleteAccountCompletely } from '@/lib/accountDeletion'
 import { cn } from '@/lib/utils'
 
 export default function ProviderSettings() {
@@ -86,6 +87,34 @@ export default function ProviderSettings() {
 
   const handleCancelPassword = () => {
     setPasswordForm({ current: '', newPass: '', confirm: '' })
+  }
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
+
+  const handleDeleteAccount = async () => {
+    if (!user) return
+    setDeletingAccount(true)
+    try {
+      await deleteAccountCompletely(
+        {
+          id: user.id,
+          email: user.email,
+          name: profile?.full_name || profile?.business_name,
+          role: 'provider',
+        },
+        'Provider (Self)'
+      )
+      toast.success('Your provider account and all associated data have been permanently deleted.')
+      setShowDeleteModal(false)
+      if (signOut) await signOut()
+      else await supabase.auth.signOut()
+      navigate('/', { replace: true })
+    } catch (err) {
+      toast.error('Failed to delete provider account: ' + err.message)
+    } finally {
+      setDeletingAccount(false)
+    }
   }
 
   return (
@@ -377,6 +406,31 @@ export default function ProviderSettings() {
                   </div>
                 </form>
               </div>
+
+              {/* Danger Zone: Delete Provider Account */}
+              <div className="card border border-red-200 bg-white shadow-sm flex flex-col gap-4">
+                <div className="border-b border-red-100 pb-3">
+                  <div className="flex items-center gap-2 text-red-600">
+                    <Trash2 size={18} />
+                    <h2 className="font-bold text-base">Danger Zone</h2>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Permanently delete your provider account, listings, booking history, and payout information.</p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Delete Provider Account</p>
+                    <p className="text-xs text-gray-400 mt-0.5">This action permanently deletes all your listings, reviews, and bookings from the platform.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteModal(true)}
+                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold transition-colors"
+                  >
+                    Delete Account
+                  </button>
+                </div>
+              </div>
             </>
           )}
 
@@ -464,8 +518,37 @@ export default function ProviderSettings() {
           )}
 
         </div>
-
       </div>
+
+      {/* Delete Provider Confirmation Modal */}
+      <Modal open={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Delete Provider Account Permanently" size="sm">
+        <div className="flex flex-col gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+            <Trash2 size={24} />
+          </div>
+          <div className="text-center">
+            <h3 className="font-bold text-gray-900 text-base">Permanently Delete Provider Account?</h3>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+              Are you sure you want to delete your provider account? All your listings, bookings, withdrawal requests, earnings, and provider verification details will be permanently wiped from both the database and local storage. This action is irreversible.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="btn-secondary flex-1 text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              disabled={deletingAccount}
+              onClick={handleDeleteAccount}
+              className="btn-danger flex-1 text-xs"
+            >
+              {deletingAccount ? 'Deleting...' : 'Yes, Delete Provider Account'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </motion.div>
   )
 }

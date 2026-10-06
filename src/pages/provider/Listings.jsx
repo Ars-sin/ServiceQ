@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Plus, Edit2, Archive, Eye, ToggleLeft, ToggleRight, Check,
-  ShieldAlert, CheckCircle2, MapPin, Calendar, Clock, DollarSign,
-  ExternalLink, ArrowLeft, ArrowRight, Package
+  Plus, Archive, Eye, ToggleLeft, ToggleRight,
+  ShieldAlert, MapPin, Calendar, Clock,
+  ArrowLeft, ArrowRight, Package
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
@@ -13,7 +13,6 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
 import {
   fetchProviderListings,
   saveProviderListing,

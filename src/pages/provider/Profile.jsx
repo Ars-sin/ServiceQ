@@ -2,17 +2,14 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
   CheckCircle, Clock, Upload, Save,
-  Building, Phone, Mail, MapPin, CreditCard, ShieldCheck,
-  Facebook, Instagram, ExternalLink, Loader, RefreshCw,
-  Pencil, ArrowLeft, AlertCircle
+  Building, Phone, CreditCard, ShieldCheck,
+  Loader, RefreshCw, Pencil, ArrowLeft
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import Badge from '@/components/ui/Badge'
-import Modal from '@/components/ui/Modal'
 import { GOV_ID_TYPES } from '@/lib/constants'
-import { cn } from '@/lib/utils'
 
 const PROVIDER_CATEGORIES = [
   'Cleaning & Home Care',
@@ -44,7 +41,6 @@ export default function ProviderProfile() {
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
   const [providerRow, setProviderRow] = useState(null)
-  const [showPayoutModal, setShowPayoutModal] = useState(false)
 
   const [form, setForm] = useState({
     // Personal / Profile

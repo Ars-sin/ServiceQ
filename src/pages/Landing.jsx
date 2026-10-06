@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import {
   MapPin, Star, Shield, Zap, Clock, MessageCircle,
   Search, Calendar, CheckCircle2, ChevronRight, ArrowRight,
-  Sparkles, Award, Users, Home, LayoutGrid, Settings, User,
+  Sparkles, Award, Home, LayoutGrid, Settings, User,
   Menu, X
 } from 'lucide-react'
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Mail, ArrowRight, UserCheck, Briefcase, Sparkles, ChevronLeft } from 'lucide-react'
+import { X, Mail, ArrowRight, ChevronLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 

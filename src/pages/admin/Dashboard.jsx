@@ -4,10 +4,10 @@ import { useNavigate } from "react-router-dom"
 import toast from "react-hot-toast"
 import {
   Users, Briefcase, Package, CalendarCheck, DollarSign,
-  TrendingUp, ArrowDownCircle, Download, ShieldAlert,
-  Wallet, RefreshCw, CheckCircle2, Clock
+  TrendingUp, ArrowDownCircle, Download,
+  Wallet, RefreshCw
 } from "lucide-react"
-import { formatPHP, relativeTime, statusVariant, cn } from "@/lib/utils"
+import { formatPHP, relativeTime, cn } from "@/lib/utils"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/AuthContext"
 import { ALL_LISTINGS } from "@/pages/customer/Explore"

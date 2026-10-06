@@ -6,8 +6,7 @@ import Badge from '@/components/ui/Badge'
 import StatCard from '@/components/ui/StatCard'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
-import toast from 'react-hot-toast'
-import { DollarSign, TrendingUp, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import { DollarSign, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 
 import {
   fetchBackendWithdrawals,

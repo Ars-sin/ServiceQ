@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  User, Mail, Phone, Lock, Eye, EyeOff, MapPin, ChevronRight, ChevronLeft,
-  ShieldCheck, ArrowLeft, Briefcase, Building2, Wrench, Package, Sparkles, Home, Check
+  User, Mail, Eye, EyeOff, MapPin, ChevronRight, ChevronLeft,
+  ShieldCheck, ArrowLeft, Briefcase, Sparkles, Home, Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'

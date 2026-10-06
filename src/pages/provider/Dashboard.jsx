@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Package, CalendarCheck, Star, Users, Plus, DollarSign, TrendingUp, Clock, CheckCircle2, ShieldAlert } from 'lucide-react'
+import { Package, CalendarCheck, Star, Users, Plus, DollarSign, TrendingUp, Clock, CheckCircle2 } from 'lucide-react'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Star, MapPin, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar } from 'lucide-react'
+import { Star, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, calcFees } from '@/lib/utils'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'

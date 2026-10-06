@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { DollarSign, TrendingUp, Wallet, Clock, ArrowDownRight, CheckCircle2 } from 'lucide-react'
+import { DollarSign, TrendingUp, Wallet, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import StatCard from '@/components/ui/StatCard'
@@ -11,7 +11,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   submitWithdrawalRequestBackend,
   fetchBackendWithdrawals,
-  fetchProviderBalancesBackend,
   saveProviderBalancesBackend,
   fetchProviderBookings
 } from '@/lib/bookingsService'

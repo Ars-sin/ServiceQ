@@ -4,7 +4,6 @@ import { ShieldCheck, AlertCircle, Search } from 'lucide-react'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
-import { relativeTime } from '@/lib/utils'
 
 const LOGS = [
   { id: 'a01', staff: 'Bryce Obien',  role: 'superadmin',        action: 'Provider Approved',        target: 'Maria Santos',        desc: 'KYC verified and provider account approved.',                  before: { status: 'under_verification' }, after: { status: 'approved' },           ip: '192.168.1.10', ts: '2026-09-09T08:12:00Z' },

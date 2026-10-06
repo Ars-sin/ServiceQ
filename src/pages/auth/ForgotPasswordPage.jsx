@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, ShieldCheck, RefreshCw, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, ShieldCheck, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { MapPin, Search, Star, ChevronRight, X, Sparkles, Home, Laptop, GraduationCap, Hammer, PartyPopper, Car, Package, Utensils, Wrench } from 'lucide-react'
 import { CATEGORIES } from '@/lib/constants'
 import { formatPHP } from '@/lib/utils'
