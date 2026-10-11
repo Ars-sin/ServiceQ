@@ -34,18 +34,25 @@ export default function AdminLogin() {
         password: form.password,
       })
 
-      // Check cached password fallback (e.g. recently updated offline/local password)
+      // Check cached password fallback (e.g. recently updated offline/local password, or added staff)
       if (authError) {
+        const emailLower = form.email.trim().toLowerCase()
         const cachedPw =
-          localStorage.getItem(`serviceq_admin_password_${form.email.trim().toLowerCase()}`) ||
-          localStorage.getItem(`serviceq_password_${form.email.trim().toLowerCase()}`)
-        if (cachedPw && form.password === cachedPw) {
+          localStorage.getItem(`serviceq_admin_password_${emailLower}`) ||
+          localStorage.getItem(`serviceq_password_${emailLower}`)
+        let staffMember = null
+        try {
+          const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
+          staffMember = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailLower) : null
+        } catch {}
+
+        if ((cachedPw && form.password === cachedPw) || (staffMember && (!cachedPw || cachedPw === form.password))) {
           authError = null
           authData = {
             user: {
-              id: 'admin-cached-id',
+              id: staffMember?.id || 'admin-cached-id',
               email: form.email.trim(),
-              user_metadata: { full_name: 'Bryce' },
+              user_metadata: { full_name: staffMember?.name || 'Admin' },
             },
           }
         }
@@ -68,23 +75,45 @@ export default function AdminLogin() {
         // Fallback if network/table issue
       }
 
-      const isAdmin =
+      const emailLower = form.email.trim().toLowerCase()
+      let staffMember = null
+      try {
+        const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
+        staffMember = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailLower) : null
+      } catch {}
+
+      const isAllowedAdminOrStaff =
         resolvedProfile?.role === 'admin' ||
-        form.email.trim().toLowerCase() === 'rutilander@gmail.com' ||
+        resolvedProfile?.role === 'superadmin' ||
+        resolvedProfile?.role === 'staff' ||
+        resolvedProfile?.role === 'financial_staff' ||
+        resolvedProfile?.role === 'support_moderator' ||
+        Boolean(staffMember) ||
+        emailLower === 'rutilander@gmail.com' ||
+        emailLower === 'admin@serviceq.ph' ||
         authData.user.email?.toLowerCase() === 'rutilander@gmail.com'
 
-      if (!isAdmin) {
+      if (!isAllowedAdminOrStaff) {
         await supabase.auth.signOut()
         setLoading(false)
         return toast.error('Access denied: This login is reserved for Administrators.')
       }
 
-      const finalProfile = resolvedProfile || {
+      const finalRole = resolvedProfile?.role === 'superadmin' ? 'admin' : (resolvedProfile?.role || staffMember?.role || 'admin')
+      const finalName = resolvedProfile?.full_name || staffMember?.name || authData.user.user_metadata?.full_name || 'Admin'
+
+      const finalProfile = resolvedProfile ? { ...resolvedProfile, role: finalRole } : {
         id: authData.user.id,
         email: authData.user.email,
-        full_name: authData.user.user_metadata?.full_name || 'Bryce',
-        role: 'admin',
+        full_name: finalName,
+        role: finalRole,
       }
+
+      // Cache password locally for resilient login verification
+      try {
+        localStorage.setItem(`serviceq_admin_password_${emailLower}`, form.password)
+        localStorage.setItem(`serviceq_password_${emailLower}`, form.password)
+      } catch {}
 
       loginWithProfile(finalProfile)
       toast.success(`Welcome back, ${finalProfile.full_name || 'Admin'}! 👋`)
@@ -174,7 +203,7 @@ export default function AdminLogin() {
             </div>
             <div className="flex justify-end mt-2">
               <Link
-                to="/forgot-password"
+                to="/admin/forgot-password"
                 className="text-sm font-medium text-[#1e69ff] hover:underline transition-colors"
               >
                 Forgot password?

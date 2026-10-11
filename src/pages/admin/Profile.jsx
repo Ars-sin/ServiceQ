@@ -49,6 +49,27 @@ export default function AdminProfile() {
 
     setLoading(true)
     try {
+      // 0. Verify current password (SQI-38: Reject incorrect existing password)
+      let currentPwMatches = false
+      const cachedPw = localStorage.getItem(`serviceq_admin_password_${adminEmail.toLowerCase()}`) ||
+                       localStorage.getItem(`serviceq_password_${adminEmail.toLowerCase()}`)
+
+      const { data: testAuth, error: testAuthError } = await supabase.auth.signInWithPassword({
+        email: adminEmail,
+        password: currentPassword,
+      })
+
+      if (!testAuthError && testAuth?.user) {
+        currentPwMatches = true
+      } else if (cachedPw && cachedPw === currentPassword) {
+        currentPwMatches = true
+      }
+
+      if (!currentPwMatches) {
+        setLoading(false)
+        return toast.error('Current password is incorrect. Please try again.')
+      }
+
       // 1. Update password in Supabase Auth
       const { error } = await supabase.auth.updateUser({
         password: newPassword,

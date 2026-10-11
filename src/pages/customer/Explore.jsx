@@ -201,6 +201,15 @@ export default function CustomerExplore() {
   // Filter and sort listings
   const filtered = allListings
     .filter(item => {
+      // SQI-34: Only display listings from verified providers to customers
+      const isBaseSeed = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15'].includes(String(item.id)) && !item.providerId
+      const isVerifiedProvider = isBaseSeed ||
+        item.isVerified === true ||
+        item.provider_verified === true ||
+        item.providerVerified === true ||
+        (item.providerId && localStorage.getItem(`provider_verified_${item.providerId}`) === 'true')
+      if (!isVerifiedProvider) return false
+
       // Search
       if (search.trim()) {
         const q = search.toLowerCase()

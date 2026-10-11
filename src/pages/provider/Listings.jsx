@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   Plus, Archive, Eye, ToggleLeft, ToggleRight,
   ShieldAlert, MapPin, Calendar, Clock,
-  ArrowLeft, ArrowRight, Package
+  ArrowLeft, ArrowRight, Package, Star
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
@@ -13,6 +13,7 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import {
   fetchProviderListings,
   saveProviderListing,
@@ -473,7 +474,7 @@ export default function ProviderListings() {
         {/* Step 0: Type & Category */}
         {wizardStep === 0 && (
           <div className="flex flex-col gap-4">
-            <label className="label">Offering Type *</label>
+            <label className="label">Offering Type <span className="text-red-500 font-bold">*</span></label>
             <div className="grid grid-cols-3 gap-3">
               {['Service', 'Rental Property', 'Rental Item'].map(t => (
                 <button
@@ -490,7 +491,7 @@ export default function ProviderListings() {
             </div>
 
             <div className="form-group mt-2">
-              <label className="label">Category *</label>
+              <label className="label">Category <span className="text-red-500 font-bold">*</span></label>
               <select
                 value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
@@ -514,7 +515,7 @@ export default function ProviderListings() {
         {wizardStep === 1 && (
           <div className="flex flex-col gap-4">
             <div className="form-group">
-              <label className="label">Listing Title *</label>
+              <label className="label">Listing Title <span className="text-red-500 font-bold">*</span></label>
               <input
                 className="input"
                 placeholder="e.g. Professional Sofa Shampooing Service"
@@ -523,7 +524,7 @@ export default function ProviderListings() {
               />
             </div>
             <div className="form-group">
-              <label className="label">Detailed Description *</label>
+              <label className="label">Detailed Description <span className="text-red-500 font-bold">*</span></label>
               <textarea
                 rows={3}
                 className="input resize-none"
@@ -546,7 +547,7 @@ export default function ProviderListings() {
         {wizardStep === 2 && (
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
-              <label className="label">Price / Rate (₱) *</label>
+              <label className="label">Price / Rate (₱) <span className="text-red-500 font-bold">*</span></label>
               <input
                 type="number"
                 className="input font-mono"
@@ -576,7 +577,7 @@ export default function ProviderListings() {
         {wizardStep === 3 && (
           <div className="flex flex-col gap-4">
             <div className="form-group">
-              <label className="label">Primary Location / Base City *</label>
+              <label className="label">Primary Location / Base City <span className="text-red-500 font-bold">*</span></label>
               <input
                 className="input"
                 value={form.location}
@@ -585,7 +586,7 @@ export default function ProviderListings() {
               />
             </div>
             <div className="form-group">
-              <label className="label">Service Area Coverage *</label>
+              <label className="label">Service Area Coverage <span className="text-red-500 font-bold">*</span></label>
               <input
                 className="input"
                 placeholder="e.g. Cebu City, Mandaue, Lapu-Lapu, Talisay"
@@ -599,7 +600,7 @@ export default function ProviderListings() {
         {/* Step 4: Availability */}
         {wizardStep === 4 && (
           <div className="flex flex-col gap-4">
-            <label className="label">Available Days *</label>
+            <label className="label">Available Days <span className="text-red-500 font-bold">*</span></label>
             <div className="grid grid-cols-4 gap-2">
               {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
                 <label key={d} className={`flex items-center gap-2 text-xs font-medium cursor-pointer p-2 rounded-lg border transition-all ${form.days.includes(d) ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
@@ -622,7 +623,7 @@ export default function ProviderListings() {
               <div className="flex items-center justify-between">
                 <label className="label !mb-0 flex items-center gap-1.5 text-emerald-950 font-semibold">
                   <Calendar size={14} className="text-emerald-600" />
-                  Active Calendar Availability (Month, Day, Year) *
+                  Active Calendar Availability (Month, Day, Year) <span className="text-red-500 font-bold">*</span>
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer">
                   <input
@@ -844,7 +845,52 @@ export default function ProviderListings() {
               </div>
             </div>
 
+            {/* ── Customer Reviews for this listing (SQI-31) ── */}
+            {(() => {
+              const lid = String(viewingListing.id)
+              const allRev = (() => { try { return JSON.parse(localStorage.getItem('serviceq_reviews')) || [] } catch { return [] } })()
+              const matchingRev = allRev.filter(r =>
+                String(r.listingId) === lid ||
+                (r.service && viewingListing.title && r.service.trim().toLowerCase() === viewingListing.title.trim().toLowerCase())
+              )
+              const combined = [...matchingRev, ...(viewingListing.reviews_list || [])]
 
+              return (
+                <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="bg-gray-50 px-3.5 py-2.5 border-b border-gray-100 flex items-center justify-between">
+                    <p className="text-xs font-bold text-gray-800">Customer Reviews ({combined.length})</p>
+                    {combined.length > 0 && (
+                      <div className="flex items-center gap-1 text-xs font-bold text-amber-600">
+                        <Star size={13} className="fill-amber-400 text-amber-400" />
+                        {(combined.reduce((sum, r) => sum + Number(r.rating || 5), 0) / combined.length).toFixed(1)}
+                      </div>
+                    )}
+                  </div>
+                  {combined.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400">
+                      No customer reviews submitted yet for this listing.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50 max-h-56 overflow-y-auto">
+                      {combined.map((r, idx) => (
+                        <div key={idx} className="p-3 bg-white">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-gray-900">{r.user || r.author || 'Customer'}</span>
+                            <span className="text-[10px] text-gray-400">{r.date || 'Recent'}</span>
+                          </div>
+                          <div className="flex items-center gap-0.5 mb-1">
+                            {Array.from({ length: 5 }).map((_, j) => (
+                              <Star key={j} size={11} className={j < Number(r.rating || 5) ? 'fill-amber-400 text-amber-400' : 'text-gray-200 fill-gray-200'} />
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-600 leading-relaxed">{r.comment || 'Service completed successfully.'}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100">
               <button
@@ -895,7 +941,9 @@ export default function ProviderListings() {
 
             {/* Available Days */}
             <div className="space-y-1.5">
-              <label className="label">Available Days *</label>
+              <label className="label">
+                Available Days <span className="text-red-500 font-bold">*</span>
+              </label>
               <div className="grid grid-cols-4 gap-2">
                 {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
                   <label key={d} className={`flex items-center gap-1.5 text-xs font-medium cursor-pointer p-2 rounded-lg border transition-all ${availForm.days.includes(d) ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-gray-200 hover:bg-gray-50 text-gray-700'}`}>
@@ -919,7 +967,7 @@ export default function ProviderListings() {
               <div className="flex items-center justify-between">
                 <label className="label !mb-0 flex items-center gap-1.5 text-emerald-950 font-semibold">
                   <Calendar size={14} className="text-emerald-600" />
-                  Active Calendar Availability (Month, Day, Year) *
+                  Active Calendar Availability (Month, Day, Year) <span className="text-red-500 font-bold">*</span>
                 </label>
                 <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer">
                   <input

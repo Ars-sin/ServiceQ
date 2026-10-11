@@ -50,18 +50,22 @@ export default function CustomerBookings() {
     const syncCustomerBookings = async () => {
       const userId = user?.id ? String(user.id) : null
       const userEmail = (user?.email || profile?.email || '').trim().toLowerCase()
-      const userName = (profile?.full_name || user?.user_metadata?.full_name || '').trim().toLowerCase()
 
-      if (!userId && !userEmail && !userName) {
+      if (!userId && !userEmail) {
         setBookings([])
         return
       }
 
+      // SQI-15: Strict isolation. A booking belongs to this customer ONLY if customerId matches,
+      // or if customerEmail matches when customerId is omitted. Never match on loose name strings.
       const isBookingMine = (b) => {
         if (!b) return false
-        if (userId && b.customerId && String(b.customerId) === userId) return true
-        if (userEmail && b.customerEmail && b.customerEmail.toLowerCase().trim() === userEmail) return true
-        if (userName && b.customer && b.customer.toLowerCase().trim() === userName) return true
+        if (b.customerId) {
+          return userId ? String(b.customerId) === userId : false
+        }
+        if (b.customerEmail && userEmail) {
+          return b.customerEmail.toLowerCase().trim() === userEmail
+        }
         return false
       }
 
@@ -73,12 +77,12 @@ export default function CustomerBookings() {
           try {
             const userStored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${userId}`)) || []
             if (Array.isArray(userStored)) {
-              userStored.forEach(b => { if (b?.id) localMap.set(b.id, b) })
+              userStored.forEach(b => { if (b?.id && isBookingMine(b)) localMap.set(b.id, b) })
             }
           } catch {}
         }
 
-        // 2. Fallback general customer cache in localStorage
+        // 2. Fallback general customer cache in localStorage (Strictly filtered)
         try {
           const genStored = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
           if (Array.isArray(genStored)) {
@@ -158,8 +162,12 @@ export default function CustomerBookings() {
           setBookings(merged)
           if (userId) {
             localStorage.setItem(`serviceq_customer_bookings_${userId}`, JSON.stringify(merged))
+            try {
+              const currentGen = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+              const others = currentGen.filter(b => b.customerId && String(b.customerId) !== userId)
+              localStorage.setItem('serviceq_customer_bookings', JSON.stringify([...merged, ...others]))
+            } catch {}
           }
-          localStorage.setItem('serviceq_customer_bookings', JSON.stringify(merged))
         }
       } catch (err) {
         console.warn('Customer bookings sync warning:', err)
@@ -256,20 +264,47 @@ export default function CustomerBookings() {
     const updated = bookings.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating, comment } : b)
     setBookings(updated)
 
+    const customerName = profile?.full_name || user?.user_metadata?.full_name || 'Customer'
+    const reviewRecord = {
+      id: `rev-${Date.now()}`,
+      listingId: String(reviewModal.listingId || reviewModal.id || ''),
+      bookingId: targetId,
+      service: reviewModal.service || 'Service Offering',
+      author: customerName,
+      user: customerName,
+      rating,
+      comment: comment || 'Service completed successfully.',
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      createdAt: new Date().toISOString(),
+    }
+
     try {
       if (user?.id) {
         localStorage.setItem(`serviceq_customer_bookings_${user.id}`, JSON.stringify(updated))
       }
       localStorage.setItem('serviceq_customer_bookings', JSON.stringify(updated))
       const allBk = JSON.parse(localStorage.getItem('serviceq_all_bookings')) || []
-      localStorage.setItem('serviceq_all_bookings', JSON.stringify(allBk.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating } : b)))
+      localStorage.setItem('serviceq_all_bookings', JSON.stringify(allBk.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating, comment } : b)))
+
+      // SQI-31: Save review into serviceq_reviews
+      const allReviews = JSON.parse(localStorage.getItem('serviceq_reviews')) || []
+      const updatedReviews = [reviewRecord, ...allReviews]
+      localStorage.setItem('serviceq_reviews', JSON.stringify(updatedReviews))
 
       // Update Supabase platform_settings
+      try {
+        await supabase.from('platform_settings').upsert({
+          key: 'serviceq_all_reviews',
+          value: JSON.stringify(updatedReviews),
+          updated_at: new Date().toISOString(),
+        })
+      } catch {}
+
       const { data: gRow } = await supabase.from('platform_settings').select('value').eq('key', 'serviceq_global_bookings').maybeSingle()
       if (gRow?.value) {
         const cloudList = typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value
         if (Array.isArray(cloudList)) {
-          const updatedCloud = cloudList.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating } : b)
+          const updatedCloud = cloudList.map(b => b.id === targetId ? { ...b, reviewed: true, userRating: rating, comment } : b)
           await supabase.from('platform_settings').upsert({
             key: 'serviceq_global_bookings',
             value: JSON.stringify(updatedCloud),
@@ -280,6 +315,8 @@ export default function CustomerBookings() {
     } catch {}
 
     window.dispatchEvent(new Event('serviceq_bookings_updated'))
+    window.dispatchEvent(new Event('serviceq_reviews_updated'))
+    window.dispatchEvent(new Event('serviceq_listings_updated'))
 
     toast.success('Review submitted! Thank you.')
     setReviewModal(null)

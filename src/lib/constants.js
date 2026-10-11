@@ -92,7 +92,7 @@ export const GOV_ID_TYPES = [
 
 // ── Admin Roles ───────────────────────────────────────────
 export const ADMIN_ROLES = [
-  { id: 'superadmin',        label: 'Super Admin' },
+  { id: 'superadmin',        label: 'Admin' },
   { id: 'financial_staff',   label: 'Financial Staff' },
   { id: 'support_moderator', label: 'Support Moderator' },
 ]

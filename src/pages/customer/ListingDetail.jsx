@@ -114,6 +114,18 @@ export default function ListingDetail() {
     return () => { isMounted = false }
   }, [id])
 
+  const [reviewsTrigger, setReviewsTrigger] = useState(0)
+
+  useEffect(() => {
+    const handleRev = () => setReviewsTrigger(v => v + 1)
+    window.addEventListener('serviceq_reviews_updated', handleRev)
+    window.addEventListener('storage', handleRev)
+    return () => {
+      window.removeEventListener('serviceq_reviews_updated', handleRev)
+      window.removeEventListener('storage', handleRev)
+    }
+  }, [])
+
   // Dynamically resolve listing from custom listings + ALL_LISTINGS by id
   const listing = useMemo(() => {
     let all = ALL_LISTINGS
@@ -129,6 +141,22 @@ export default function ListingDetail() {
       ? backendListing
       : all.find(l => String(l.id) === String(id))
     if (!matched) return DEFAULT_MOCK
+
+    // SQI-31: Dynamic reviews from serviceq_reviews
+    let dynamicReviews = []
+    try {
+      const allRev = JSON.parse(localStorage.getItem('serviceq_reviews')) || []
+      dynamicReviews = allRev.filter(r =>
+        String(r.listingId) === String(matched.id) ||
+        (r.service && matched.title && r.service.trim().toLowerCase() === matched.title.trim().toLowerCase())
+      )
+    } catch {}
+
+    const combinedReviews = [...dynamicReviews, ...(matched.reviews_list || DEFAULT_MOCK.reviews_list || [])]
+    const calculatedReviews = Math.max((matched.reviews || 0), dynamicReviews.length)
+    const calculatedRating = dynamicReviews.length > 0
+      ? (dynamicReviews.reduce((sum, r) => sum + Number(r.rating || 5), 0) / dynamicReviews.length).toFixed(1)
+      : (matched.rating || 5.0)
 
     const initials = (matched.provider || 'SP')
       .split(' ')
@@ -149,20 +177,21 @@ export default function ListingDetail() {
       description: matched.description || `${matched.title} provided by ${matched.provider}. Available for immediate booking with verified quality guarantee and secure digital payment via ServiceQ. Located ${matched.distance || '1.0'} km away in Metro Cebu.`,
       price: matched.price,
       unit: matched.unit || 'per session',
-      rating: matched.rating || 5.0,
-      reviews: matched.reviews || 0,
-      bookings: Math.round((matched.reviews || 10) * 2.8) || 45,
+      rating: Number(calculatedRating),
+      reviews: calculatedReviews,
+      reviews_list: combinedReviews,
+      bookings: Math.round((calculatedReviews || 10) * 2.8) || 45,
       provider: {
-        name: (matched.provider && matched.provider !== 'Verified Provider') ? matched.provider : 'Service Provider',
+        name: matched.provider || 'Service Provider',
         avatar: initials,
-        rating: matched.rating || 5.0,
+        rating: Number(calculatedRating),
         verified: !!(matched.isVerified || matched.provider_verified || matched.providerVerified),
         joined: 'January 2024',
       },
       providerId: matched.providerId || null,
       photos: colorGradients,
     }
-  }, [id])
+  }, [id, backendListing, reviewsTrigger])
 
   const subtotal = listing.price * sessions
   const { fee, total } = calcFees(subtotal)
@@ -271,7 +300,7 @@ export default function ListingDetail() {
               {listing.reviews_list.map((r, i) => (
                 <div key={i} className={`${i < listing.reviews_list.length - 1 ? 'pb-4 border-b border-gray-100' : ''}`}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-sm text-gray-900">{r.user}</span>
+                    <span className="font-medium text-sm text-gray-900">{r.user || r.author || 'Customer'}</span>
                     <span className="text-xs text-gray-400">{r.date}</span>
                   </div>
                   <div className="flex gap-0.5 mb-1">

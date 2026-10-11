@@ -773,23 +773,8 @@ export default function RegisterPage() {
   }
 
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
-  const handleGoogleSignIn = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          queryParams: {
-            prompt: 'select_account',
-            access_type: 'offline',
-          },
-          redirectTo: `${window.location.origin}/register?from=google&role=${role || 'customer'}`,
-        },
-      })
-      if (error) throw error
-    } catch (err) {
-      console.error('Google OAuth sign-up error:', err)
-      toast.error(err.message || 'Failed to start Google sign-up')
-    }
+  const handleGoogleSignIn = () => {
+    setShowGoogleModal(true)
   }
 
   return (
@@ -821,7 +806,7 @@ export default function RegisterPage() {
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 mb-2">
                 <Briefcase size={13} /> Provider Partner Registration
               </span>
-              <h1 className="text-2xl font-black text-gray-900">Offer Services & Rentals</h1>
+              <h1 className="text-2xl font-black text-emerald-800">Offer Services & Rentals</h1>
               <p className="text-gray-500 text-xs mt-1">Start receiving client bookings and gear rental orders in Cebu</p>
             </div>
           ) : (
@@ -834,8 +819,8 @@ export default function RegisterPage() {
         <div className="card shadow-modal border border-gray-100">
           {/* Google Registration Detected Banner */}
           {fromGoogle && (
-            <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 mb-5 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-white border border-brand-200 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+            <div className={`${role === 'provider' ? 'bg-emerald-50 border-emerald-200' : 'bg-brand-50 border-brand-200'} rounded-2xl p-4 mb-5 flex items-start gap-3`}>
+              <div className="w-9 h-9 rounded-xl bg-white border border-gray-200 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
                 <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -844,8 +829,8 @@ export default function RegisterPage() {
                 </svg>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-brand-900">Google Registration Detected</p>
-                <p className="text-xs text-brand-700 mt-0.5 leading-relaxed">
+                <p className={`text-xs font-bold ${role === 'provider' ? 'text-emerald-900' : 'text-brand-900'}`}>Google Registration Detected</p>
+                <p className={`text-xs ${role === 'provider' ? 'text-emerald-700' : 'text-brand-700'} mt-0.5 leading-relaxed`}>
                   Registering with <span className="font-semibold underline">{form.email || initialEmail}</span>. Choose whether you want to join as a <span className="font-bold">Customer</span> or <span className="font-bold">Provider Partner</span> below:
                 </p>
               </div>
@@ -1231,7 +1216,11 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={handleGoogleSignIn}
-                    className="btn-secondary py-2.5 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    className={`py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-xs ${
+                      role === 'provider'
+                        ? 'border-gray-200 bg-white hover:bg-gray-50'
+                        : 'btn-secondary hover:bg-gray-100'
+                    }`}
                     title="Sign up with Google"
                   >
                     <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
@@ -1244,7 +1233,11 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => toast('Facebook sign-up coming soon!')}
-                    className="btn-secondary py-2.5 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    className={`py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-xs ${
+                      role === 'provider'
+                        ? 'border-gray-200 bg-white hover:bg-gray-50'
+                        : 'btn-secondary hover:bg-gray-100'
+                    }`}
                     title="Sign up with Facebook"
                   >
                     <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2" xmlns="http://www.w3.org/2000/svg">
@@ -1355,7 +1348,11 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(0)}
-                    className="btn-secondary flex-1 py-3 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
+                    className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-sm transition-colors ${
+                      role === 'provider'
+                        ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'btn-secondary hover:bg-gray-100'
+                    }`}
                   >
                     <ChevronLeft size={16} /> Back
                   </button>
@@ -1510,7 +1507,7 @@ export default function RegisterPage() {
                       <button
                         type="button"
                         onClick={() => setShowTermsModal(true)}
-                        className="text-brand-600 hover:underline font-semibold"
+                        className={`${role === 'provider' ? 'text-emerald-700' : 'text-brand-600'} hover:underline font-semibold`}
                       >
                         Terms & Conditions
                       </button>
@@ -1534,7 +1531,11 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="btn-secondary flex-1 py-3 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-sm hover:bg-gray-100"
+                    className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-sm transition-colors ${
+                      role === 'provider'
+                        ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'btn-secondary hover:bg-gray-100'
+                    }`}
                   >
                     <ChevronLeft size={16} /> Back
                   </button>
@@ -1623,7 +1624,11 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setStep(0)}
-                    className="btn-secondary flex-1 py-2.5 flex items-center justify-center gap-1.5 font-semibold text-xs hover:bg-gray-100"
+                    className={`flex-1 py-2.5 rounded-xl flex items-center justify-center gap-1.5 font-semibold text-xs transition-colors ${
+                      role === 'provider'
+                        ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                        : 'btn-secondary hover:bg-gray-100'
+                    }`}
                   >
                     <ArrowLeft size={14} /> Edit Account Info
                   </button>

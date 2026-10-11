@@ -18,15 +18,44 @@ const TABS = [
 ]
 
 // ── Read bookings strictly belonging to THIS provider ──────────────────────────
-function readAllBookings(userId, providerName) {
-  if (!userId && !providerName) return []
+function readAllBookings(userId, providerName, businessName) {
+  if (!userId && !providerName && !businessName) return []
   const seen = new Set()
   const combined = []
 
+  // Resolve listing IDs owned by this provider
+  const myListingIds = new Set()
+  try {
+    if (userId) {
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${userId}`)) || []
+      stored.forEach(l => { if (l?.id) myListingIds.add(String(l.id)) })
+    }
+    const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+    custom.forEach(l => {
+      if (l?.id && (String(l.providerId) === String(userId) || (providerName && l.provider?.toLowerCase() === providerName.toLowerCase()))) {
+        myListingIds.add(String(l.id))
+      }
+    })
+  } catch {}
+
   const isForThisProvider = (b) => {
     if (!b) return false
-    if (userId && b.providerId && String(b.providerId) === String(userId)) return true
-    if (providerName && b.provider && typeof b.provider === 'string' && b.provider.trim().toLowerCase() === providerName.trim().toLowerCase()) return true
+    // 1. Strict providerId check: if set, MUST match userId
+    if (b.providerId) {
+      return userId ? String(b.providerId) === String(userId) : false
+    }
+    // 2. Listing match
+    if (b.listingId && myListingIds.has(String(b.listingId))) {
+      return true
+    }
+    // 3. Name or business match, excluding placeholders
+    if (b.provider && typeof b.provider === 'string') {
+      const pName = b.provider.trim().toLowerCase()
+      if (pName !== 'verified provider' && pName !== 'service provider') {
+        if (providerName && pName === providerName.trim().toLowerCase()) return true
+        if (businessName && pName === businessName.trim().toLowerCase()) return true
+      }
+    }
     return false
   }
 
@@ -78,10 +107,11 @@ function readAllBookings(userId, providerName) {
 
 export default function ProviderBookings() {
   const { user, profile } = useAuth()
-  const providerName = profile?.full_name || profile?.business_name
+  const providerName = profile?.full_name
+  const businessName = profile?.business_name
   const [tab, setTab] = useState('all')
   const [page, setPage] = useState(1)
-  const [bookings, setBookings] = useState(() => readAllBookings(user?.id, providerName))
+  const [bookings, setBookings] = useState(() => readAllBookings(user?.id, providerName, businessName))
   const [lastRefreshed, setLastRefreshed] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const prevCountRef = useRef(0)
@@ -89,13 +119,13 @@ export default function ProviderBookings() {
   // ── Core load function: instant local cache + live Supabase sync ───────────
   const loadBookings = useCallback(async (silent = true) => {
     // 1. Instant local read
-    const localResult = readAllBookings(user?.id, providerName)
+    const localResult = readAllBookings(user?.id, providerName, businessName)
     setBookings(localResult)
     setLastRefreshed(new Date())
 
     // 2. Live Supabase fetch (cross-browser / incognito truth)
     try {
-      const liveResult = await fetchProviderBookings(user?.id, providerName)
+      const liveResult = await fetchProviderBookings(user?.id, providerName, businessName)
       if (Array.isArray(liveResult)) {
         setBookings(liveResult)
 

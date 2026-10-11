@@ -51,6 +51,12 @@ export function normalizeListing(raw) {
     tag: (raw.tag && raw.tag !== 'Verified')
       ? raw.tag
       : ((raw.isVerified || raw.provider_verified || raw.providerVerified) ? 'Verified' : ''),
+    isVerified: Boolean(
+      raw.isVerified ||
+      raw.provider_verified ||
+      raw.providerVerified ||
+      (raw.providerId && typeof window !== 'undefined' && window.localStorage?.getItem(`provider_verified_${raw.providerId}`) === 'true')
+    ),
     days: Array.isArray(raw.days) && raw.days.length > 0 ? raw.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     hoursFrom: raw.hoursFrom || raw.hours_from || '08:00',
     hoursTo: raw.hoursTo || raw.hours_to || '17:00',

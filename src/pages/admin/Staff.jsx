@@ -6,6 +6,8 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import { ADMIN_ROLES } from '@/lib/constants'
 
+import { supabase } from '@/lib/supabase'
+
 const STAFF = [
   { id: '1', name: 'Bryce Obien',   email: 'bryce@serviceq.ph', role: 'superadmin',        status: 'active',   lastActive: '2026-09-09' },
   { id: '2', name: 'John Monares',  email: 'john@serviceq.ph',  role: 'financial_staff',   status: 'active',   lastActive: '2026-09-09' },
@@ -40,19 +42,121 @@ const ROLE_COLOR = {
 const roleLabel = r => ADMIN_ROLES.find(a => a.id === r)?.label ?? r
 
 export default function AdminStaff() {
-  const [staff, setStaff] = useState(STAFF)
+  const [staff, setStaff] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('serviceq_admin_staff'))
+      if (Array.isArray(stored) && stored.length > 0) return stored
+    } catch {}
+    return STAFF
+  })
   const [addModal, setAdd] = useState(false)
-  const [form, setForm]    = useState({ name: '', email: '', role: 'support_moderator' })
+  const [editingStaff, setEditingStaff] = useState(null)
+  const [form, setForm]    = useState({ name: '', email: '', role: 'support_moderator', defaultPassword: '' })
 
-  const handleAdd = () => {
-    if (!form.name || !form.email) return toast.error('Fill in all fields')
-    setStaff(prev => [...prev, { id: Date.now().toString(), ...form, status: 'active', lastActive: 'Just now' }])
-    toast.success('Staff member added!')
-    setAdd(false); setForm({ name: '', email: '', role: 'support_moderator' })
+  const saveStaffList = (updated) => {
+    setStaff(updated)
+    try {
+      localStorage.setItem('serviceq_admin_staff', JSON.stringify(updated))
+    } catch {}
+  }
+
+  const handleAdd = async () => {
+    if (!form.name.trim() || !form.email.trim() || !form.defaultPassword.trim()) {
+      return toast.error('Please fill in all fields including Default Password')
+    }
+    if (form.defaultPassword.length < 6) {
+      return toast.error('Default password must be at least 6 characters')
+    }
+
+    const emailKey = form.email.trim().toLowerCase()
+    const newMember = {
+      id: Date.now().toString(),
+      name: form.name.trim(),
+      email: form.email.trim(),
+      role: form.role,
+      status: 'active',
+      lastActive: 'Just now'
+    }
+
+    const updatedList = [...staff, newMember]
+    saveStaffList(updatedList)
+
+    // Store default password for login (SQI-43)
+    try {
+      localStorage.setItem(`serviceq_admin_password_${emailKey}`, form.defaultPassword)
+      localStorage.setItem(`serviceq_password_${emailKey}`, form.defaultPassword)
+    } catch {}
+
+    // Upsert into profiles table so backend is synced
+    try {
+      await supabase.from('profiles').upsert({
+        id: `staff-${Date.now()}`,
+        email: form.email.trim(),
+        full_name: form.name.trim(),
+        role: form.role === 'superadmin' ? 'admin' : form.role,
+        is_active: true,
+      }, { onConflict: 'email' })
+    } catch (err) {
+      console.warn('Profile sync note:', err)
+    }
+
+    // Record in audit log
+    try {
+      const existingLogs = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+      const log = {
+        id: `a${Date.now()}`,
+        staff: 'Admin',
+        role: 'superadmin',
+        action: 'Staff Member Added',
+        target: `${form.name} (${form.email})`,
+        desc: `Added new staff member with role: ${roleLabel(form.role)}.`,
+        before: { status: 'none' },
+        after: { status: 'active', role: form.role },
+        ts: new Date().toISOString(),
+      }
+      localStorage.setItem('serviceq_audit_log', JSON.stringify([log, ...existingLogs]))
+    } catch {}
+
+    toast.success(`Staff member added! Login password set for ${form.email}.`)
+    setAdd(false)
+    setForm({ name: '', email: '', role: 'support_moderator', defaultPassword: '' })
+  }
+
+  const handleSaveRole = async () => {
+    if (!editingStaff) return
+    const updated = staff.map(s => s.id === editingStaff.id ? { ...s, role: editingStaff.role } : s)
+    saveStaffList(updated)
+
+    // Sync role to Supabase profiles
+    try {
+      await supabase
+        .from('profiles')
+        .update({ role: editingStaff.role === 'superadmin' ? 'admin' : editingStaff.role })
+        .ilike('email', editingStaff.email)
+    } catch {}
+
+    // Record in audit log
+    try {
+      const existingLogs = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+      const log = {
+        id: `a${Date.now()}`,
+        staff: 'Admin',
+        role: 'superadmin',
+        action: 'Staff Role Updated',
+        target: `${editingStaff.name} (${editingStaff.email})`,
+        desc: `Role changed to: ${roleLabel(editingStaff.role)}.`,
+        ts: new Date().toISOString(),
+      }
+      localStorage.setItem('serviceq_audit_log', JSON.stringify([log, ...existingLogs]))
+    } catch {}
+
+    toast.success(`Role updated successfully for ${editingStaff.name}`)
+    setEditingStaff(null)
   }
 
   const toggleStatus = id => {
-    setStaff(prev => prev.map(s => s.id === id ? { ...s, status: s.status === 'active' ? 'inactive' : 'active' } : s))
+    const updated = staff.map(s => s.id === id ? { ...s, status: s.status === 'active' ? 'inactive' : 'active' } : s)
+    saveStaffList(updated)
     toast.success('Status updated')
   }
 
@@ -108,8 +212,8 @@ export default function AdminStaff() {
                 <td className="p-4">
                   <div className="flex gap-2">
                     <button
-                      onClick={() => toast('Edit role coming soon')}
-                      className="btn-ghost btn-sm text-xs"
+                      onClick={() => setEditingStaff({ ...s })}
+                      className="btn-ghost btn-sm text-xs hover:bg-slate-100 font-semibold"
                     >
                       Edit Role
                     </button>
@@ -141,7 +245,7 @@ export default function AdminStaff() {
           {[
             {
               role: 'superadmin',
-              title: 'Super Admin',
+              title: 'Admin',
               badge: 'danger',
               badgeLabel: 'Full Access',
               desc: 'Complete administrative control across the entire ServiceQ platform.',
@@ -214,7 +318,7 @@ export default function AdminStaff() {
           <thead>
             <tr className="text-left text-gray-400 text-xs border-b border-gray-100 bg-gray-50">
               <th className="p-4 font-semibold">Permission</th>
-              <th className="p-4 text-center font-semibold">Super Admin</th>
+              <th className="p-4 text-center font-semibold">Admin</th>
               <th className="p-4 text-center font-semibold">Financial Staff</th>
               <th className="p-4 text-center font-semibold">Support Moderator</th>
             </tr>
@@ -248,9 +352,20 @@ export default function AdminStaff() {
             <input type="email" className="input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="staff@serviceq.ph" />
           </div>
           <div className="form-group">
+            <label className="label">Default Password</label>
+            <input
+              type="password"
+              className="input font-mono"
+              value={form.defaultPassword}
+              onChange={e => setForm(f => ({ ...f, defaultPassword: e.target.value }))}
+              placeholder="Set initial login password (min 6 chars)"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Staff will use this password to sign in via the Admin Login portal.</p>
+          </div>
+          <div className="form-group">
             <label className="label">Role</label>
             <select className="input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-              {ADMIN_ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+              {ADMIN_ROLES.map(r => <option key={r.id} value={r.id}>{r.id === 'superadmin' ? 'Admin' : r.label}</option>)}
             </select>
           </div>
 
@@ -277,6 +392,58 @@ export default function AdminStaff() {
             <button onClick={handleAdd} className="btn-primary flex-1">Add Staff</button>
           </div>
         </div>
+      </Modal>
+
+      {/* Edit Role Modal (SQI-42) */}
+      <Modal open={!!editingStaff} onClose={() => setEditingStaff(null)} title="Edit Staff Role">
+        {editingStaff && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-bold text-gray-900">{editingStaff.name}</p>
+              <p className="text-xs text-gray-500">{editingStaff.email}</p>
+            </div>
+
+            <div className="form-group">
+              <label className="label">Assigned Role</label>
+              <select
+                className="input"
+                value={editingStaff.role}
+                onChange={e => setEditingStaff(s => ({ ...s, role: e.target.value }))}
+              >
+                {ADMIN_ROLES.map(r => (
+                  <option key={r.id} value={r.id}>{r.id === 'superadmin' ? 'Admin' : r.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dynamic Role Access Preview for Editing */}
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs">
+              <span className="font-semibold text-gray-800 block mb-2 flex items-center gap-1.5">
+                <Shield size={13} className="text-brand-600" /> Role Capabilities:
+              </span>
+              <ul className="space-y-1.5 text-gray-600">
+                {ROLE_PERMS[editingStaff.role]?.map(permKey => {
+                  const perm = PERMISSIONS.find(p => p.key === permKey)
+                  return (
+                    <li key={permKey} className="flex items-center gap-1.5">
+                      <Check size={12} className="text-emerald-500 flex-shrink-0" />
+                      <span>{perm?.label || permKey}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => setEditingStaff(null)} className="btn-ghost flex-1">
+                Cancel
+              </button>
+              <button onClick={handleSaveRole} className="btn-primary flex-1">
+                Save Role
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </motion.div>
   )

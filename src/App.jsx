@@ -39,6 +39,7 @@ import AdminSettings   from '@/pages/admin/Settings'
 import AdminAuditLog   from '@/pages/admin/AuditLog'
 import AdminProfile    from '@/pages/admin/Profile'
 import AdminLogin      from '@/pages/admin/Login'
+import AdminForgotPassword from '@/pages/admin/ForgotPassword'
 
 // Misc
 import NotFoundPage from '@/pages/NotFound'
@@ -128,6 +129,7 @@ function AppRoutes() {
       {/* ── Auth (guests only — redirect if already logged in) ── */}
       <Route path="/login"           element={<GuestOnly><LoginPage /></GuestOnly>} />
       <Route path="/admin/login"     element={<AdminLogin />} />
+      <Route path="/admin/forgot-password" element={<AdminForgotPassword />} />
       <Route path="/register"        element={<GuestOnly><RegisterPage /></GuestOnly>} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ForgotPasswordPage />} />

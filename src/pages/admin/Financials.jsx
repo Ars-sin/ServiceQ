@@ -7,6 +7,8 @@ import StatCard from '@/components/ui/StatCard'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { DollarSign, AlertCircle, CheckCircle, Clock } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { supabase } from '@/lib/supabase'
 
 import {
   fetchBackendWithdrawals,
@@ -122,8 +124,78 @@ export default function AdminFinancials() {
   const PAGE_SIZE = 6
   const isDefaultAll = txnFilter === 'all'
 
-  const issueRefund = (id) => {
+  const issueRefund = async (id) => {
+    // 1. Immediately update state so UI and "Refunded" stat card updates live
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'refunded' } : t))
+
+    try {
+      // 2. Persist to local storage
+      const updateList = (key) => {
+        const arr = JSON.parse(localStorage.getItem(key)) || []
+        if (Array.isArray(arr)) {
+          const updated = arr.map(b => b.id === id ? { ...b, status: 'cancelled', refundStatus: 'refunded' } : b)
+          localStorage.setItem(key, JSON.stringify(updated))
+        }
+      }
+      updateList('serviceq_all_bookings')
+      updateList('serviceq_customer_bookings')
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && (k.startsWith('serviceq_customer_bookings_') || k.startsWith('serviceq_provider_bookings_'))) {
+          updateList(k)
+        }
+      }
+
+      // 3. Persist to Supabase platform_settings (serviceq_global_bookings)
+      try {
+        const { data: gRow } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_global_bookings')
+          .maybeSingle()
+        if (gRow?.value) {
+          const gList = JSON.parse(gRow.value) || []
+          const updatedG = gList.map(b => b.id === id ? { ...b, status: 'cancelled', refundStatus: 'refunded' } : b)
+          await supabase.from('platform_settings').upsert({
+            key: 'serviceq_global_bookings',
+            value: JSON.stringify(updatedG),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'key' })
+        }
+      } catch (err) {
+        console.warn('Backend refund sync notice:', err)
+      }
+
+      // 4. Record to Audit Log
+      try {
+        const targetTxn = transactions.find(t => t.id === id)
+        const existingAudit = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+        const auditEntry = {
+          id: `a${Date.now()}`,
+          staff: 'Admin',
+          role: 'superadmin',
+          action: 'Refund Issued',
+          target: id,
+          desc: `Refund issued for transaction ${id} (${targetTxn ? `${targetTxn.service} - ${formatPHP(targetTxn.gross)}` : 'Booking'}).`,
+          before: { status: 'successful' },
+          after: { status: 'refunded' },
+          ts: new Date().toISOString(),
+        }
+        localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...existingAudit]))
+      } catch {}
+
+      // 5. Broadcast updates
+      window.dispatchEvent(new Event('serviceq_bookings_updated'))
+      try {
+        const bc = new BroadcastChannel('serviceq_bookings')
+        bc.postMessage({ type: 'refund_issued', id })
+        bc.close()
+      } catch {}
+    } catch (e) {
+      console.error('Refund save error:', e)
+    }
+
     toast.success('Refund issued successfully. Counter updated.')
   }
 

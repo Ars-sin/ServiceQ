@@ -67,6 +67,21 @@ export default function GoogleSignInModal({
           return
         }
 
+        // SQI-35: Admin credentials cannot log in on customer/provider portal
+        if (
+          profile.role === 'admin' ||
+          profile.role === 'superadmin' ||
+          profile.role === 'staff' ||
+          profile.role === 'financial_staff' ||
+          profile.role === 'support_moderator' ||
+          cleanEmail === 'rutilander@gmail.com' ||
+          cleanEmail === 'admin@serviceq.ph' ||
+          Boolean(localStorage.getItem(`serviceq_admin_password_${cleanEmail}`))
+        ) {
+          toast.error('This is an Admin account. Please use the Admin Portal to sign in.')
+          return
+        }
+
         // Enforce strict role boundary
         if (loginRole === 'customer' && profile.role === 'provider') {
           toast.error('This is a Provider account. Please use the Provider tab to sign in.')

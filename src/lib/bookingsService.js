@@ -298,15 +298,44 @@ export async function recordCustomerBooking(raw) {
  * 2. Fetching from Supabase platform_settings (backend truth across all browsers/devices)
  * 3. Merging and deduplicating by booking ID
  */
-export async function fetchProviderBookings(userId, providerName) {
-  if (!userId && !providerName) return []
+export async function fetchProviderBookings(userId, providerName, businessName) {
+  if (!userId && !providerName && !businessName) return []
   const seen = new Set()
   const combined = []
 
+  // Resolve listing IDs owned by this provider
+  const myListingIds = new Set()
+  try {
+    if (userId) {
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_listings_${userId}`)) || []
+      stored.forEach(l => { if (l?.id) myListingIds.add(String(l.id)) })
+    }
+    const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+    custom.forEach(l => {
+      if (l?.id && (String(l.providerId) === String(userId) || (providerName && l.provider?.toLowerCase() === providerName.toLowerCase()))) {
+        myListingIds.add(String(l.id))
+      }
+    })
+  } catch {}
+
   const isForThisProvider = (b) => {
     if (!b) return false
-    if (userId && b.providerId && String(b.providerId) === String(userId)) return true
-    if (providerName && b.provider && typeof b.provider === 'string' && b.provider.trim().toLowerCase() === providerName.trim().toLowerCase()) return true
+    // 1. Strict providerId check: if set, MUST match userId
+    if (b.providerId) {
+      return userId ? String(b.providerId) === String(userId) : false
+    }
+    // 2. Listing match
+    if (b.listingId && myListingIds.has(String(b.listingId))) {
+      return true
+    }
+    // 3. Name or business match, excluding placeholders
+    if (b.provider && typeof b.provider === 'string') {
+      const pName = b.provider.trim().toLowerCase()
+      if (pName !== 'verified provider' && pName !== 'service provider') {
+        if (providerName && pName === providerName.trim().toLowerCase()) return true
+        if (businessName && pName === businessName.trim().toLowerCase()) return true
+      }
+    }
     return false
   }
 
@@ -953,16 +982,20 @@ export async function fetchBackendTransactions() {
     for (const b of arr) {
       if (b?.id && !seen.has(b.id) && !/^TXN-00\d$/.test(b.id)) {
         seen.add(b.id)
+        const amt = Number(b.amount || b.gross) || 0
+        const isRefunded = b.status === 'cancelled' || b.status === 'refunded' || b.refundStatus === 'refunded'
         combined.push({
           id: b.id,
-          customer: b.customer || 'Customer',
-          provider: b.provider || 'Provider',
-          service: b.service || 'Service',
-          gross: Number(b.amount) || 0,
-          fee: Number(b.fee) || Math.round((Number(b.amount) || 0) * 0.1),
-          net: Number(b.net) || Math.round((Number(b.amount) || 0) * 0.9),
+          customer: b.customer || b.customer_name || 'Customer',
+          provider: b.provider || b.provider_name || 'Provider',
+          service: b.service || b.title || 'Service',
+          amount: amt,
+          gross: amt,
+          fee: Number(b.fee) || Math.round(amt * 0.1),
+          net: Number(b.net) || Math.round(amt * 0.9),
           date: b.date || b.createdAt?.slice(0, 10) || new Date().toISOString().split('T')[0],
-          status: b.status === 'completed' || b.status === 'scheduled' ? 'successful' : b.status === 'cancelled' ? 'refunded' : 'pending'
+          createdAt: b.createdAt || b.date || new Date().toISOString(),
+          status: isRefunded ? 'refunded' : (b.status === 'completed' || b.status === 'scheduled' ? 'successful' : (b.status || 'pending'))
         })
       }
     }

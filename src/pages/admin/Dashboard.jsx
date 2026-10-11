@@ -16,6 +16,8 @@ import { fetchBackendWithdrawals, fetchBackendTransactions } from "@/lib/booking
 const TYPE_BADGE = {
   "New User":               "bg-blue-100 text-blue-700",
   "Booking Created & Paid": "bg-emerald-100 text-emerald-700",
+  "Booking Refunded":       "bg-rose-100 text-rose-700",
+  "Refund Issued":          "bg-rose-100 text-rose-700",
   "KYC Submitted":          "bg-amber-100 text-amber-700",
   "KYC Approved":           "bg-emerald-100 text-emerald-700",
   "Withdrawal Requested":   "bg-purple-100 text-purple-700",
@@ -185,12 +187,14 @@ export default function Dashboard() {
 
       // From recent real bookings
       for (const b of bookingsList.slice(0, 5)) {
+        const isRefunded = b.status === 'cancelled' && (b.refundStatus === 'refunded' || b.refunded)
+        const isCancelled = b.status === 'cancelled'
         eventList.push({
           id: `bk-${b.id}`,
-          type: 'Booking Created & Paid',
-          details: `${b.customer || 'Customer'} reserved "${b.service || 'Service'}" (${formatPHP(b.amount || 0)})`,
-          time: b.createdAt || new Date().toISOString(),
-          status: b.status || 'scheduled',
+          type: isRefunded ? 'Booking Refunded' : isCancelled ? 'Booking Cancelled' : 'Booking Created & Paid',
+          details: `${b.customer || 'Customer'} reserved "${b.service || 'Service'}" (${formatPHP(b.amount || b.gross || 0)})`,
+          time: b.createdAt || (b.date ? new Date(b.date).toISOString() : new Date().toISOString()),
+          status: isRefunded ? 'refunded' : (b.status || 'scheduled'),
         })
       }
 

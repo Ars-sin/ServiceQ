@@ -13,6 +13,21 @@ const ROLE_REDIRECT = {
   admin:    '/admin/dashboard',
 }
 
+function isAdminAccount(email, role) {
+  if (!email && !role) return false
+  const cleanEmail = email ? email.trim().toLowerCase() : ''
+  if (role === 'admin' || role === 'superadmin' || role === 'staff' || role === 'financial_staff' || role === 'support_moderator') return true
+  if (cleanEmail === 'rutilander@gmail.com' || cleanEmail === 'admin@serviceq.ph') return true
+  if (cleanEmail) {
+    try {
+      if (localStorage.getItem(`serviceq_admin_password_${cleanEmail}`)) return true
+      const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
+      if (Array.isArray(staffList) && staffList.some(s => s.email?.toLowerCase() === cleanEmail)) return true
+    } catch {}
+  }
+  return false
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { loginWithProfile } = useAuth()
@@ -43,6 +58,13 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (profile?.role) {
+        // SQI-35: Admin credentials cannot log in on customer/provider login screen
+        if (isAdminAccount(session.user.email, profile.role)) {
+          await supabase.auth.signOut()
+          toast.error('This is an Admin account. Please use the Admin Portal to sign in.')
+          return
+        }
+
         // SQI-25: If user registered manually, they cannot log in using Google Sign-In
         let isManualRegistration = false
         const storedMethod = localStorage.getItem(`serviceq_auth_provider_${session.user.email.toLowerCase()}`)
@@ -127,23 +149,8 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          queryParams: {
-            prompt: 'select_account',
-            access_type: 'offline',
-          },
-          redirectTo: `${window.location.origin}/login?from=google&role=${loginRole || 'customer'}`,
-        },
-      })
-      if (error) throw error
-    } catch (err) {
-      console.error('Google OAuth sign-in error:', err)
-      toast.error(err.message || 'Failed to start Google sign-in')
-    }
+  const handleGoogleSignIn = () => {
+    setShowGoogleModal(true)
   }
 
   const handleSubmit = async e => {
@@ -169,6 +176,12 @@ export default function LoginPage() {
 
         const preRole = preCheck.role || 'customer'
 
+        // SQI-35: Admin credentials cannot login in customer/provider login screen
+        if (isAdminAccount(form.email, preRole)) {
+          toast.error('This is an Admin account. Please use the Admin Portal to sign in.')
+          return
+        }
+
         // Wrong portal — show error, auto-switch tab, don't sign in at all
         if (loginRole === 'customer' && preRole === 'provider') {
           toast.error('This is a Provider account. Please use the Provider tab to sign in.')
@@ -178,6 +191,12 @@ export default function LoginPage() {
         if (loginRole === 'provider' && preRole === 'customer') {
           toast.error('This is a Customer account. Please use the Customer tab to sign in.')
           setLoginRole('customer')
+          return
+        }
+      } else {
+        // Even if no preCheck profile row found yet, check if email belongs to admin/staff
+        if (isAdminAccount(form.email, null)) {
+          toast.error('This is an Admin account. Please use the Admin Portal to sign in.')
           return
         }
       }
@@ -217,6 +236,14 @@ export default function LoginPage() {
       }
 
       const userRole = profile.role || 'customer'
+
+      // SQI-35: Prevent admin credentials from logging in on customer/provider portals
+      if (isAdminAccount(profile.email, userRole)) {
+        await supabase.auth.signOut()
+        localStorage.removeItem('serviceq_auth_profile')
+        toast.error('This is an Admin account. Please use the Admin Portal to sign in.')
+        return
+      }
 
       // Strict Role Boundary: Prevent provider from logging in under customer tab and vice versa
       if (loginRole === 'customer' && userRole === 'provider') {

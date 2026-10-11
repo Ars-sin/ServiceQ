@@ -25,7 +25,7 @@ const actionVariant = a => {
   return 'info'
 }
 
-const roleLabel = r => ({ superadmin: 'Super Admin', financial_staff: 'Financial Staff', support_moderator: 'Support Mod' }[r] ?? r)
+const roleLabel = r => ({ superadmin: 'Admin', financial_staff: 'Financial Staff', support_moderator: 'Support Mod' }[r] ?? r)
 
 const ROLE_COLOR = {
   superadmin:        'bg-rose-100 text-rose-700',

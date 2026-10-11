@@ -29,7 +29,7 @@ export default function ProviderEarnings() {
   const [tab, setTab]                   = useState('transactions')
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [wAmount, setWAmount]           = useState('')
-  const [wMethod, setWMethod]           = useState('gcash')
+  const [wMethod, setWMethod]           = useState('')
 
   // Helper to derive transactions from bookings
   const deriveTransactionsFromBookings = (bookingList) => {
@@ -110,8 +110,9 @@ export default function ProviderEarnings() {
     const syncEarningsData = async () => {
       if (!user?.id) return
       try {
-        const provName = profile?.full_name || profile?.business_name
-        const liveBk = await fetchProviderBookings(user.id, provName)
+        const provName = profile?.full_name || profile?.business_name || user?.user_metadata?.full_name || ''
+        const busName = profile?.business_name || ''
+        const liveBk = await fetchProviderBookings(user.id, provName, busName)
         if (isMounted && Array.isArray(liveBk)) {
           setBookings(liveBk)
           const derived = deriveTransactionsFromBookings(liveBk)
@@ -163,9 +164,10 @@ export default function ProviderEarnings() {
       window.removeEventListener('storage', syncEarningsData)
       if (bc) bc.close()
     }
-  }, [user?.id, profile?.full_name])
+  }, [user?.id, profile?.full_name, profile?.business_name])
 
   const handleWithdraw = async () => {
+    if (!wMethod) return toast.error('Please select a payout destination method (GCash, Maya, or Bank)')
     const amount = Number(wAmount)
     if (!amount || amount <= 0) return toast.error('Please enter a valid amount')
     if (amount > availBalance) return toast.error(`Max available: ${formatPHP(availBalance)}`)

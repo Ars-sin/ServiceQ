@@ -123,18 +123,18 @@ export default function CustomerProfile() {
 
   // ── Calculate dynamic stats for customer (Slide 13: default 0 for new users) ──
   const bookingCount = useMemo(() => {
+    if (!user?.id) return 0
     try {
-      const key = user?.id ? `serviceq_customer_bookings_${user.id}` : 'serviceq_customer_bookings'
-      const stored = JSON.parse(localStorage.getItem(key))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
       if (Array.isArray(stored)) return stored.filter(b => b.status !== 'cancelled').length
     } catch {}
     return 0
   }, [user?.id])
 
   const reviewCount = useMemo(() => {
+    if (!user?.id) return 0
     try {
-      const key = user?.id ? `serviceq_customer_bookings_${user.id}` : 'serviceq_customer_bookings'
-      const stored = JSON.parse(localStorage.getItem(key))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
       if (Array.isArray(stored)) return stored.filter(b => b.reviewed).length
     } catch {}
     return 0
@@ -146,9 +146,9 @@ export default function CustomerProfile() {
 
   // ── Derive transactions from user's actual bookings (Slide 14: default empty) ──
   const transactions = useMemo(() => {
+    if (!user?.id) return []
     try {
-      const key = user?.id ? `serviceq_customer_bookings_${user.id}` : 'serviceq_customer_bookings'
-      const stored = JSON.parse(localStorage.getItem(key))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
       if (Array.isArray(stored) && stored.length > 0) {
         return stored.map(b => ({
           id: b.id,
@@ -172,6 +172,7 @@ export default function CustomerProfile() {
   const passwordsMatch = Boolean(passwordForm.confirm && newPass === passwordForm.confirm)
 
   const isPasswordValid = Boolean(
+    passwordForm.current &&
     hasMinLength &&
     hasUppercase &&
     hasLowercase &&
@@ -210,14 +211,47 @@ export default function CustomerProfile() {
     }
   }
 
-  // ── Change password via Supabase Auth (SQI-10) ────────────────────
+  // ── Change password via Supabase Auth (SQI-10 & SQI-38) ────────────
   const handlePasswordChange = async (e) => {
     e.preventDefault()
+    if (!passwordForm.current) return toast.error('Please enter your existing password')
     if (!isPasswordValid) return toast.error('Please meet all password requirements before updating.')
     setPwLoading(true)
     try {
+      const userEmail = user?.email || profile?.email
+      let verified = false
+      if (userEmail) {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: userEmail,
+          password: passwordForm.current,
+        })
+        if (!signInErr) {
+          verified = true
+        } else {
+          const cachedPw =
+            localStorage.getItem(`serviceq_password_${userEmail.toLowerCase()}`) ||
+            localStorage.getItem(`serviceq_customer_password_${userEmail.toLowerCase()}`)
+          if (cachedPw && cachedPw === passwordForm.current) {
+            verified = true
+          }
+        }
+      } else {
+        verified = true
+      }
+
+      if (!verified) {
+        setPwLoading(false)
+        return toast.error('Existing password is incorrect.')
+      }
+
       const { error } = await supabase.auth.updateUser({ password: passwordForm.newPass })
       if (error) throw error
+
+      if (userEmail) {
+        localStorage.setItem(`serviceq_password_${userEmail.toLowerCase()}`, passwordForm.newPass)
+        localStorage.setItem(`serviceq_customer_password_${userEmail.toLowerCase()}`, passwordForm.newPass)
+      }
+
       toast.success('Password updated successfully! Please sign in with your new password.')
       setPasswordForm({ current: '', newPass: '', confirm: '' })
       await supabase.auth.signOut()
@@ -536,6 +570,27 @@ export default function CustomerProfile() {
                       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                         {/* Inputs column */}
                         <div className="lg:col-span-7 space-y-4">
+                          {/* Current Password */}
+                          <div>
+                            <label className="text-xs font-semibold text-gray-700 mb-1.5 block">Existing Password</label>
+                            <div className="relative">
+                              <input
+                                type={showCurrentPass ? 'text' : 'password'}
+                                placeholder="Enter current password"
+                                value={passwordForm.current}
+                                onChange={e => setPasswordForm(p => ({ ...p, current: e.target.value }))}
+                                className="w-full border border-gray-200 rounded-xl px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 transition"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowCurrentPass(!showCurrentPass)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                              >
+                                {showCurrentPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+
                           {/* New Password */}
                           <div>
                             <label className="text-xs font-semibold text-gray-700 mb-1.5 block">New Password</label>
@@ -657,10 +712,10 @@ export default function CustomerProfile() {
                           type="button"
                           onClick={() => setPasswordForm({ current: '', newPass: '', confirm: '' })}
                           disabled={!passwordForm.newPass && !passwordForm.confirm}
-                          className={`text-xs px-5 py-2.5 rounded-xl font-semibold transition-all border ${
-                            passwordForm.newPass || passwordForm.confirm
-                              ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:scale-95 cursor-pointer shadow-xs'
-                              : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                          className={`text-xs px-5 py-2.5 rounded-xl font-semibold transition-all ${
+                            passwordForm.newPass || passwordForm.confirm || passwordForm.current
+                              ? 'bg-gray-100 hover:bg-gray-200 text-gray-800 active:scale-95 cursor-pointer shadow-xs border border-gray-300'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 border border-gray-200'
                           }`}
                         >
                           Cancel

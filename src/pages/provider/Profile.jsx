@@ -77,9 +77,49 @@ export default function ProviderProfile() {
     payoutBankName: '',
   })
 
+  function resizeImageToDataUrl(file, maxWidth = 320, maxHeight = 320, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let width = img.width
+          let height = img.height
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width)
+              width = maxWidth
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height)
+              height = maxHeight
+            }
+          }
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(img, 0, 0, width, height)
+          resolve(canvas.toDataURL('image/jpeg', quality))
+        }
+        img.onerror = () => reject(new Error('Failed to load image'))
+        img.src = e.target.result
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  }
+
   const [avatarPhoto, setAvatarPhoto] = useState(() => {
     try {
-      return localStorage.getItem(`serviceq_provider_avatar_${user?.id}`) || null
+      return (
+        localStorage.getItem(`serviceq_provider_avatar_${user?.id}`) ||
+        localStorage.getItem(`serviceq_provider_avatar_${user?.email?.toLowerCase()}`) ||
+        localStorage.getItem(`serviceq_avatar_${user?.id}`) ||
+        localStorage.getItem('serviceq_provider_avatar_latest') ||
+        null
+      )
     } catch {
       return null
     }
@@ -87,7 +127,7 @@ export default function ProviderProfile() {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
 
-  const handlePhotoUpload = (e) => {
+  const handlePhotoUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -95,30 +135,54 @@ export default function ProviderProfile() {
       return toast.error('Please select an image file (PNG, JPG, JPEG)')
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      return toast.error('Image must be under 5MB')
+    if (file.size > 10 * 1024 * 1024) {
+      return toast.error('Image must be under 10MB')
     }
 
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      const dataUrl = ev.target?.result
-      if (!dataUrl) return
-      setAvatarPhoto(dataUrl)
+    try {
+      const compressedDataUrl = await resizeImageToDataUrl(file, 360, 360, 0.85)
+      setAvatarPhoto(compressedDataUrl)
+
+      // 1. Immediately cache across all relevant local keys so refreshes always show it
+      try {
+        if (user?.id) {
+          localStorage.setItem(`serviceq_provider_avatar_${user.id}`, compressedDataUrl)
+          localStorage.setItem(`serviceq_avatar_${user.id}`, compressedDataUrl)
+        }
+        if (user?.email) {
+          localStorage.setItem(`serviceq_provider_avatar_${user.email.toLowerCase()}`, compressedDataUrl)
+        }
+        localStorage.setItem('serviceq_provider_avatar_latest', compressedDataUrl)
+        window.dispatchEvent(new Event('serviceq_provider_avatar_updated'))
+      } catch (e) {
+        console.warn('Local storage avatar cache notice:', e)
+      }
+
+      // 2. Persist to Supabase profiles & providers tables so it survives page reloads and refreshes (SQI-3)
       if (user?.id) {
         try {
-          localStorage.setItem(`serviceq_provider_avatar_${user.id}`, dataUrl)
-          window.dispatchEvent(new Event('serviceq_provider_avatar_updated'))
-          
-          // Persist to Supabase so it survives page reloads and refreshes (SQI-3)
-          await supabase.from('profiles').update({ avatar_url: dataUrl }).eq('id', user.id)
-          await supabase.from('providers').update({ avatar_url: dataUrl }).eq('user_id', user.id)
+          let metaToSave = {}
+          const { data: curProf } = await supabase.from('profiles').select('avatar_url').eq('id', user.id).maybeSingle()
+          if (curProf?.avatar_url && curProf.avatar_url.startsWith('{')) {
+            try { metaToSave = JSON.parse(curProf.avatar_url) } catch {}
+          }
+          metaToSave.photo_url = compressedDataUrl
+          metaToSave.avatar_photo = compressedDataUrl
+          metaToSave.avatar_url = compressedDataUrl
+
+          await supabase.from('profiles').update({ avatar_url: JSON.stringify(metaToSave) }).eq('id', user.id)
+          await supabase.from('providers').update({ avatar_url: compressedDataUrl }).eq('user_id', user.id)
+          await supabase.auth.updateUser({ data: { avatar_url: compressedDataUrl, photo_url: compressedDataUrl } })
         } catch (err) {
-          console.warn('Avatar photo save notice:', err)
+          console.warn('Avatar photo Supabase save notice:', err)
         }
       }
+
       toast.success('Profile photo updated successfully!')
+    } catch (err) {
+      console.error('Photo processing failed:', err)
+      toast.error('Could not process selected image. Please try another photo.')
     }
-    reader.readAsDataURL(file)
   }
 
   // ─── Fetch real provider data from backend & registration caches ─────────
@@ -128,7 +192,7 @@ export default function ProviderProfile() {
 
     // Load saved avatar photo if available locally
     try {
-      const savedPhoto = localStorage.getItem(`serviceq_provider_avatar_${user.id}`)
+      const savedPhoto = localStorage.getItem(`serviceq_provider_avatar_${user.id}`) || localStorage.getItem(`serviceq_avatar_${user.id}`)
       if (savedPhoto) setAvatarPhoto(savedPhoto)
     } catch {}
 
@@ -141,9 +205,28 @@ export default function ProviderProfile() {
         .maybeSingle()
 
       // Load avatar from Supabase profile if present (SQI-3)
-      if (profData?.avatar_url && (profData.avatar_url.startsWith('data:image') || profData.avatar_url.startsWith('http'))) {
-        setAvatarPhoto(profData.avatar_url)
-        try { localStorage.setItem(`serviceq_provider_avatar_${user.id}`, profData.avatar_url) } catch {}
+      let photoFromSupabase = null
+      if (profData?.avatar_url) {
+        if (profData.avatar_url.startsWith('data:image') || profData.avatar_url.startsWith('http')) {
+          photoFromSupabase = profData.avatar_url
+        } else if (profData.avatar_url.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(profData.avatar_url)
+            photoFromSupabase = parsed.photo_url || parsed.avatar_photo || parsed.avatar_url || null
+          } catch {}
+        }
+      }
+      if (photoFromSupabase) {
+        setAvatarPhoto(photoFromSupabase)
+        try { localStorage.setItem(`serviceq_provider_avatar_${user.id}`, photoFromSupabase) } catch {}
+      } else {
+        const savedPhoto = (
+          localStorage.getItem(`serviceq_provider_avatar_${user.id}`) ||
+          localStorage.getItem(`serviceq_provider_avatar_${user.email?.toLowerCase()}`) ||
+          localStorage.getItem(`serviceq_avatar_${user.id}`) ||
+          localStorage.getItem('serviceq_provider_avatar_latest')
+        )
+        if (savedPhoto) setAvatarPhoto(savedPhoto)
       }
 
       // 2. Fetch provider row if available
@@ -205,6 +288,12 @@ export default function ProviderProfile() {
         (localStorage.getItem(`provider_verified_${user.id}`) === 'true' ? 'approved' :
         (profData?.is_active === false ? 'suspended' : 'under_verification'))
 
+      // SQI-30: Resolve payout account name — do not use obsolete Google metadata names
+      let resolvedPayoutAccountName = provData?.payout_account_name || profileMeta?.payout_account_name || mergedCache.payoutAccountName || ''
+      if (!resolvedPayoutAccountName || (meta?.full_name && resolvedPayoutAccountName === meta.full_name && effectiveName !== meta.full_name)) {
+        resolvedPayoutAccountName = effectiveName
+      }
+
       setForm({
         fullName: effectiveName,
         email: profData?.email || user.email || '',
@@ -233,7 +322,7 @@ export default function ProviderProfile() {
 
         // Slide 41: blank/unconfigured by default if not set
         payoutMethod: provData?.payout_method || profileMeta?.payout_method || meta.payout_method || mergedCache.payoutMethod || '',
-        payoutAccountName: provData?.payout_account_name || profileMeta?.payout_account_name || meta.payout_account_name || mergedCache.payoutAccountName || '',
+        payoutAccountName: resolvedPayoutAccountName,
         payoutAccountNumber: provData?.payout_account_number || profileMeta?.payout_account_number || meta.payout_account_number || mergedCache.payoutAccountNumber || '',
         payoutBankName: provData?.payout_bank_name || profileMeta?.payout_bank_name || meta.payout_bank_name || mergedCache.payoutBankName || '',
       })
@@ -270,8 +359,12 @@ export default function ProviderProfile() {
         }
       } catch {}
 
+      const currentPhoto = avatarPhoto || currentMeta.photo_url || currentMeta.avatar_photo || currentMeta.avatar_url || null
       const updatedMeta = {
         ...currentMeta,
+        photo_url: currentPhoto,
+        avatar_photo: currentPhoto,
+        avatar_url: currentPhoto,
         business_name: form.businessName,
         description: form.description,
         category: form.category,
@@ -283,7 +376,7 @@ export default function ProviderProfile() {
         gov_id_type: form.idType,
         gov_id_number: form.idNumber,
         payout_method: form.payoutMethod,
-        payout_account_name: form.payoutAccountName,
+        payout_account_name: form.payoutAccountName || form.fullName,
         payout_account_number: form.payoutAccountNumber,
         payout_bank_name: form.payoutBankName,
         facebook_url: form.facebookUrl,

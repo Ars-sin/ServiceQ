@@ -35,15 +35,24 @@ export default function ProviderSettings() {
     systemAnnouncements: true,
   })
 
-  // Live password validation rules
-  const hasMinLength = passwordForm.newPass.length >= 6
-  const hasUppercase = /[A-Z]/.test(passwordForm.newPass)
-  const hasLowercase = /[a-z]/.test(passwordForm.newPass)
-  const hasNumber    = /\d/.test(passwordForm.newPass)
-  const hasSpecial   = /[!@#$%^&*(),.?":{}|<>]/.test(passwordForm.newPass)
-  const passwordsMatch = passwordForm.newPass.length > 0 && passwordForm.newPass === passwordForm.confirm
+  // Live password validation rules (SQI-10)
+  const newPass = passwordForm.newPass || ''
+  const hasMinLength = newPass.length >= 8
+  const hasUppercase = /[A-Z]/.test(newPass)
+  const hasLowercase = /[a-z]/.test(newPass)
+  const hasNumber    = /\d/.test(newPass)
+  const hasSpecial   = /[!@#$%^&*(),.?":{}|<>]/.test(newPass)
+  const passwordsMatch = Boolean(passwordForm.confirm && newPass === passwordForm.confirm)
 
-  const isPasswordValid = hasMinLength && passwordsMatch
+  const isPasswordValid = Boolean(
+    passwordForm.current &&
+    hasMinLength &&
+    hasUppercase &&
+    hasLowercase &&
+    hasNumber &&
+    hasSpecial &&
+    passwordsMatch
+  )
 
   const handlePasswordChange = async (e) => {
     e.preventDefault()
@@ -59,6 +68,28 @@ export default function ProviderSettings() {
 
     setPwLoading(true)
     try {
+      // Verify current password (SQI-38: Reject incorrect existing password)
+      let currentPwMatches = false
+      const provEmail = profile?.email || user?.email
+      const cachedPw = localStorage.getItem(`serviceq_provider_password_${provEmail?.toLowerCase()}`) ||
+                       localStorage.getItem(`serviceq_password_${provEmail?.toLowerCase()}`)
+
+      const { data: testAuth, error: testAuthError } = await supabase.auth.signInWithPassword({
+        email: provEmail,
+        password: passwordForm.current,
+      })
+
+      if (!testAuthError && testAuth?.user) {
+        currentPwMatches = true
+      } else if (cachedPw && cachedPw === passwordForm.current) {
+        currentPwMatches = true
+      }
+
+      if (!currentPwMatches) {
+        setPwLoading(false)
+        return toast.error('Current password is incorrect. Please try again.')
+      }
+
       const { error } = await supabase.auth.updateUser({ password: passwordForm.newPass })
       if (error) {
         if (error.message?.toLowerCase().includes('session') || error.message?.toLowerCase().includes('auth')) {
@@ -325,7 +356,7 @@ export default function ProviderSettings() {
                           ) : (
                             <Circle size={15} className="text-gray-300 flex-shrink-0" />
                           )}
-                          At least 6 characters
+                          At least 8 characters
                         </li>
                         <li className="flex items-center gap-2 text-gray-500 text-xs">
                           {hasUppercase ? (
@@ -380,9 +411,9 @@ export default function ProviderSettings() {
                     <button
                       type="button"
                       onClick={handleCancelPassword}
-                      disabled={!passwordForm.current}
+                      disabled={!passwordForm.current && !passwordForm.newPass && !passwordForm.confirm}
                       className={`text-xs px-5 py-2.5 rounded-xl font-semibold transition-all border ${
-                        passwordForm.current
+                        passwordForm.current || passwordForm.newPass || passwordForm.confirm
                           ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:scale-95 cursor-pointer shadow-xs'
                           : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                       }`}
@@ -392,8 +423,11 @@ export default function ProviderSettings() {
                     <button
                       type="submit"
                       disabled={pwLoading || !isPasswordValid}
-                      className="btn-primary text-xs px-6 py-2.5 font-bold shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{ background: '#059669' }}
+                      className={`text-xs px-6 py-2.5 rounded-xl font-bold transition-all shadow-sm flex items-center gap-2 ${
+                        isPasswordValid && !pwLoading
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
+                          : 'border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
                     >
                       {pwLoading ? (
                         <>

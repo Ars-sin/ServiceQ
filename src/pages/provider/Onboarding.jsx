@@ -37,8 +37,8 @@ export default function ProviderOnboarding() {
     hoursFrom: '', hoursTo: '', serviceArea: '', facebook: '', instagram: '',
     // Step 3
     idType: '', idNumber: '',
-    // Step 4
-    payoutMethod: 'gcash', gcashNum: '', mayaNum: '', bankName: '', accountName: '', accountNum: '',
+    // Step 4 (SQI-33: manual selection, no auto-fill)
+    payoutMethod: '', gcashNum: '', mayaNum: '', bankName: '', accountName: '', accountNum: '',
   })
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
@@ -66,10 +66,11 @@ export default function ProviderOnboarding() {
       }
     } catch {}
 
-    const name  = profile?.full_name || user?.user_metadata?.full_name || savedReg?.fullName || (savedReg?.firstName ? `${savedReg.firstName} ${savedReg.lastName || ''}`.trim() : '')
+    // SQI-30: Prioritize registered provider name over old Google metadata
+    const name  = profile?.full_name || (savedReg?.firstName ? `${savedReg.firstName} ${savedReg.lastName || ''}`.trim() : '') || savedReg?.fullName || (user?.user_metadata?.full_name && !user?.user_metadata?.full_name?.includes('@') ? user.user_metadata.full_name : '') || ''
     const email = profile?.email || user?.email || savedReg?.email
     const phone = profile?.phone || user?.user_metadata?.phone || savedReg?.phone
-    const bName = meta?.business_name || profile?.business_name || user?.user_metadata?.business_name || savedReg?.businessName || name
+    const bName = meta?.business_name || profile?.business_name || savedReg?.businessName || user?.user_metadata?.business_name || name
     const pType = meta?.provider_type || user?.user_metadata?.provider_type?.[0] || savedReg?.providerType || 'services'
     const normPType = pType === 'rental' || pType === 'rental_items' ? 'rental_items' : pType === 'rental_props' ? 'rental_props' : pType === 'both' ? 'both' : 'services'
     const desc = meta?.description || savedReg?.description || (savedReg?.category ? `Specializing in ${savedReg.category}` : '')
@@ -88,9 +89,10 @@ export default function ProviderOnboarding() {
       serviceArea:  serviceArea || f.serviceArea,
       hoursFrom:    meta?.hours_from || f.hoursFrom || '08:00',
       hoursTo:      meta?.hours_to || f.hoursTo || '17:00',
-      accountName:  f.accountName || name || bName,
-      gcashNum:     f.gcashNum || phone,
-      mayaNum:      f.mayaNum || phone,
+      accountName:  f.accountName || savedReg?.accountName || name || bName,
+      // SQI-33: Do not auto-fill GCash/Maya number with phone number
+      gcashNum:     f.gcashNum || savedReg?.gcashNum || '',
+      mayaNum:      f.mayaNum || savedReg?.mayaNum || '',
     }))
 
     const addr = profile?.address || savedReg?.address
@@ -130,9 +132,9 @@ export default function ProviderOnboarding() {
 
     if (user?.id) {
       try {
-        const payoutMethodEnum = ['gcash', 'maya', 'bdo', 'bpi', 'metrobank'].includes(form.payoutMethod?.toLowerCase())
-          ? form.payoutMethod.toLowerCase()
-          : 'gcash'
+        const payoutMethodEnum = form.payoutMethod
+          ? (['gcash', 'maya', 'bdo', 'bpi', 'metrobank'].includes(form.payoutMethod?.toLowerCase()) ? form.payoutMethod.toLowerCase() : form.payoutMethod)
+          : null
         const payoutAccountNum = form.payoutMethod === 'gcash' ? form.gcashNum : form.payoutMethod === 'maya' ? form.mayaNum : form.accountNum
         const payoutBank = form.payoutMethod === 'bank' ? form.bankName : null
 
@@ -157,7 +159,7 @@ export default function ProviderOnboarding() {
             service_area: form.serviceArea || locationData.city || 'Cebu',
             payout_method: payoutMethodEnum,
             payout_account_name: form.accountName || form.fullName,
-            payout_account_number: payoutAccountNum || form.phone,
+            payout_account_number: payoutAccountNum || null,
             payout_bank_name: payoutBank,
             submitted_at: new Date().toISOString()
           })
@@ -177,7 +179,7 @@ export default function ProviderOnboarding() {
             gov_id_number: form.idNumber || '',
             payout_method: payoutMethodEnum,
             payout_account_name: form.accountName || form.fullName,
-            payout_account_number: payoutAccountNum || form.phone,
+            payout_account_number: payoutAccountNum || null,
             payout_bank_name: payoutBank,
             status: 'under_verification',
           }
@@ -196,7 +198,7 @@ export default function ProviderOnboarding() {
           gov_id_number: form.idNumber || '',
           payout_method: payoutMethodEnum,
           payout_account_name: form.accountName || form.fullName,
-          payout_account_number: payoutAccountNum || form.phone,
+          payout_account_number: payoutAccountNum || null,
           payout_bank_name: payoutBank,
           facebook_url: form.facebook || '',
           instagram_url: form.instagram || '',
@@ -222,7 +224,7 @@ export default function ProviderOnboarding() {
             idNumber: form.idNumber || '',
             payoutMethod: payoutMethodEnum,
             payoutAccountName: form.accountName || form.fullName,
-            payoutAccountNumber: payoutAccountNum || form.phone,
+            payoutAccountNumber: payoutAccountNum || null,
             payoutBankName: payoutBank || '',
             facebookUrl: form.facebook || '',
             instagramUrl: form.instagram || '',
@@ -311,7 +313,9 @@ export default function ProviderOnboarding() {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="form-group sm:col-span-2">
-                      <label className="label">Full Name</label>
+                      <label className="label">
+                        Full Name <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <input className="input" placeholder="Juan dela Cruz" value={form.fullName} onChange={e => set('fullName', e.target.value)} />
                     </div>
                     <div className="form-group">
@@ -327,12 +331,14 @@ export default function ProviderOnboarding() {
                       />
                     </div>
                     <div className="form-group">
-                      <label className="label">Phone Number</label>
+                      <label className="label">
+                        Phone Number <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <input className="input" placeholder="09xxxxxxxxx" value={form.phone} onChange={e => set('phone', e.target.value)} />
                     </div>
                     <div className="form-group">
                       <label className="label flex items-center justify-between">
-                        <span>Date of Birth</span>
+                        <span>Date of Birth <span className="text-red-500 font-bold">*</span></span>
                         <span className="text-xs text-amber-600 font-medium">Required</span>
                       </label>
                       <input type="date" className="input" value={form.dob} onChange={e => set('dob', e.target.value)} />
@@ -436,7 +442,9 @@ export default function ProviderOnboarding() {
                 {/* STEP 2: Provider Type & Details */}
                 {step === 2 && <>
                   <div className="form-group">
-                    <label className="label">Provider Type</label>
+                    <label className="label">
+                      Provider Type <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
                       {PROVIDER_TYPES.map(pt => (
                         <label key={pt.id} className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${form.providerType === pt.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 hover:border-gray-300'}`}>
@@ -448,7 +456,9 @@ export default function ProviderOnboarding() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="form-group sm:col-span-2">
-                      <label className="label">Business Name</label>
+                      <label className="label">
+                        Business Name <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <input className="input" value={form.businessName} onChange={e => set('businessName', e.target.value)} />
                     </div>
                     <div className="form-group sm:col-span-2">
@@ -486,14 +496,18 @@ export default function ProviderOnboarding() {
                 {step === 3 && <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="form-group">
-                      <label className="label">Government ID Type</label>
+                      <label className="label">
+                        Government ID Type <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <select className="input" value={form.idType} onChange={e => set('idType', e.target.value)}>
                         <option value="">Select ID type...</option>
                         {GOV_ID_TYPES.map(id => <option key={id} value={id}>{id}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label className="label">ID Number</label>
+                      <label className="label">
+                        ID Number <span className="text-red-500 font-bold">*</span>
+                      </label>
                       <input className="input" value={form.idNumber} onChange={e => set('idNumber', e.target.value)} placeholder="e.g. 1234-5678-9012" />
                     </div>
                   </div>
@@ -502,7 +516,9 @@ export default function ProviderOnboarding() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Front Upload */}
                     <div className="form-group">
-                      <label className="label">ID Photo (Front Page) *</label>
+                      <label className="label">
+                        ID Photo (Front Page) <span className="text-red-500 font-bold">*</span>
+                      </label>
                       {idFrontPreview ? (
                         <div className="relative border border-emerald-300 rounded-xl overflow-hidden bg-gray-50">
                           <img src={idFrontPreview} alt="ID Front" className="w-full h-32 object-contain" />
@@ -538,7 +554,9 @@ export default function ProviderOnboarding() {
 
                     {/* Back Upload */}
                     <div className="form-group">
-                      <label className="label">ID Photo (Back Page) *</label>
+                      <label className="label">
+                        ID Photo (Back Page) <span className="text-red-500 font-bold">*</span>
+                      </label>
                       {idBackPreview ? (
                         <div className="relative border border-emerald-300 rounded-xl overflow-hidden bg-gray-50">
                           <img src={idBackPreview} alt="ID Back" className="w-full h-32 object-contain" />
@@ -575,7 +593,9 @@ export default function ProviderOnboarding() {
 
                   {/* Selfie Verification */}
                   <div className="form-group">
-                    <label className="label">Selfie Verification with ID *</label>
+                    <label className="label">
+                      Selfie Verification with ID <span className="text-red-500 font-bold">*</span>
+                    </label>
                     {selfiePreview ? (
                       <div className="relative border border-emerald-300 rounded-xl overflow-hidden bg-gray-50 max-w-sm mx-auto">
                         <img src={selfiePreview} alt="Selfie" className="w-full h-36 object-contain" />
@@ -613,7 +633,9 @@ export default function ProviderOnboarding() {
                 {/* STEP 4: Payout */}
                 {step === 4 && <>
                   <div className="form-group">
-                    <label className="label">Preferred Payout Method</label>
+                    <label className="label">
+                      Preferred Payout Method <span className="text-red-500 font-bold">*</span>
+                    </label>
                     <div className="flex gap-3">
                       {[{ id: 'gcash', label: '💚 GCash' }, { id: 'maya', label: '💙 Maya' }, { id: 'bank', label: '🏦 Bank Transfer' }].map(m => (
                         <label key={m.id} className={`flex-1 p-3 text-center rounded-xl border-2 cursor-pointer transition-all text-sm font-medium ${form.payoutMethod === m.id ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 hover:border-gray-300'}`}>

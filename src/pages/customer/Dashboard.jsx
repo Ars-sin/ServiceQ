@@ -130,6 +130,15 @@ export default function CustomerDashboard() {
 
   // Reactive filtering — uses dynamic allListings instead of static MOCK_LISTINGS
   const filteredListings = allListings.filter(l => {
+    // SQI-34: Only display listings from verified providers to customers
+    const isBaseSeed = ['1','2','3','4','5','6','7','8','9','10','11','12','13','14','15'].includes(String(l.id)) && !l.providerId
+    const isVerifiedProvider = isBaseSeed ||
+      l.isVerified === true ||
+      l.provider_verified === true ||
+      l.providerVerified === true ||
+      (l.providerId && localStorage.getItem(`provider_verified_${l.providerId}`) === 'true')
+    if (!isVerifiedProvider) return false
+
     const q = search.trim().toLowerCase()
     const matchesSearch = !q ||
       l.title?.toLowerCase().includes(q) ||
