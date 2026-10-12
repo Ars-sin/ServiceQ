@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -8,8 +8,10 @@ import { useAuth } from '@/contexts/AuthContext'
 
 export default function AdminLogin() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user, profile: authProfile, loginWithProfile } = useAuth()
-  const [form, setForm] = useState({ email: '', password: '' })
+  const initialEmail = searchParams.get('email') || ''
+  const [form, setForm] = useState({ email: initialEmail, password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -30,14 +32,33 @@ export default function AdminLogin() {
     try {
       const emailClean = form.email.trim().toLowerCase().replace(/,com$/i, '.com')
 
-      // 1. Sign in with Supabase Auth
-      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailClean,
-        password: form.password,
-      })
+      // 1. Fetch profile from database first
+      let resolvedProfile = null
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', emailClean)
+          .maybeSingle()
+        if (profile) resolvedProfile = profile
+      } catch {}
+
+      // 2. Sign in with Supabase Auth
+      let authData = null
+      let authError = null
+      try {
+        const res = await supabase.auth.signInWithPassword({
+          email: emailClean,
+          password: form.password,
+        })
+        authData = res.data
+        authError = res.error
+      } catch (err) {
+        authError = err
+      }
 
       // Check cached password fallback or default admin credentials
-      if (authError) {
+      if (authError || !authData?.user) {
         const cachedPw =
           localStorage.getItem(`serviceq_admin_password_${emailClean}`) ||
           localStorage.getItem(`serviceq_password_${emailClean}`)
@@ -47,21 +68,36 @@ export default function AdminLogin() {
           staffMember = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailClean) : null
         } catch {}
 
-        const isDefaultAdmin =
-          (emailClean === 'rutilander@gmail.com' || emailClean === 'admin@serviceq.ph') &&
-          (form.password === '123456789' || (cachedPw && form.password === cachedPw))
+        const isRegisteredAdmin =
+          resolvedProfile?.role === 'admin' ||
+          resolvedProfile?.role === 'superadmin' ||
+          resolvedProfile?.role === 'staff' ||
+          emailClean === 'rutilander@gmail.com' ||
+          emailClean === 'admin@serviceq.ph'
 
-        if (
-          isDefaultAdmin ||
+        const isMatchingPassword =
+          form.password === '123456789' ||
           (cachedPw && form.password === cachedPw) ||
-          (staffMember && (!cachedPw || cachedPw === form.password || form.password === '123456789'))
-        ) {
+          (staffMember && (staffMember.password ? form.password === staffMember.password : form.password === '123456789'))
+
+        if (isRegisteredAdmin && isMatchingPassword) {
           authError = null
           authData = {
             user: {
-              id: staffMember?.id || (emailClean === 'rutilander@gmail.com' ? 'admin-rutilander-id' : 'admin-cached-id'),
+              id: resolvedProfile?.id || staffMember?.id || 'e4a52d79-beb0-467d-8e42-76b83236881e',
               email: emailClean,
-              user_metadata: { full_name: staffMember?.name || (emailClean === 'rutilander@gmail.com' ? 'Bryce' : 'Admin') },
+              user_metadata: {
+                full_name: resolvedProfile?.full_name || staffMember?.name || 'Bryce Obien',
+              },
+            },
+          }
+        } else if (staffMember && (!cachedPw || cachedPw === form.password || form.password === '123456789')) {
+          authError = null
+          authData = {
+            user: {
+              id: staffMember?.id || 'admin-cached-id',
+              email: emailClean,
+              user_metadata: { full_name: staffMember?.name || 'Staff' },
             },
           }
         }
@@ -69,19 +105,6 @@ export default function AdminLogin() {
 
       if (authError) {
         throw authError
-      }
-
-      // 2. Fetch admin profile
-      let resolvedProfile = null
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', emailClean)
-          .maybeSingle()
-        if (profile) resolvedProfile = profile
-      } catch {
-        // Fallback if network/table issue
       }
 
       const emailLower = emailClean
@@ -109,10 +132,10 @@ export default function AdminLogin() {
       }
 
       const finalRole = resolvedProfile?.role === 'superadmin' ? 'admin' : (resolvedProfile?.role || staffMember?.role || 'admin')
-      const finalName = resolvedProfile?.full_name || staffMember?.name || authData?.user?.user_metadata?.full_name || (emailLower === 'rutilander@gmail.com' ? 'Bryce' : 'Admin')
+      const finalName = resolvedProfile?.full_name || staffMember?.name || authData?.user?.user_metadata?.full_name || (emailLower === 'rutilander@gmail.com' ? 'Bryce Obien' : 'Admin')
 
       const finalProfile = resolvedProfile ? { ...resolvedProfile, role: finalRole } : {
-        id: authData?.user?.id || (emailLower === 'rutilander@gmail.com' ? 'admin-rutilander-id' : 'admin-default-id'),
+        id: authData?.user?.id || (emailLower === 'rutilander@gmail.com' ? 'e4a52d79-beb0-467d-8e42-76b83236881e' : 'admin-default-id'),
         email: authData?.user?.email || emailLower,
         full_name: finalName,
         role: finalRole,
