@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Star, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar } from 'lucide-react'
+import { Star, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar, PenLine } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, calcFees } from '@/lib/utils'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
 import { isFavorite, toggleFavorite } from '@/lib/favorites'
 import { fetchBackendListings } from '@/lib/listingsService'
+import Modal from '@/components/ui/Modal'
+import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 const DEFAULT_MOCK = {
   id: '1',
@@ -114,6 +117,10 @@ export default function ListingDetail() {
     return () => { isMounted = false }
   }, [id])
 
+  const { user, profile } = useAuth()
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [reviewRating, setReviewRating] = useState(5)
+  const [reviewComment, setReviewComment] = useState('')
   const [reviewsTrigger, setReviewsTrigger] = useState(0)
 
   useEffect(() => {
@@ -125,6 +132,39 @@ export default function ListingDetail() {
       window.removeEventListener('storage', handleRev)
     }
   }, [])
+
+  const handleAddReview = async () => {
+    if (!reviewRating) return toast.error('Please select a rating')
+    const customerName = profile?.full_name || user?.user_metadata?.full_name || 'Customer'
+    const newRev = {
+      id: `rev-${Date.now()}`,
+      listingId: String(id),
+      service: listing?.title || 'Service Offering',
+      author: customerName,
+      user: customerName,
+      rating: reviewRating,
+      comment: reviewComment || 'Service completed successfully.',
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      createdAt: new Date().toISOString(),
+    }
+    const allRev = JSON.parse(localStorage.getItem('serviceq_reviews')) || []
+    const updated = [newRev, ...allRev]
+    localStorage.setItem('serviceq_reviews', JSON.stringify(updated))
+    const scopedKey = `serviceq_reviews_${id}`
+    const scopedList = JSON.parse(localStorage.getItem(scopedKey)) || []
+    localStorage.setItem(scopedKey, JSON.stringify([newRev, ...scopedList]))
+    try {
+      await supabase.from('platform_settings').upsert({
+        key: 'serviceq_all_reviews',
+        value: JSON.stringify(updated),
+        updated_at: new Date().toISOString(),
+      })
+    } catch {}
+    window.dispatchEvent(new Event('serviceq_reviews_updated'))
+    toast.success('Review posted successfully!')
+    setShowReviewModal(false)
+    setReviewComment('')
+  }
 
   // Dynamically resolve listing from custom listings + ALL_LISTINGS by id
   const listing = useMemo(() => {
@@ -146,10 +186,18 @@ export default function ListingDetail() {
     let dynamicReviews = []
     try {
       const allRev = JSON.parse(localStorage.getItem('serviceq_reviews')) || []
-      dynamicReviews = allRev.filter(r =>
-        String(r.listingId) === String(matched.id) ||
-        (r.service && matched.title && r.service.trim().toLowerCase() === matched.title.trim().toLowerCase())
-      )
+      const scopedRev = JSON.parse(localStorage.getItem(`serviceq_reviews_${matched.id}`)) || []
+      const combinedAll = [...scopedRev, ...allRev]
+      const seenRev = new Set()
+      dynamicReviews = combinedAll.filter(r => {
+        if (!r || !r.id || seenRev.has(r.id)) return false
+        seenRev.add(r.id)
+        return (
+          String(r.listingId) === String(matched.id) ||
+          String(r.bookingId) === String(matched.id) ||
+          (r.service && matched.title && r.service.trim().toLowerCase() === matched.title.trim().toLowerCase())
+        )
+      })
     } catch {}
 
     const combinedReviews = [...dynamicReviews, ...(matched.reviews_list || DEFAULT_MOCK.reviews_list || [])]
@@ -295,7 +343,16 @@ export default function ListingDetail() {
 
           {/* Reviews */}
           <div className="card">
-            <h2 className="font-semibold text-gray-900 mb-4">Customer Reviews</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">Customer Reviews ({listing.reviews})</h2>
+              <button
+                type="button"
+                onClick={() => setShowReviewModal(true)}
+                className="btn-secondary btn-sm flex items-center gap-1.5 text-xs text-brand-600 border-brand-200 hover:bg-brand-50"
+              >
+                <PenLine size={13} /> Write a Review
+              </button>
+            </div>
             <div className="flex flex-col gap-4">
               {listing.reviews_list.map((r, i) => (
                 <div key={i} className={`${i < listing.reviews_list.length - 1 ? 'pb-4 border-b border-gray-100' : ''}`}>
@@ -464,6 +521,63 @@ export default function ListingDetail() {
           </div>
         </div>
       </div>
+
+      {/* Write Review Modal (SQI-31) */}
+      <Modal open={showReviewModal} onClose={() => setShowReviewModal(false)} title="Write a Review" size="sm">
+        <div className="flex flex-col gap-4">
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Listing</p>
+            <p className="text-sm font-bold text-gray-900">{listing.title}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-700 mb-1.5 block">Your Rating</label>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  type="button"
+                  key={star}
+                  onClick={() => setReviewRating(star)}
+                  className="p-1 hover:scale-110 transition-transform"
+                >
+                  <Star
+                    size={22}
+                    className={star <= reviewRating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="label">Your Comments / Feedback</label>
+            <textarea
+              rows={3}
+              value={reviewComment}
+              onChange={(e) => setReviewComment(e.target.value)}
+              placeholder="Share details of your experience with this service or provider..."
+              className="input text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => setShowReviewModal(false)}
+              className="btn-ghost text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleAddReview}
+              className="btn-primary text-xs font-bold"
+            >
+              Submit Review
+            </button>
+          </div>
+        </div>
+      </Modal>
     </motion.div>
   )
 }

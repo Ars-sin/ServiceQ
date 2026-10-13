@@ -6,6 +6,7 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import toast from 'react-hot-toast'
+import { supabase } from '@/lib/supabase'
 import { fetchBackendBookings, updateBookingStatusBackend } from '@/lib/bookingsService'
 
 export default function AdminBookings() {
@@ -74,10 +75,92 @@ export default function AdminBookings() {
     setOverride(null); setNewStatus('')
   }
 
-  const handleRefund = () => {
-    if (!refundAmt) return toast.error('Enter refund amount')
-    toast.success(`Refund of ${formatPHP(+refundAmt)} issued`)
-    setRefund(null); setRefundAmt('')
+  const handleRefund = async () => {
+    if (!refundAmt || Number(refundAmt) <= 0) return toast.error('Enter a valid refund amount')
+    const targetId = refundModal?.id
+    if (!targetId) return
+
+    const amountNum = Number(refundAmt)
+
+    // 1. Immediately update state so UI and counters update
+    setBookings(prev => prev.map(b => b.id === targetId ? { ...b, status: 'cancelled', refundStatus: 'refunded', refunded: true, refundAmount: amountNum } : b))
+
+    try {
+      // 2. Persist to local storage across all booking keys
+      const updateList = (key) => {
+        const arr = JSON.parse(localStorage.getItem(key)) || []
+        if (Array.isArray(arr)) {
+          const updated = arr.map(b => b.id === targetId ? { ...b, status: 'cancelled', refundStatus: 'refunded', refunded: true, refundAmount: amountNum } : b)
+          localStorage.setItem(key, JSON.stringify(updated))
+        }
+      }
+      updateList('serviceq_all_bookings')
+      updateList('serviceq_customer_bookings')
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && (k.startsWith('serviceq_customer_bookings_') || k.startsWith('serviceq_provider_bookings_'))) {
+          updateList(k)
+        }
+      }
+
+      // 3. Persist to Supabase platform_settings (serviceq_global_bookings)
+      try {
+        const { data: gRow } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_global_bookings')
+          .maybeSingle()
+        if (gRow?.value) {
+          const gList = (typeof gRow.value === 'string' ? JSON.parse(gRow.value) : gRow.value) || []
+          const updatedG = gList.map(b => b.id === targetId ? { ...b, status: 'cancelled', refundStatus: 'refunded', refunded: true, refundAmount: amountNum } : b)
+          await supabase.from('platform_settings').upsert({
+            key: 'serviceq_global_bookings',
+            value: JSON.stringify(updatedG),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'key' })
+        }
+      } catch (err) {
+        console.warn('Backend refund sync notice:', err)
+      }
+
+      // 4. Update Supabase bookings table if exists
+      try {
+        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', targetId)
+      } catch {}
+
+      // 5. Record in Audit Log (SQI-44)
+      try {
+        const existingAudit = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
+        const auditEntry = {
+          id: `a${Date.now()}`,
+          staff: 'Admin',
+          role: 'admin',
+          action: 'Booking Refunded',
+          target: `${refundModal.customer} (${refundModal.id})`,
+          desc: `Administrator issued refund of ${formatPHP(amountNum)} for booking ${refundModal.id} (${refundModal.service || 'Service'}).`,
+          before: { status: refundModal.status, refunded: false },
+          after: { status: 'cancelled', refundStatus: 'refunded', refunded: true, refundAmount: amountNum },
+          ts: new Date().toISOString(),
+        }
+        localStorage.setItem('serviceq_audit_log', JSON.stringify([auditEntry, ...existingAudit]))
+      } catch {}
+
+      // 6. Broadcast updates
+      window.dispatchEvent(new Event('serviceq_bookings_updated'))
+      try {
+        const bc = new BroadcastChannel('serviceq_bookings')
+        bc.postMessage({ type: 'refund', bookingId: targetId, amount: amountNum })
+        bc.close()
+      } catch {}
+
+      toast.success(`Refund of ${formatPHP(amountNum)} issued successfully!`)
+    } catch (err) {
+      toast.error('Failed to issue refund: ' + err.message)
+    } finally {
+      setRefund(null)
+      setRefundAmt('')
+    }
   }
 
   const disputeCount = bookings.filter(b => b.dispute).length

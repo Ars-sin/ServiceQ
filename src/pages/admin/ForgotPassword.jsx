@@ -221,30 +221,39 @@ export default function AdminForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
-      {/* Subtle Background Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[350px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#edf5fd] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Soft curved background accents matching AdminLogin.jsx */}
+      <div className="absolute -top-32 -left-32 w-[620px] h-[620px] rounded-full bg-blue-100/50 blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -right-32 w-[620px] h-[620px] rounded-full bg-sky-100/60 blur-3xl pointer-events-none" />
+      <div className="absolute top-1/2 -left-48 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-blue-50/60 blur-2xl pointer-events-none" />
 
       {/* Main Container Card */}
       <motion.div
-        initial={{ opacity: 0, y: 14 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-8 sm:p-10 relative z-10"
+        transition={{ duration: 0.35 }}
+        className="w-full max-w-[460px] bg-white rounded-3xl shadow-xl shadow-blue-500/5 border border-blue-50/80 p-8 sm:p-10 relative z-10 flex flex-col items-center"
       >
-        {/* Admin Portal Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <img src="/logo.png" alt="ServiceQ" className="h-9 w-auto object-contain" />
-            <span className="font-bold text-2xl text-slate-900 tracking-tight">ServiceQ</span>
-            <span className="bg-slate-900 text-white text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full tracking-wider ml-1">
+        {/* Admin Portal Header matching AdminLogin */}
+        <div className="flex flex-col items-center text-center mb-6 w-full">
+          <img
+            src="/logo.png"
+            alt="ServiceQ"
+            className="h-16 w-auto object-contain mb-3"
+          />
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-[#0047ba] tracking-tight">
+              ServiceQ
+            </h1>
+            <span className="bg-[#0047ba] text-white text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full tracking-wider">
               Admin
             </span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">
+          <h2 className="text-base font-bold text-slate-800 mt-2">
             {step === 1 && 'Reset Admin Password'}
             {step === 2 && 'Verify Admin Identity'}
             {step === 3 && 'Set New Password'}
-          </h1>
+          </h2>
           <p className="text-xs text-slate-500 mt-1 max-w-xs">
             {step === 1 && 'Enter your registered administrator email to receive password recovery instructions.'}
             {step === 2 && `Enter the 6-digit verification code sent to ${email}.`}
@@ -259,7 +268,7 @@ export default function AdminForgotPassword() {
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
                 s === step
-                  ? 'w-8 bg-blue-600'
+                  ? 'w-8 bg-[#0047ba]'
                   : s < step
                   ? 'w-4 bg-emerald-500'
                   : 'w-4 bg-slate-200'
@@ -277,10 +286,10 @@ export default function AdminForgotPassword() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               onSubmit={handleSendOtp}
-              className="space-y-4"
+              className="w-full space-y-4"
             >
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 text-left">
                   Admin Email Address
                 </label>
                 <div className="relative">
@@ -291,7 +300,7 @@ export default function AdminForgotPassword() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="admin@serviceq.ph"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 transition-all"
                   />
                 </div>
               </div>
@@ -299,7 +308,7 @@ export default function AdminForgotPassword() {
               <button
                 type="submit"
                 disabled={loading || !email.trim()}
-                className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                className="w-full bg-[#7ea8f8] hover:bg-[#6b9af6] text-white font-medium py-3 rounded-full text-base transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? (
                   <>
@@ -321,7 +330,7 @@ export default function AdminForgotPassword() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
               onSubmit={handleVerifyOtp}
-              className="space-y-5"
+              className="w-full space-y-5"
             >
               <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
                 {otp.map((digit, i) => (
@@ -334,7 +343,7 @@ export default function AdminForgotPassword() {
                     value={digit}
                     onChange={(e) => handleOtpChange(i, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                    className="w-11 h-13 text-center text-xl font-bold font-mono border-2 rounded-xl focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 transition-all border-slate-200 text-slate-900 bg-slate-50"
+                    className="w-11 h-13 text-center text-xl font-bold font-mono border-2 rounded-xl focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 transition-all border-slate-200 text-slate-900 bg-white"
                   />
                 ))}
               </div>
@@ -342,7 +351,7 @@ export default function AdminForgotPassword() {
               <button
                 type="submit"
                 disabled={loading || otp.join('').length !== 6}
-                className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
+                className="w-full bg-[#7ea8f8] hover:bg-[#6b9af6] text-white font-medium py-3 rounded-full text-base transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -366,7 +375,7 @@ export default function AdminForgotPassword() {
                   type="button"
                   disabled={resendCooldown > 0}
                   onClick={handleSendOtp}
-                  className="text-blue-600 hover:text-blue-700 font-semibold disabled:opacity-40"
+                  className="text-[#1e69ff] hover:underline font-semibold disabled:opacity-40"
                 >
                   {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
                 </button>
@@ -381,11 +390,11 @@ export default function AdminForgotPassword() {
               initial={{ opacity: 0, x: 10 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
-              onSubmit={handleSetNewPassword}
-              className="space-y-4"
+              onSubmit={handleUpdatePassword}
+              className="w-full space-y-4"
             >
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 text-left">
                   New Password
                 </label>
                 <div className="relative">
@@ -396,7 +405,7 @@ export default function AdminForgotPassword() {
                     value={passwords.newPw}
                     onChange={(e) => setPasswords((p) => ({ ...p, newPw: e.target.value }))}
                     placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all font-mono"
+                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 transition-all font-mono"
                   />
                   <button
                     type="button"
@@ -409,7 +418,7 @@ export default function AdminForgotPassword() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-sm font-semibold text-slate-800 mb-1.5 text-left">
                   Confirm New Password
                 </label>
                 <div className="relative">
@@ -420,7 +429,7 @@ export default function AdminForgotPassword() {
                     value={passwords.confirmPw}
                     onChange={(e) => setPasswords((p) => ({ ...p, confirmPw: e.target.value }))}
                     placeholder="••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all font-mono"
+                    className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 transition-all font-mono"
                   />
                   <button
                     type="button"
@@ -447,7 +456,7 @@ export default function AdminForgotPassword() {
               <button
                 type="submit"
                 disabled={loading || !isPasswordValid}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
+                className="w-full bg-[#7ea8f8] hover:bg-[#6b9af6] text-white font-medium py-3 rounded-full text-base transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? (
                   <>
@@ -463,12 +472,12 @@ export default function AdminForgotPassword() {
         </AnimatePresence>
 
         {/* Back to Admin Login */}
-        <div className="mt-8 pt-5 border-t border-slate-100 text-center">
+        <div className="mt-8 pt-5 border-t border-slate-100 text-center w-full">
           <Link
             to="/admin/login"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1e69ff] hover:underline transition-colors"
           >
-            <ArrowLeft size={14} /> Back to Admin Login
+            <ArrowLeft size={15} /> Back to Admin Login
           </Link>
         </div>
       </motion.div>

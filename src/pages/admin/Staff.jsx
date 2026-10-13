@@ -28,18 +28,20 @@ const PERMISSIONS = [
 ]
 
 const ROLE_PERMS = {
+  admin:             ['manage_users','manage_providers','approve_kyc','manage_listings','view_financials','process_payouts','manage_settings','view_audit'],
   superadmin:        ['manage_users','manage_providers','approve_kyc','manage_listings','view_financials','process_payouts','manage_settings','view_audit'],
   financial_staff:   ['view_financials','process_payouts','view_audit'],
   support_moderator: ['manage_users','manage_providers','approve_kyc','manage_listings','view_audit'],
 }
 
 const ROLE_COLOR = {
+  admin:             { badge: 'danger',  pill: 'bg-rose-100 text-rose-700',    border: 'border-rose-100 bg-rose-50/30' },
   superadmin:        { badge: 'danger',  pill: 'bg-rose-100 text-rose-700',    border: 'border-rose-100 bg-rose-50/30' },
   financial_staff:   { badge: 'brand',   pill: 'bg-blue-100 text-blue-700',    border: 'border-blue-100 bg-blue-50/30' },
   support_moderator: { badge: 'info',    pill: 'bg-purple-100 text-purple-700', border: 'border-purple-100 bg-purple-50/30' },
 }
 
-const roleLabel = r => ADMIN_ROLES.find(a => a.id === r)?.label ?? r
+const roleLabel = r => (r === 'admin' || r === 'superadmin') ? 'Admin' : (ADMIN_ROLES.find(a => a.id === r)?.label ?? r)
 
 export default function AdminStaff() {
   const [staff, setStaff] = useState(() => {
@@ -73,9 +75,10 @@ export default function AdminStaff() {
       id: Date.now().toString(),
       name: form.name.trim(),
       email: form.email.trim(),
-      role: form.role,
+      role: form.role === 'superadmin' ? 'admin' : form.role,
       status: 'active',
-      lastActive: 'Just now'
+      lastActive: 'Just now',
+      password: form.defaultPassword.trim(),
     }
 
     const updatedList = [...staff, newMember]
@@ -83,8 +86,8 @@ export default function AdminStaff() {
 
     // Store default password for login (SQI-43)
     try {
-      localStorage.setItem(`serviceq_admin_password_${emailKey}`, form.defaultPassword)
-      localStorage.setItem(`serviceq_password_${emailKey}`, form.defaultPassword)
+      localStorage.setItem(`serviceq_admin_password_${emailKey}`, form.defaultPassword.trim())
+      localStorage.setItem(`serviceq_password_${emailKey}`, form.defaultPassword.trim())
     } catch {}
 
     // Upsert into profiles table so backend is synced
@@ -106,7 +109,7 @@ export default function AdminStaff() {
       const log = {
         id: `a${Date.now()}`,
         staff: 'Admin',
-        role: 'superadmin',
+        role: 'admin',
         action: 'Staff Member Added',
         target: `${form.name} (${form.email})`,
         desc: `Added new staff member with role: ${roleLabel(form.role)}.`,
@@ -141,7 +144,7 @@ export default function AdminStaff() {
       const log = {
         id: `a${Date.now()}`,
         staff: 'Admin',
-        role: 'superadmin',
+        role: 'admin',
         action: 'Staff Role Updated',
         target: `${editingStaff.name} (${editingStaff.email})`,
         desc: `Role changed to: ${roleLabel(editingStaff.role)}.`,

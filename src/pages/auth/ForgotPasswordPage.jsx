@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, ShieldCheck, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -8,7 +8,15 @@ import { supabase } from '@/lib/supabase'
 const STEPS = ['Enter Email', 'Verify OTP', 'New Password']
 
 export default function ForgotPasswordPage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    if (searchParams.get('role') === 'admin') {
+      navigate('/admin/forgot-password', { replace: true })
+    }
+  }, [searchParams, navigate])
+
   const initialRole = searchParams.get('role') === 'provider' ? 'provider' : 'customer'
   const [role, setRole]                 = useState(initialRole)
   const [step, setStep]                 = useState(1)
