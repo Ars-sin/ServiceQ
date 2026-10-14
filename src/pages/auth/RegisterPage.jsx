@@ -40,7 +40,7 @@ const ROLE_REDIRECT = {
 }
 
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
-import { launchGoogleSignIn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
+import { launchGoogleSignIn, parseGoogleOAuthReturn } from '@/lib/googleAuth'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function RegisterPage() {
@@ -81,37 +81,50 @@ export default function RegisterPage() {
 
   // SQI-24: Auto-fill registration form from Google session when returning from OAuth
   useEffect(() => {
+    async function processOAuthReturn(uEmail, fullName) {
+      if (!uEmail) return
+      const cleanEmail = uEmail.trim().toLowerCase()
+
+      // Check if profile already exists in DB
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('email', cleanEmail)
+        .maybeSingle()
+
+      if (profile) {
+        localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+        toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
+        loginWithProfile(profile)
+        navigate(ROLE_REDIRECT[profile.role] || '/customer/explore', { replace: true })
+        return
+      }
+
+      const parts = (fullName || '').trim().split(' ')
+      const first = parts[0] || ''
+      const last = parts.slice(1).join(' ') || ''
+      setForm(prev => ({
+        ...prev,
+        email: prev.email || cleanEmail,
+        firstName: prev.firstName || first,
+        lastName: prev.lastName || last,
+      }))
+      localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+    }
+
+    const googleUser = parseGoogleOAuthReturn()
+    if (googleUser?.email) {
+      if (window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
+      processOAuthReturn(googleUser.email, googleUser.name)
+      return
+    }
+
     if (fromGoogle || window.location.hash.includes('access_token')) {
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user?.email) {
-          const uEmail = session.user.email
-
-          // Check if profile already exists in DB
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .ilike('email', uEmail)
-            .maybeSingle()
-
-          if (profile) {
-            localStorage.setItem(`serviceq_auth_provider_${uEmail.toLowerCase()}`, 'google')
-            toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
-            loginWithProfile(profile)
-            navigate(ROLE_REDIRECT[profile.role] || '/customer/explore', { replace: true })
-            return
-          }
-
-          const fullName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || ''
-          const parts = fullName.trim().split(' ')
-          const first = parts[0] || ''
-          const last = parts.slice(1).join(' ') || ''
-          setForm(prev => ({
-            ...prev,
-            email: prev.email || uEmail,
-            firstName: prev.firstName || first,
-            lastName: prev.lastName || last,
-          }))
-          localStorage.setItem(`serviceq_auth_provider_${uEmail.toLowerCase()}`, 'google')
+          processOAuthReturn(session.user.email, session.user.user_metadata?.full_name)
         }
       })
     }
@@ -836,26 +849,7 @@ export default function RegisterPage() {
 
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
   const handleGoogleSignIn = () => {
-    launchGoogleSignIn({
-      role: role || 'customer',
-      onSuccess: async (userInfo) => {
-        try {
-          await handleGoogleAuthSuccess(userInfo, role || 'customer', {
-            loginWithProfile,
-            navigate,
-          })
-        } catch (err) {
-          toast.error(err.message || 'Google authentication failed.')
-        }
-      },
-      onError: (err) => {
-        if (err.isConfigurationMissing) {
-          setShowGoogleModal(true)
-        } else {
-          toast.error(err.message || 'Failed to initialize Google Sign-In')
-        }
-      },
-    })
+    launchGoogleSignIn({ role: role || 'customer' })
   }
 
   return (

@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
-import { launchGoogleSignIn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
+import { launchGoogleSignIn, parseGoogleOAuthReturn } from '@/lib/googleAuth'
 
 const ROLE_REDIRECT = {
   customer: '/customer/explore',
@@ -44,32 +44,32 @@ export default function LoginPage() {
   const [showGoogleModal, setShowGoogleModal] = useState(false)
 
   // Listen for active OAuth session (e.g. redirected back from Google OAuth)
-  // Only runs once on mount — deduplicated with id to prevent double-toast
   useEffect(() => {
-    const isOAuthRedirect = window.location.hash.includes('access_token') || searchParams.get('from') === 'google'
     let handled = false
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.user?.email || handled) return
+
+    async function processOAuthUser(rawEmail, fullName) {
+      if (!rawEmail || handled) return
       handled = true
+      const cleanEmail = rawEmail.trim().toLowerCase()
 
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
-        .ilike('email', session.user.email)
+        .ilike('email', cleanEmail)
         .maybeSingle()
 
       if (profile?.role) {
         // SQI-35: Admin credentials cannot log in on customer/provider portal
-        if (isAdminAccount(session.user.email, profile.role)) {
+        if (isAdminAccount(cleanEmail, profile.role)) {
           await supabase.auth.signOut()
           toast.error('This login screen is for customers and providers only.')
           return
         }
 
         // Verified account -> update auth provider to google and proceed to login
-        localStorage.setItem(`serviceq_auth_provider_${session.user.email.toLowerCase()}`, 'google')
+        localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
 
-        // Check cross-role mismatch (read loginRole from the ref snapshot at mount time)
+        // Check cross-role mismatch
         if (loginRole === 'customer' && profile.role === 'provider') {
           await supabase.auth.signOut()
           toast.error('This account is registered as a Provider. Please use the Provider tab to sign in.')
@@ -90,17 +90,35 @@ export default function LoginPage() {
           return
         }
         const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
-        if (isOAuthRedirect) {
-          toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
-        }
+        toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
         navigate(destination, { replace: true })
       } else {
         toast('Google verified! Please choose your account type to complete registration.', { icon: '✨', id: 'google-verified-toast' })
-        navigate(`/register?email=${encodeURIComponent(session.user.email)}&name=${encodeURIComponent(session.user.user_metadata?.full_name || '')}&from=google`, { replace: true })
+        navigate(
+          `/register?email=${encodeURIComponent(cleanEmail)}&name=${encodeURIComponent(fullName || '')}&from=google&role=${loginRole || 'customer'}`,
+          { replace: true }
+        )
+      }
+    }
+
+    // 1. Check if returning with access_token in URL hash from Google OAuth
+    const googleUser = parseGoogleOAuthReturn()
+    if (googleUser?.email) {
+      if (window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      }
+      processOAuthUser(googleUser.email, googleUser.name)
+      return
+    }
+
+    // 2. Also check standard Supabase session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        processOAuthUser(session.user.email, session.user.user_metadata?.full_name)
       }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally empty — runs once on mount only
+  }, [])
 
   const handleChange = e => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -148,26 +166,7 @@ export default function LoginPage() {
   }, [loginRole, navigate, loginWithProfile])
 
   const handleGoogleSignIn = () => {
-    launchGoogleSignIn({
-      role: loginRole || 'customer',
-      onSuccess: async (userInfo) => {
-        try {
-          await handleGoogleAuthSuccess(userInfo, loginRole || 'customer', {
-            loginWithProfile,
-            navigate,
-          })
-        } catch (err) {
-          toast.error(err.message || 'Google authentication failed.')
-        }
-      },
-      onError: (err) => {
-        if (err.isConfigurationMissing) {
-          setShowGoogleModal(true)
-        } else {
-          toast.error(err.message || 'Failed to initialize Google Sign-In')
-        }
-      },
-    })
+    launchGoogleSignIn({ role: loginRole || 'customer' })
   }
 
   const handleSubmit = async e => {

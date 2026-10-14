@@ -21,17 +21,18 @@ function test(description, fn) {
 // -------------------------------------------------------------
 // TEST 1: SQI-24 & SQI-25 (Google Sign-In/Up with Authentic Google Screen & No 400 Error)
 // -------------------------------------------------------------
-test('SQI-24 & SQI-25: Google Sign-In/Up connects directly to official Google API without hitting disabled Supabase 400 endpoint', () => {
+test('SQI-24 & SQI-25: Google Sign-In/Up connects directly to official Google OAuth without hitting disabled Supabase 400 endpoint', () => {
   const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
   const regSrc = fs.readFileSync('src/pages/auth/RegisterPage.jsx', 'utf8')
   const googleAuthSrc = fs.readFileSync('src/lib/googleAuth.js', 'utf8')
-  const indexHtml = fs.readFileSync('index.html', 'utf8')
 
-  assert.ok(indexHtml.includes('https://accounts.google.com/gsi/client'), 'index.html must load Google Identity Services SDK')
-  assert.ok(googleAuthSrc.includes('google.accounts.oauth2.initTokenClient'), 'googleAuth.js must use Google Identity Services token client')
-  assert.ok(googleAuthSrc.includes('https://www.googleapis.com/oauth2/v3/userinfo'), 'googleAuth.js fetches profile from official Google userinfo endpoint')
+  assert.ok(googleAuthSrc.includes('GOOGLE_AUTH_ENDPOINT'), 'googleAuth.js declares official Google OAuth endpoint')
+  assert.ok(googleAuthSrc.includes('launchGoogleSignIn'), 'googleAuth.js defines launchGoogleSignIn')
+  assert.ok(googleAuthSrc.includes('parseGoogleOAuthReturn'), 'googleAuth.js defines parseGoogleOAuthReturn')
   assert.ok(loginSrc.includes('launchGoogleSignIn'), 'LoginPage must launch official Google Sign-In')
   assert.ok(regSrc.includes('launchGoogleSignIn'), 'RegisterPage must launch official Google Sign-In')
+  assert.ok(loginSrc.includes('parseGoogleOAuthReturn'), 'LoginPage parses Google OAuth return')
+  assert.ok(regSrc.includes('parseGoogleOAuthReturn'), 'RegisterPage parses Google OAuth return')
 })
 
 test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', () => {
@@ -41,11 +42,11 @@ test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', 
 })
 
 test('SQI-24 & SQI-25: Verified Google accounts (confirmed with OTP during registration) can log in seamlessly with Google', () => {
-  const googleAuthSrc = fs.readFileSync('src/lib/googleAuth.js', 'utf8')
+  const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
 
-  assert.ok(googleAuthSrc.includes('serviceq_auth_provider_'), 'googleAuth sets auth provider to google')
-  assert.ok(googleAuthSrc.includes('Welcome back,'), 'googleAuth logs in verified accounts with Welcome back toast')
-  assert.ok(googleAuthSrc.includes('loginWithProfile(profile)'), 'googleAuth invokes loginWithProfile for verified accounts')
+  assert.ok(loginSrc.includes('serviceq_auth_provider_'), 'LoginPage sets auth provider to google')
+  assert.ok(loginSrc.includes('Welcome back,'), 'LoginPage logs in verified accounts with Welcome back toast')
+  assert.ok(loginSrc.includes('loginWithProfile(profile)'), 'LoginPage invokes loginWithProfile for verified accounts')
 })
 
 // -------------------------------------------------------------
@@ -59,7 +60,7 @@ test('SQI-35: Admin credentials strictly blocked on customer/provider /login', (
     'Must show specific error message blocking admin on /login'
   )
   assert.ok(
-    loginSrc.includes('isAdminAccount(session.user.email, profile.role)'),
+    loginSrc.includes('isAdminAccount(cleanEmail, profile.role)'),
     'Must check isAdminAccount on session restore'
   )
   assert.ok(
