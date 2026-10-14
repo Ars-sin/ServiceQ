@@ -554,7 +554,6 @@ export default function LandingPage() {
             <a href="mailto:partner@serviceq.com" className="hover:text-white transition">partner@serviceq.com</a>
             <a href="mailto:support@serviceq.com" className="hover:text-white transition">support@serviceq.com</a>
             <span className="text-brand-400 font-mono">+63 (032) 412-SERV (7378)</span>
-            <Link to="/admin/login" className="hover:text-white text-brand-300 font-medium transition">Admin Portal</Link>
           </div>
 
           <p className="text-brand-400">© 2026 ServiceQ. All rights reserved.</p>

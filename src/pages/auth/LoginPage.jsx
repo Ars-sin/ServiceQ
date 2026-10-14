@@ -189,8 +189,7 @@ export default function LoginPage() {
             navigate('/admin/dashboard', { replace: true })
             return
           } else {
-            toast('Admin account detected. Redirecting to Admin Portal...', { icon: '🛡️', id: 'admin-redirect' })
-            navigate(`/admin/login?email=${encodeURIComponent(form.email.trim())}`)
+            toast.error('Invalid email or password.')
             return
           }
         }
@@ -225,8 +224,7 @@ export default function LoginPage() {
             navigate('/admin/dashboard', { replace: true })
             return
           } else {
-            toast('Admin account detected. Redirecting to Admin Portal...', { icon: '🛡️', id: 'admin-redirect' })
-            navigate(`/admin/login?email=${encodeURIComponent(form.email.trim())}`)
+            toast.error('Invalid email or password.')
             return
           }
         }
@@ -514,17 +512,6 @@ export default function LoginPage() {
               </Link>
             </p>
           )}
-
-          {/* Admin Portal Link */}
-          <div className="mt-5 pt-4 border-t border-gray-100 text-center">
-            <Link
-              to="/admin/login"
-              className="text-xs font-semibold text-slate-500 hover:text-brand-600 inline-flex items-center gap-1.5 transition-colors"
-            >
-              <span>🛡️</span>
-              <span>Looking for Admin Portal? Sign in here</span>
-            </Link>
-          </div>
         </div>
       </motion.div>
 

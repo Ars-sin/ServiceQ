@@ -28,10 +28,17 @@ export default function GoogleSignInModal({
       .from('profiles')
       .select('id, email, full_name, role')
       .ilike('email', '%@gmail.com')
-      .limit(4)
+      .limit(10)
       .then(({ data }) => {
         if (data && data.length > 0) {
-          setSampleAccounts(data)
+          const publicAccounts = data.filter(acc => {
+            const r = acc.role?.toLowerCase()
+            const em = acc.email?.toLowerCase()
+            return r !== 'admin' && r !== 'superadmin' && r !== 'staff' &&
+                   r !== 'financial_staff' && r !== 'support_moderator' &&
+                   em !== 'rutilander@gmail.com' && em !== 'admin@serviceq.ph'
+          }).slice(0, 4)
+          setSampleAccounts(publicAccounts)
         }
       })
       .catch(() => {})
@@ -78,7 +85,7 @@ export default function GoogleSignInModal({
           cleanEmail === 'admin@serviceq.ph' ||
           Boolean(localStorage.getItem(`serviceq_admin_password_${cleanEmail}`))
         ) {
-          toast.error('This is an Admin account. Please use the Admin Portal to sign in.')
+          toast.error('This email cannot be used to sign in here.')
           return
         }
 
@@ -258,8 +265,6 @@ export default function GoogleSignInModal({
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${
                             acc.role === 'provider'
                               ? 'bg-emerald-100 text-emerald-800'
-                              : acc.role === 'admin'
-                              ? 'bg-rose-100 text-rose-800'
                               : 'bg-brand-100 text-brand-800'
                           }`}>
                             {acc.role}

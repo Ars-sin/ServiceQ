@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Wrench, RefreshCw, ArrowLeft, Mail, Phone, Lock } from 'lucide-react'
+import { Wrench, RefreshCw, ArrowLeft, Mail, Phone } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -95,17 +95,6 @@ export default function MaintenancePage() {
               className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-colors inline-flex items-center justify-center gap-1.5"
             >
               <ArrowLeft size={16} /> Home
-            </Link>
-          </div>
-
-          {/* Admin access note */}
-          <div className="pt-4 border-t border-gray-100 text-center">
-            <p className="text-xs text-gray-400 mb-2">Are you a platform administrator?</p>
-            <Link
-              to="/login?role=admin"
-              className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline inline-flex items-center gap-1"
-            >
-              <Lock size={12} /> Sign in to Admin Portal
             </Link>
           </div>
         </motion.div>
