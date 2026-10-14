@@ -61,7 +61,9 @@ export default function AdminProfile() {
       })
 
       const expectedCurrentPw = cachedPw || '123456789'
-      if (!testAuthError && testAuth?.user) {
+      if (cachedPw) {
+        currentPwMatches = currentPassword === cachedPw
+      } else if (!testAuthError && testAuth?.user) {
         currentPwMatches = true
       } else if (currentPassword === expectedCurrentPw) {
         currentPwMatches = true
@@ -86,9 +88,24 @@ export default function AdminProfile() {
         console.warn('Supabase auth updateUser message:', error.message)
       }
 
-      // 2. Cache new password locally for immediate sign-in resilience
+      // 2. Cache new password locally and globally for immediate sign-in resilience
       localStorage.setItem(`serviceq_admin_password_${emailKey}`, newPassword)
       localStorage.setItem(`serviceq_password_${emailKey}`, newPassword)
+
+      try {
+        const { data: pwdSetting } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_admin_passwords')
+          .maybeSingle()
+        const pwdMap = pwdSetting?.value ? JSON.parse(pwdSetting.value) : {}
+        pwdMap[emailKey] = newPassword
+        await supabase.from('platform_settings').upsert({
+          key: 'serviceq_admin_passwords',
+          value: JSON.stringify(pwdMap),
+          updated_at: new Date().toISOString(),
+        })
+      } catch {}
 
       try {
         const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
@@ -97,6 +114,11 @@ export default function AdminProfile() {
             s.email?.toLowerCase() === emailKey ? { ...s, password: newPassword } : s
           )
           localStorage.setItem('serviceq_admin_staff', JSON.stringify(updatedStaff))
+          await supabase.from('platform_settings').upsert({
+            key: 'serviceq_admin_staff',
+            value: JSON.stringify(updatedStaff),
+            updated_at: new Date().toISOString(),
+          })
         }
       } catch {}
 

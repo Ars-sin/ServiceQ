@@ -821,23 +821,64 @@ export default function RegisterPage() {
     }
   }
 
+  // Listen for popup auth messages from GoogleAuthPopup
+  useEffect(() => {
+    const handleAuthMessage = (e) => {
+      if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        const { profile, email, isNewUser, role: authRole } = e.data
+        if (isNewUser) {
+          const cleanEmail = email.toLowerCase()
+          const parts = (cleanEmail.split('@')[0] || '').split(/[._-]/)
+          const fName = parts[0] ? parts[0].charAt(0).toUpperCase() + parts[0].slice(1) : ''
+          const lName = parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : ''
+
+          setForm(prev => ({
+            ...prev,
+            email: cleanEmail,
+            firstName: prev.firstName || fName,
+            lastName: prev.lastName || lName,
+          }))
+          if (authRole && (authRole === 'customer' || authRole === 'provider')) {
+            setRole(authRole)
+          }
+          localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+          toast.success(`Google account connected: ${cleanEmail}! Please complete your details.`)
+          setStep(0)
+        } else if (profile) {
+          loginWithProfile(profile)
+          const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+          if (isMaintenance && profile.role !== 'admin') {
+            navigate('/maintenance', { replace: true })
+            return
+          }
+          const destination = profile.role === 'provider' ? '/provider/dashboard' : '/customer/explore'
+          navigate(destination, { replace: true })
+        }
+      }
+    }
+    window.addEventListener('message', handleAuthMessage)
+    return () => window.removeEventListener('message', handleAuthMessage)
+  }, [loginWithProfile, navigate, setRole])
+
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
+    const width = 500
+    const height = 620
+    const left = window.screen.width / 2 - width / 2
+    const top = window.screen.height / 2 - height / 2
+    const url = `/auth/google?role=${role || 'customer'}&mode=register`
+
     try {
-      const redirectUrl = `${window.location.origin}/register?from=google&role=${role || 'customer'}`
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          queryParams: {
-            prompt: 'select_account',
-          },
-        },
-      })
-      if (error) throw error
-    } catch (err) {
-      console.error('Google Sign-Up Error:', err)
-      toast.error(err.message || 'Failed to initialize Google Sign-Up')
+      const popup = window.open(
+        url,
+        'google_auth_window',
+        `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},top=${top},left=${left}`
+      )
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        setShowGoogleModal(true)
+      }
+    } catch {
+      setShowGoogleModal(true)
     }
   }
 

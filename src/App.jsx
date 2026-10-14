@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import LoginPage          from '@/pages/auth/LoginPage'
 import RegisterPage       from '@/pages/auth/RegisterPage'
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
+import GoogleAuthPopup    from '@/pages/auth/GoogleAuthPopup'
 
 // Customer portal
 import CustomerLayout       from '@/layouts/CustomerLayout'
@@ -131,6 +132,7 @@ function AppRoutes() {
       <Route path="/admin/login"     element={<AdminLogin />} />
       <Route path="/admin/forgot-password" element={<AdminForgotPassword />} />
       <Route path="/register"        element={<GuestOnly><RegisterPage /></GuestOnly>} />
+      <Route path="/auth/google"     element={<GoogleAuthPopup />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ForgotPasswordPage />} />
 

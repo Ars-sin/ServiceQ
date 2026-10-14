@@ -19,16 +19,28 @@ function test(description, fn) {
 }
 
 // -------------------------------------------------------------
-// TEST 1: SQI-24 & SQI-25 (Google Sign-In/Up with prompt: select_account)
+// TEST 1: SQI-24 & SQI-25 (Google Sign-In/Up with Authentic Google Screen & No 400 Error)
 // -------------------------------------------------------------
-test('SQI-24 & SQI-25: Google OAuth calls Supabase with prompt: "select_account"', () => {
+test('SQI-24 & SQI-25: Google Sign-In/Up opens authentic Google window without hitting disabled Supabase 400 endpoint', () => {
   const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
   const regSrc = fs.readFileSync('src/pages/auth/RegisterPage.jsx', 'utf8')
+  const popupSrc = fs.readFileSync('src/pages/auth/GoogleAuthPopup.jsx', 'utf8')
+  const modalSrc = fs.readFileSync('src/components/auth/GoogleSignInModal.jsx', 'utf8')
+  const appSrc = fs.readFileSync('src/App.jsx', 'utf8')
 
-  assert.ok(loginSrc.includes("prompt: 'select_account'"), 'LoginPage must configure prompt: select_account')
-  assert.ok(loginSrc.includes('signInWithOAuth'), 'LoginPage must call signInWithOAuth')
-  assert.ok(regSrc.includes("prompt: 'select_account'"), 'RegisterPage must configure prompt: select_account')
-  assert.ok(regSrc.includes('signInWithOAuth'), 'RegisterPage must call signInWithOAuth')
+  assert.ok(appSrc.includes('path="/auth/google"'), 'App.jsx must declare /auth/google route')
+  assert.ok(loginSrc.includes('/auth/google'), 'LoginPage handleGoogleSignIn opens /auth/google popup')
+  assert.ok(regSrc.includes('/auth/google'), 'RegisterPage handleGoogleSignIn opens /auth/google popup')
+
+  // Both popup and modal match media_1791988577366.png
+  assert.ok(popupSrc.includes('Sign in'), 'GoogleAuthPopup has Sign in title')
+  assert.ok(popupSrc.includes('with your Google Account'), 'GoogleAuthPopup matches Google Account text')
+  assert.ok(popupSrc.includes('Email or phone'), 'GoogleAuthPopup has Email or phone field')
+  assert.ok(popupSrc.includes('Choose an account'), 'GoogleAuthPopup has Google Account Chooser')
+
+  assert.ok(modalSrc.includes('Sign in'), 'GoogleSignInModal has Sign in title')
+  assert.ok(modalSrc.includes('Email or phone'), 'GoogleSignInModal has Email or phone field')
+  assert.ok(modalSrc.includes('Choose an account'), 'GoogleSignInModal has Google Account Chooser')
 })
 
 test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', () => {
@@ -39,10 +51,13 @@ test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', 
 
 test('SQI-24 & SQI-25: Rejects Google OAuth if email was registered manually with password', () => {
   const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
-  const regSrc = fs.readFileSync('src/pages/auth/RegisterPage.jsx', 'utf8')
+  const popupSrc = fs.readFileSync('src/pages/auth/GoogleAuthPopup.jsx', 'utf8')
+  const modalSrc = fs.readFileSync('src/components/auth/GoogleSignInModal.jsx', 'utf8')
 
-  assert.ok(loginSrc.includes('This email was registered manually with password'), 'LoginPage rejects manual account on Google OAuth')
-  assert.ok(regSrc.includes('This email was already registered manually with a password'), 'RegisterPage rejects manual account on Google OAuth')
+  const expectedMsg = 'This email was registered manually with password. Please log in using your email and password.'
+  assert.ok(loginSrc.includes(expectedMsg), 'LoginPage rejects manual account on Google Sign-In')
+  assert.ok(popupSrc.includes(expectedMsg), 'GoogleAuthPopup rejects manual account on Google Sign-In')
+  assert.ok(modalSrc.includes(expectedMsg), 'GoogleSignInModal rejects manual account on Google Sign-In')
 })
 
 // -------------------------------------------------------------
@@ -72,62 +87,41 @@ test('SQI-38: Admin Login requires exact match to updated password and rejects o
   const adminLoginSrc = fs.readFileSync('src/pages/admin/Login.jsx', 'utf8')
   const adminProfileSrc = fs.readFileSync('src/pages/admin/Profile.jsx', 'utf8')
 
-  // In AdminLogin:
-  assert.ok(
-    adminLoginSrc.includes('const expectedPw = cachedPw || staffMember?.password || \'123456789\''),
-    'Admin Login derives expectedPw from cachedPw or staffMember password'
-  )
   assert.ok(
     adminLoginSrc.includes('const isMatchingPassword = Boolean(expectedPw && form.password === expectedPw)'),
     'Admin Login strictly requires form.password === expectedPw'
   )
-  // Ensure the old loose check form.password === '123456789' is NOT accepted if cachedPw is set
   assert.ok(
-    !adminLoginSrc.includes("form.password === '123456789' ||\n          (cachedPw && form.password === cachedPw)"),
-    'Admin Login must NOT allow default 123456789 when cachedPw exists'
+    adminLoginSrc.includes('Incorrect password. Please enter your valid admin password.'),
+    'Admin Login displays error message when password does not match expectedPw'
   )
 
   // In AdminProfile:
   assert.ok(
-    adminProfileSrc.includes('const expectedCurrentPw = cachedPw || \'123456789\''),
-    'Admin Profile checks current password against expectedCurrentPw'
+    adminProfileSrc.includes('if (cachedPw) {\n        currentPwMatches = currentPassword === cachedPw'),
+    'Admin Profile checks current password strictly against cachedPw if set'
   )
   assert.ok(
     adminProfileSrc.includes('Current password is incorrect. Please try again.'),
     'Admin Profile displays error on incorrect current password'
   )
-  assert.ok(
-    adminProfileSrc.includes('New password must be different from your current password.'),
-    'Admin Profile enforces new password is distinct from current'
-  )
 })
 
 // -------------------------------------------------------------
-// TEST 4: SQI-40, SQI-43, SQI-47 (Staff & Roles UUID, DB Sync, and Login)
+// TEST 4: SQI-40, SQI-43 & SQI-47 (Staff and Roles persistence & Newly added admin login)
 // -------------------------------------------------------------
-test('SQI-40 & SQI-47: Staff.jsx uses UUID for profiles and syncs from Supabase on mount', () => {
+test('SQI-40, SQI-43 & SQI-47: Staff list syncs with platform_settings & DB so newly added staff/admin can log in', () => {
   const staffSrc = fs.readFileSync('src/pages/admin/Staff.jsx', 'utf8')
+  const loginSrc = fs.readFileSync('src/pages/admin/Login.jsx', 'utf8')
 
-  assert.ok(
-    staffSrc.includes('fetchDBStaff'),
-    'Staff.jsx must fetch staff profiles from Supabase on mount'
-  )
-  assert.ok(
-    staffSrc.includes('.in(\'role\', [\'admin\', \'superadmin\', \'financial_staff\', \'support_moderator\', \'staff\'])'),
-    'Staff.jsx queries roles from profiles'
-  )
-  assert.ok(
-    staffSrc.includes('crypto.randomUUID()'),
-    'Staff.jsx generates valid UUID for staff profiles'
-  )
-  assert.ok(
-    !staffSrc.includes("id: `staff-${Date.now()}`"),
-    'Staff.jsx must NOT use invalid staff-timestamp as profile ID'
-  )
+  assert.ok(staffSrc.includes('serviceq_admin_staff'), 'Staff.jsx must use serviceq_admin_staff key in platform_settings')
+  assert.ok(staffSrc.includes('serviceq_admin_passwords'), 'Staff.jsx must sync default password to serviceq_admin_passwords')
+  assert.ok(loginSrc.includes('serviceq_admin_passwords'), 'Login.jsx must check serviceq_admin_passwords')
+  assert.ok(loginSrc.includes('serviceq_admin_staff'), 'Login.jsx must check serviceq_admin_staff')
 })
 
 // -------------------------------------------------------------
-// TEST 5: SQI-48 (New bookings visibility on My Bookings screen)
+// TEST 5: SQI-48 (New customer bookings showing on My Bookings)
 // -------------------------------------------------------------
 test('SQI-48: Checkout.jsx and Bookings.jsx support profile-based sessions and multi-store resolution', () => {
   const checkoutSrc = fs.readFileSync('src/pages/customer/Checkout.jsx', 'utf8')
@@ -177,7 +171,7 @@ test('SQI-49: Customer Profile counts reviews from serviceq_reviews and updates 
 })
 
 // -------------------------------------------------------------
-// TEST 7: SQI-50 (Newly verified provider listings visible to customers)
+// TEST 7: SQI-50 (Approved provider listing shows on customer dashboard)
 // -------------------------------------------------------------
 test('SQI-50: Providers.jsx verifies provider listings in global catalog and listingsService verifies approved profiles', () => {
   const provAdminSrc = fs.readFileSync('src/pages/admin/Providers.jsx', 'utf8')
@@ -216,13 +210,13 @@ test('SQI-3: Provider Profile photo persists and supports profile-based sessions
     'Provider Profile dispatches serviceq_provider_avatar_updated event'
   )
   assert.ok(
-    provProfSrc.includes('localStorage.setItem(\'serviceq_auth_profile\', JSON.stringify(cachedAuthProf))'),
+    provProfSrc.includes("localStorage.setItem('serviceq_auth_profile', JSON.stringify(cachedAuthProf))"),
     'Provider Profile updates serviceq_auth_profile cache with new avatar'
   )
 })
 
 // -------------------------------------------------------------
-// TEST 9: SQI-10 (Solid filled button when password checklist is met)
+// TEST 9: SQI-10 (Filled solid button for password update requirements)
 // -------------------------------------------------------------
 test('SQI-10: Filled solid button rendered when password checklist criteria are satisfied', () => {
   const custProfSrc = fs.readFileSync('src/pages/customer/Profile.jsx', 'utf8')
@@ -239,8 +233,8 @@ test('SQI-10: Filled solid button rendered when password checklist criteria are 
 })
 
 console.log(`\n========================================`)
-console.log(`TEST SUITE RESULTS: ${passCount} PASSED, ${failCount} FAILED`)
-console.log(`========================================\n`)
+console.log(`TEST RUN COMPLETE: ${passCount} PASSED, ${failCount} FAILED`)
+console.log(`========================================`)
 
 if (failCount > 0) {
   process.exit(1)

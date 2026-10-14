@@ -55,44 +55,54 @@ export default function AdminStaff() {
   const [editingStaff, setEditingStaff] = useState(null)
   const [form, setForm]    = useState({ name: '', email: '', role: 'support_moderator', defaultPassword: '' })
 
-  // SQI-40 / SQI-47: Fetch all staff and admin profiles from DB on mount
+  // SQI-40 / SQI-47: Fetch all staff and admin profiles from DB & platform_settings on mount
   useEffect(() => {
     async function fetchDBStaff() {
       try {
+        let remoteStaff = []
+        try {
+          const { data: remoteData } = await supabase
+            .from('platform_settings')
+            .select('value')
+            .eq('key', 'serviceq_admin_staff')
+            .maybeSingle()
+          if (remoteData?.value) {
+            remoteStaff = JSON.parse(remoteData.value)
+          }
+        } catch {}
+
         const { data: dbProfiles } = await supabase
           .from('profiles')
           .select('*')
           .in('role', ['admin', 'superadmin', 'financial_staff', 'support_moderator', 'staff'])
 
-        if (Array.isArray(dbProfiles) && dbProfiles.length > 0) {
-          setStaff(prev => {
-            const list = [...prev]
+        setStaff(prev => {
+          const map = new Map()
+          STAFF.forEach(s => map.set(s.email.toLowerCase(), s))
+          prev.forEach(s => map.set(s.email.toLowerCase(), s))
+          if (Array.isArray(remoteStaff)) {
+            remoteStaff.forEach(s => map.set(s.email.toLowerCase(), { ...map.get(s.email.toLowerCase()), ...s }))
+          }
+          if (Array.isArray(dbProfiles)) {
             dbProfiles.forEach(p => {
-              const idx = list.findIndex(s => s.email?.toLowerCase() === p.email?.toLowerCase())
-              if (idx >= 0) {
-                list[idx] = {
-                  ...list[idx],
-                  id: p.id || list[idx].id,
-                  name: p.full_name || list[idx].name,
-                  role: p.role || list[idx].role,
-                }
-              } else {
-                list.push({
-                  id: p.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `staff-${Date.now()}`),
-                  name: p.full_name || p.email.split('@')[0],
-                  email: p.email,
-                  role: p.role,
-                  status: p.is_active !== false ? 'active' : 'inactive',
-                  lastActive: p.updated_at ? new Date(p.updated_at).toLocaleDateString() : 'Active',
-                })
-              }
+              const existing = map.get(p.email.toLowerCase())
+              map.set(p.email.toLowerCase(), {
+                id: p.id || existing?.id,
+                name: p.full_name || existing?.name || p.email.split('@')[0],
+                email: p.email,
+                role: p.role || existing?.role || 'admin',
+                status: p.is_active !== false ? 'active' : 'inactive',
+                lastActive: p.updated_at ? new Date(p.updated_at).toLocaleDateString() : (existing?.lastActive || 'Active'),
+                password: existing?.password,
+              })
             })
-            try {
-              localStorage.setItem('serviceq_admin_staff', JSON.stringify(list))
-            } catch {}
-            return list
-          })
-        }
+          }
+          const merged = Array.from(map.values())
+          try {
+            localStorage.setItem('serviceq_admin_staff', JSON.stringify(merged))
+          } catch {}
+          return merged
+        })
       } catch (err) {
         console.warn('Error fetching staff profiles from DB:', err)
       }
@@ -100,10 +110,15 @@ export default function AdminStaff() {
     fetchDBStaff()
   }, [])
 
-  const saveStaffList = (updated) => {
+  const saveStaffList = async (updated) => {
     setStaff(updated)
     try {
       localStorage.setItem('serviceq_admin_staff', JSON.stringify(updated))
+      await supabase.from('platform_settings').upsert({
+        key: 'serviceq_admin_staff',
+        value: JSON.stringify(updated),
+        updated_at: new Date().toISOString(),
+      })
     } catch {}
   }
 
@@ -119,6 +134,7 @@ export default function AdminStaff() {
 
     // SQI-47: Check if profile already exists to reuse its UUID, or generate new UUID
     let memberId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null
+    let existingProfileId = null
     try {
       const { data: existingUser } = await supabase
         .from('profiles')
@@ -127,6 +143,7 @@ export default function AdminStaff() {
         .maybeSingle()
       if (existingUser?.id) {
         memberId = existingUser.id
+        existingProfileId = existingUser.id
       }
     } catch {}
 
@@ -141,23 +158,47 @@ export default function AdminStaff() {
     }
 
     const updatedList = [...staff.filter(s => s.email?.toLowerCase() !== emailKey), newMember]
-    saveStaffList(updatedList)
+    await saveStaffList(updatedList)
 
-    // Store default password for login (SQI-43)
+    // Store default password for login (SQI-43 & SQI-47)
     try {
       localStorage.setItem(`serviceq_admin_password_${emailKey}`, form.defaultPassword.trim())
       localStorage.setItem(`serviceq_password_${emailKey}`, form.defaultPassword.trim())
+
+      const { data: pwdSetting } = await supabase
+        .from('platform_settings')
+        .select('value')
+        .eq('key', 'serviceq_admin_passwords')
+        .maybeSingle()
+      const pwdMap = pwdSetting?.value ? JSON.parse(pwdSetting.value) : {}
+      pwdMap[emailKey] = form.defaultPassword.trim()
+      await supabase.from('platform_settings').upsert({
+        key: 'serviceq_admin_passwords',
+        value: JSON.stringify(pwdMap),
+        updated_at: new Date().toISOString(),
+      })
     } catch {}
 
-    // Upsert into profiles table with valid UUID so backend is synced
+    // Update or insert into profiles table
     try {
-      await supabase.from('profiles').upsert({
-        id: memberId,
-        email: form.email.trim(),
-        full_name: form.name.trim(),
-        role: form.role === 'superadmin' ? 'admin' : form.role,
-        is_active: true,
-      }, { onConflict: 'email' })
+      if (existingProfileId) {
+        await supabase
+          .from('profiles')
+          .update({
+            role: form.role === 'superadmin' ? 'admin' : form.role,
+            full_name: form.name.trim(),
+            is_active: true,
+          })
+          .eq('id', existingProfileId)
+      } else {
+        await supabase.from('profiles').insert({
+          id: memberId,
+          email: form.email.trim(),
+          full_name: form.name.trim(),
+          role: form.role === 'superadmin' ? 'admin' : form.role,
+          is_active: true,
+        })
+      }
     } catch (err) {
       console.warn('Profile sync note:', err)
     }

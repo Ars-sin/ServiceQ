@@ -149,22 +149,47 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
+  // Listen for popup auth messages from GoogleAuthPopup
+  useEffect(() => {
+    const handleAuthMessage = (e) => {
+      if (e.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        const { profile, email, isNewUser, role } = e.data
+        if (isNewUser) {
+          navigate(`/register?from=google&role=${role || loginRole || 'customer'}&email=${encodeURIComponent(email)}`)
+        } else if (profile) {
+          loginWithProfile(profile)
+          const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+          if (isMaintenance && profile.role !== 'admin') {
+            navigate('/maintenance', { replace: true })
+            return
+          }
+          const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
+          navigate(destination, { replace: true })
+        }
+      }
+    }
+    window.addEventListener('message', handleAuthMessage)
+    return () => window.removeEventListener('message', handleAuthMessage)
+  }, [loginRole, navigate, loginWithProfile])
+
+  const handleGoogleSignIn = () => {
+    const width = 500
+    const height = 620
+    const left = window.screen.width / 2 - width / 2
+    const top = window.screen.height / 2 - height / 2
+    const url = `/auth/google?role=${loginRole || 'customer'}&mode=login`
+
     try {
-      const redirectUrl = `${window.location.origin}/login?from=google&role=${loginRole || 'customer'}`
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          queryParams: {
-            prompt: 'select_account',
-          },
-        },
-      })
-      if (error) throw error
-    } catch (err) {
-      console.error('Google Sign-In Error:', err)
-      toast.error(err.message || 'Failed to initialize Google Sign-In')
+      const popup = window.open(
+        url,
+        'google_auth_window',
+        `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},top=${top},left=${left}`
+      )
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        setShowGoogleModal(true)
+      }
+    } catch {
+      setShowGoogleModal(true)
     }
   }
 

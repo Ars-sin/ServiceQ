@@ -43,89 +43,95 @@ export default function AdminLogin() {
         if (profile) resolvedProfile = profile
       } catch {}
 
-      // 2. Sign in with Supabase Auth
-      let authData = null
-      let authError = null
+      // 2. Fetch staff list & remote passwords from localStorage and platform_settings
+      let staffMember = null
+      let remotePasswords = {}
       try {
-        const res = await supabase.auth.signInWithPassword({
-          email: emailClean,
-          password: form.password,
-        })
-        authData = res.data
-        authError = res.error
-      } catch (err) {
-        authError = err
-      }
-
-      // Check cached password fallback or default admin credentials (SQI-38)
-      if (authError || !authData?.user) {
-        const cachedPw =
-          localStorage.getItem(`serviceq_admin_password_${emailClean}`) ||
-          localStorage.getItem(`serviceq_password_${emailClean}`)
-        let staffMember = null
-        try {
-          const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
-          staffMember = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailClean) : null
-        } catch {}
-
-        const isRegisteredAdmin =
-          resolvedProfile?.role === 'admin' ||
-          resolvedProfile?.role === 'superadmin' ||
-          resolvedProfile?.role === 'staff' ||
-          resolvedProfile?.role === 'financial_staff' ||
-          resolvedProfile?.role === 'support_moderator' ||
-          Boolean(staffMember) ||
-          emailClean === 'rutilander@gmail.com' ||
-          emailClean === 'admin@serviceq.ph'
-
-        // SQI-38: Strict password check.
-        // If a password was explicitly set or updated, ONLY that password is valid.
-        // Default to '123456789' ONLY if no password was ever set/cached.
-        const expectedPw = cachedPw || staffMember?.password || '123456789'
-        const isMatchingPassword = Boolean(expectedPw && form.password === expectedPw)
-
-        if (isRegisteredAdmin && isMatchingPassword) {
-          authError = null
-          authData = {
-            user: {
-              id: resolvedProfile?.id || staffMember?.id || 'e4a52d79-beb0-467d-8e42-76b83236881e',
-              email: emailClean,
-              user_metadata: {
-                full_name: resolvedProfile?.full_name || staffMember?.name || 'Bryce Obien',
-              },
-            },
+        let staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
+        const { data: remoteStaff } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_admin_staff')
+          .maybeSingle()
+        if (remoteStaff?.value) {
+          const parsed = JSON.parse(remoteStaff.value)
+          if (Array.isArray(parsed)) {
+            staffList = [...staffList, ...parsed]
+            try { localStorage.setItem('serviceq_admin_staff', JSON.stringify(staffList)) } catch {}
           }
         }
-      }
+        staffMember = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailClean) : null
 
-      if (authError) {
-        throw authError
-      }
-
-      const emailLower = emailClean
-      let staffMember = null
-      try {
-        const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
-        staffMember = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailLower) : null
+        const { data: remotePwData } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_admin_passwords')
+          .maybeSingle()
+        if (remotePwData?.value) {
+          remotePasswords = JSON.parse(remotePwData.value)
+        }
       } catch {}
 
-      const isAllowedAdminOrStaff =
+      const cachedPw =
+        localStorage.getItem(`serviceq_admin_password_${emailClean}`) ||
+        localStorage.getItem(`serviceq_password_${emailClean}`) ||
+        remotePasswords[emailClean]
+
+      const isRegisteredAdmin =
         resolvedProfile?.role === 'admin' ||
         resolvedProfile?.role === 'superadmin' ||
         resolvedProfile?.role === 'staff' ||
         resolvedProfile?.role === 'financial_staff' ||
         resolvedProfile?.role === 'support_moderator' ||
         Boolean(staffMember) ||
-        emailLower === 'rutilander@gmail.com' ||
-        emailLower === 'admin@serviceq.ph' ||
-        authData?.user?.email?.toLowerCase() === 'rutilander@gmail.com'
+        emailClean === 'rutilander@gmail.com' ||
+        emailClean === 'admin@serviceq.ph'
 
-      if (!isAllowedAdminOrStaff) {
-        await supabase.auth.signOut()
+      if (!isRegisteredAdmin) {
         setLoading(false)
         return toast.error('Access denied: This login is reserved for Administrators.')
       }
 
+      // SQI-38: Strict password check.
+      // If a password was explicitly set or updated, ONLY that password is valid.
+      // Default to '123456789' ONLY for default admin if no password was ever set/cached.
+      const expectedPw = cachedPw || staffMember?.password || (emailClean === 'rutilander@gmail.com' ? '123456789' : null)
+      const isMatchingPassword = Boolean(expectedPw && form.password === expectedPw)
+
+      let authData = null
+      let authError = null
+
+      if (expectedPw) {
+        if (!isMatchingPassword) {
+          throw new Error('Incorrect password. Please enter your valid admin password.')
+        }
+        authData = {
+          user: {
+            id: resolvedProfile?.id || staffMember?.id || 'e4a52d79-beb0-467d-8e42-76b83236881e',
+            email: emailClean,
+            user_metadata: {
+              full_name: resolvedProfile?.full_name || staffMember?.name || 'Bryce Obien',
+            },
+          },
+        }
+      } else {
+        // Attempt Supabase Auth sign in
+        try {
+          const res = await supabase.auth.signInWithPassword({
+            email: emailClean,
+            password: form.password,
+          })
+          authData = res.data
+          authError = res.error
+        } catch (err) {
+          authError = err
+        }
+        if (authError || !authData?.user) {
+          throw authError || new Error('Invalid email or password.')
+        }
+      }
+
+      const emailLower = emailClean
       const finalRole = resolvedProfile?.role === 'superadmin' ? 'admin' : (resolvedProfile?.role || staffMember?.role || 'admin')
       const finalName = resolvedProfile?.full_name || staffMember?.name || authData?.user?.user_metadata?.full_name || (emailLower === 'rutilander@gmail.com' ? 'Bryce Obien' : 'Admin')
 
