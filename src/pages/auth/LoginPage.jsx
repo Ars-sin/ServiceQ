@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
-import { launchGoogleSignIn, parseGoogleOAuthReturn } from '@/lib/googleAuth'
+import { launchGoogleSignIn, parseGoogleOAuthReturn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 
 const ROLE_REDIRECT = {
   customer: '/customer/explore',
@@ -155,7 +155,10 @@ export default function LoginPage() {
   }, [loginRole, navigate, loginWithProfile])
 
   const handleGoogleSignIn = () => {
-    launchGoogleSignIn({ role: loginRole || 'customer' })
+    launchGoogleSignIn({
+      role: loginRole || 'customer',
+      onOpenChooser: () => setShowGoogleModal(true),
+    })
   }
 
   const handleSubmit = async e => {

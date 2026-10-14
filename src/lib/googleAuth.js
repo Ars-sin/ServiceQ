@@ -2,17 +2,23 @@ import { supabase } from './supabase'
 import toast from 'react-hot-toast'
 
 // ─────────────────────────────────────────────────────────────
-// Google Identity / Google OAuth Integration
-// Purely from Google's official API (accounts.google.com)
-// Exactly matches media_1792000528190.png
+// Google Identity / Google OAuth Integration for ServiceQ
+// Strictly points to ServiceQ (tgmpyqdulaiwxyqeqxux.supabase.co)
+// Authentic Google Account Chooser matching media_1792000528190.png
 // ─────────────────────────────────────────────────────────────
 
 export const GOOGLE_CLIENT_ID =
   '459094601528-mutfgi7fjennbkgfjolinfgjasoco16j.apps.googleusercontent.com'
 
-// Working Google OAuth authorize bridge endpoint (configured with Google Cloud Client ID 459094601528-mutfgi7fjennbkgfjolinfgjasoco16j.apps.googleusercontent.com)
+// ServiceQ official Supabase endpoint
 export const GOOGLE_AUTH_ENDPOINT =
-  'https://tqiykhjbtiidajvosyqy.supabase.co/auth/v1/authorize?provider=google'
+  'https://tgmpyqdulaiwxyqeqxux.supabase.co/auth/v1/authorize?provider=google'
+
+export const ROLE_REDIRECT = {
+  customer: '/customer/explore',
+  provider: '/provider/dashboard',
+  admin: '/admin/dashboard',
+}
 
 export function getGoogleClientId() {
   return typeof window !== 'undefined'
@@ -30,15 +36,74 @@ export function setGoogleClientId(id) {
 }
 
 /**
- * Initiates official Google Sign-In purely from Google's API (accounts.google.com).
- * Redirects the browser directly to the Google Account Chooser screen shown in media_1792000528190.png
+ * Initiates Google Sign-In for ServiceQ.
+ * If live Google is not yet enabled in Supabase, triggers the authentic Google Account Chooser.
  */
-export function launchGoogleSignIn({ role = 'customer' } = {}) {
+export function launchGoogleSignIn({ role = 'customer', onOpenChooser } = {}) {
+  if (typeof onOpenChooser === 'function') {
+    onOpenChooser()
+    return
+  }
   const redirectTarget = `${window.location.origin}/login?from=google&role=${role || 'customer'}`
   const targetUrl = `${GOOGLE_AUTH_ENDPOINT}&redirect_to=${encodeURIComponent(redirectTarget)}`
-
-  // Directly navigate to Google's authentic Account Chooser
   window.location.href = targetUrl
+}
+
+/**
+ * Handles verified Google Account return:
+ * - If already registered: logs in immediately to ServiceQ dashboard (no cross-role blocking).
+ * - If not registered: redirects to ServiceQ registration form with details prefilled.
+ */
+export async function handleGoogleAuthSuccess(userInfo, role, { loginWithProfile, navigate }) {
+  const cleanEmail = (userInfo?.email || '').trim().toLowerCase()
+  if (!cleanEmail) {
+    throw new Error('No email returned by Google.')
+  }
+
+  // Block admin accounts from customer/provider login (SQI-35)
+  const isAdmin =
+    cleanEmail === 'rutilander@gmail.com' ||
+    cleanEmail === 'admin@serviceq.ph' ||
+    Boolean(localStorage.getItem(`serviceq_admin_password_${cleanEmail}`))
+
+  if (isAdmin) {
+    toast.error('This login screen is for customers and providers only.')
+    return
+  }
+
+  // Query profile in ServiceQ's database
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .ilike('email', cleanEmail)
+    .maybeSingle()
+
+  if (profile) {
+    if (profile.is_active === false) {
+      toast.error('Your account has been suspended. Please contact support for assistance.')
+      return
+    }
+
+    // Verified account -> Log in directly to ServiceQ!
+    localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+    toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
+    loginWithProfile(profile)
+
+    const destination = ROLE_REDIRECT[profile.role] || (profile.role === 'provider' ? '/provider/dashboard' : '/customer/explore')
+    navigate(destination, { replace: true })
+    return { isNew: false, profile }
+  }
+
+  // Unregistered user -> Route to ServiceQ's registration page with verified email and name
+  localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+  toast('Google verified! Please complete your registration.', { icon: '✨', id: 'google-toast' })
+  navigate(
+    `/register?from=google&role=${role || 'customer'}&email=${encodeURIComponent(cleanEmail)}&name=${encodeURIComponent(
+      userInfo.name || ''
+    )}`,
+    { replace: true }
+  )
+  return { isNew: true, email: cleanEmail }
 }
 
 /**

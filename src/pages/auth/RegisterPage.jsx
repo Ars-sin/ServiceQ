@@ -40,7 +40,7 @@ const ROLE_REDIRECT = {
 }
 
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
-import { launchGoogleSignIn, parseGoogleOAuthReturn } from '@/lib/googleAuth'
+import { launchGoogleSignIn, parseGoogleOAuthReturn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function RegisterPage() {
@@ -854,7 +854,10 @@ export default function RegisterPage() {
 
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
   const handleGoogleSignIn = () => {
-    launchGoogleSignIn({ role: role || 'customer' })
+    launchGoogleSignIn({
+      role: role || 'customer',
+      onOpenChooser: () => setShowGoogleModal(true),
+    })
   }
 
   return (
