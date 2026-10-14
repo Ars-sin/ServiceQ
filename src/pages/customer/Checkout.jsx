@@ -72,7 +72,9 @@ export default function Checkout() {
     await new Promise(r => setTimeout(r, 800))
 
     try {
-      const customerName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Customer'
+      const effectiveCustomerId = user?.id || profile?.id || null
+      const effectiveCustomerEmail = (user?.email || profile?.email || '').trim().toLowerCase() || null
+      const customerName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || profile?.email?.split('@')[0] || 'Customer'
       await recordCustomerBooking({
         id: bookingId,
         bookingRef: bookingId,
@@ -81,8 +83,8 @@ export default function Checkout() {
         provider: order.provider || 'Verified Provider',
         providerId: order.providerId || null,
         customer: customerName,
-        customerEmail: user?.email || null,
-        customerId: user?.id || null,
+        customerEmail: effectiveCustomerEmail,
+        customerId: effectiveCustomerId,
         date: order.date || new Date().toISOString().split('T')[0],
         sessions,
         subtotal: order.subtotal || subtotal,

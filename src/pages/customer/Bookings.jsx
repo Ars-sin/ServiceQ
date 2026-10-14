@@ -35,9 +35,15 @@ export default function CustomerBookings() {
   // Load bookings scoped to the current authenticated customer (0 for newly registered customer)
   const [bookings, setBookings] = useState(() => {
     try {
-      if (user?.id) {
-        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
-        if (Array.isArray(stored)) return stored
+      const uId = user?.id || profile?.id
+      if (uId) {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${uId}`))
+        if (Array.isArray(stored) && stored.length > 0) return stored
+      }
+      const uEmail = (user?.email || profile?.email || '').trim().toLowerCase()
+      if (uEmail) {
+        const storedEmail = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_email_${uEmail}`))
+        if (Array.isArray(storedEmail) && storedEmail.length > 0) return storedEmail
       }
     } catch {}
     return []
@@ -48,31 +54,28 @@ export default function CustomerBookings() {
     let isMounted = true
 
     const syncCustomerBookings = async () => {
-      const userId = user?.id ? String(user.id) : null
+      const userId = (user?.id || profile?.id) ? String(user?.id || profile?.id) : null
       const userEmail = (user?.email || profile?.email || '').trim().toLowerCase()
+      const userName = (profile?.full_name || user?.user_metadata?.full_name || '').trim().toLowerCase()
 
       if (!userId && !userEmail) {
         setBookings([])
         return
       }
 
-      // SQI-15: Strict isolation. A booking belongs to this customer ONLY if customerId matches,
-      // or if customerEmail matches when customerId is omitted. Never match on loose name strings.
+      // SQI-15 / SQI-48: Isolation. A booking belongs to this customer if customerId, customerEmail, or full customer name matches.
       const isBookingMine = (b) => {
         if (!b) return false
-        if (b.customerId) {
-          return userId ? String(b.customerId) === userId : false
-        }
-        if (b.customerEmail && userEmail) {
-          return b.customerEmail.toLowerCase().trim() === userEmail
-        }
+        if (b.customerId && userId && String(b.customerId) === userId) return true
+        if (b.customerEmail && userEmail && b.customerEmail.toLowerCase().trim() === userEmail) return true
+        if (userName && b.customer && b.customer.toLowerCase().trim() === userName) return true
         return false
       }
 
       try {
         const localMap = new Map()
 
-        // 1. User-scoped localStorage cache
+        // 1. User-scoped localStorage cache (by ID)
         if (userId) {
           try {
             const userStored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${userId}`)) || []
@@ -82,7 +85,17 @@ export default function CustomerBookings() {
           } catch {}
         }
 
-        // 2. Fallback general customer cache in localStorage (Strictly filtered)
+        // 2. User-scoped localStorage cache (by Email)
+        if (userEmail) {
+          try {
+            const emailStored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_email_${userEmail}`)) || []
+            if (Array.isArray(emailStored)) {
+              emailStored.forEach(b => { if (b?.id && isBookingMine(b)) localMap.set(b.id, b) })
+            }
+          } catch {}
+        }
+
+        // 3. Fallback general customer cache in localStorage (Strictly filtered)
         try {
           const genStored = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
           if (Array.isArray(genStored)) {
@@ -194,7 +207,7 @@ export default function CustomerBookings() {
       window.removeEventListener('storage', syncCustomerBookings)
       if (bc) bc.close()
     }
-  }, [user?.id, user?.email, profile?.full_name])
+  }, [user?.id, user?.email, profile?.id, profile?.email, profile?.full_name])
 
   const PAGE_SIZE = 4
   const isDefaultAll = activeTab === 'all'

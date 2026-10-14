@@ -219,6 +219,60 @@ export async function fetchBackendListings(includeBase = true) {
     }
   }
 
+  // SQI-50: Check approved providers from Supabase profiles to ensure listings of newly verified providers (e.g. Mochi Elorie) are verified
+  const approvedProviderIds = new Set()
+  const approvedProviderNames = new Set()
+
+  try {
+    const { data: provProfiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, avatar_url, is_active')
+      .eq('role', 'provider')
+
+    if (Array.isArray(provProfiles)) {
+      for (const p of provProfiles) {
+        let isApproved = false
+        if (p.is_active) isApproved = true
+        if (p.avatar_url && p.avatar_url.startsWith('{')) {
+          try {
+            const meta = JSON.parse(p.avatar_url)
+            if (meta?.status === 'approved') isApproved = true
+            if (meta?.status === 'suspended' || meta?.status === 'rejected') isApproved = false
+          } catch {}
+        }
+        if (isApproved) {
+          if (p.id) approvedProviderIds.add(String(p.id))
+          if (p.full_name) approvedProviderNames.add(p.full_name.trim().toLowerCase())
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not query approved provider profiles:', err)
+  }
+
+  // Also check local storage provider_verified_ keys
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('provider_verified_') && localStorage.getItem(key) === 'true') {
+        approvedProviderIds.add(key.replace('provider_verified_', ''))
+      }
+    }
+  } catch {}
+
+  // Mark all listings matching approved providers as verified
+  for (const item of backendItems) {
+    const isApproved =
+      (item.providerId && approvedProviderIds.has(String(item.providerId))) ||
+      (item.provider && approvedProviderNames.has(item.provider.trim().toLowerCase()))
+
+    if (isApproved) {
+      item.isVerified = true
+      item.provider_verified = true
+      if (!item.tag) item.tag = 'Verified'
+    }
+  }
+
   // Persist combined active custom listings to localStorage for instant load next time
   try {
     const customOnly = backendItems.filter(l => !BASE_LISTINGS.some(b => String(b.id) === String(l.id)))

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Check, X, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -55,6 +55,51 @@ export default function AdminStaff() {
   const [editingStaff, setEditingStaff] = useState(null)
   const [form, setForm]    = useState({ name: '', email: '', role: 'support_moderator', defaultPassword: '' })
 
+  // SQI-40 / SQI-47: Fetch all staff and admin profiles from DB on mount
+  useEffect(() => {
+    async function fetchDBStaff() {
+      try {
+        const { data: dbProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('role', ['admin', 'superadmin', 'financial_staff', 'support_moderator', 'staff'])
+
+        if (Array.isArray(dbProfiles) && dbProfiles.length > 0) {
+          setStaff(prev => {
+            const list = [...prev]
+            dbProfiles.forEach(p => {
+              const idx = list.findIndex(s => s.email?.toLowerCase() === p.email?.toLowerCase())
+              if (idx >= 0) {
+                list[idx] = {
+                  ...list[idx],
+                  id: p.id || list[idx].id,
+                  name: p.full_name || list[idx].name,
+                  role: p.role || list[idx].role,
+                }
+              } else {
+                list.push({
+                  id: p.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `staff-${Date.now()}`),
+                  name: p.full_name || p.email.split('@')[0],
+                  email: p.email,
+                  role: p.role,
+                  status: p.is_active !== false ? 'active' : 'inactive',
+                  lastActive: p.updated_at ? new Date(p.updated_at).toLocaleDateString() : 'Active',
+                })
+              }
+            })
+            try {
+              localStorage.setItem('serviceq_admin_staff', JSON.stringify(list))
+            } catch {}
+            return list
+          })
+        }
+      } catch (err) {
+        console.warn('Error fetching staff profiles from DB:', err)
+      }
+    }
+    fetchDBStaff()
+  }, [])
+
   const saveStaffList = (updated) => {
     setStaff(updated)
     try {
@@ -71,8 +116,22 @@ export default function AdminStaff() {
     }
 
     const emailKey = form.email.trim().toLowerCase()
+
+    // SQI-47: Check if profile already exists to reuse its UUID, or generate new UUID
+    let memberId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null
+    try {
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', emailKey)
+        .maybeSingle()
+      if (existingUser?.id) {
+        memberId = existingUser.id
+      }
+    } catch {}
+
     const newMember = {
-      id: Date.now().toString(),
+      id: memberId,
       name: form.name.trim(),
       email: form.email.trim(),
       role: form.role === 'superadmin' ? 'admin' : form.role,
@@ -81,7 +140,7 @@ export default function AdminStaff() {
       password: form.defaultPassword.trim(),
     }
 
-    const updatedList = [...staff, newMember]
+    const updatedList = [...staff.filter(s => s.email?.toLowerCase() !== emailKey), newMember]
     saveStaffList(updatedList)
 
     // Store default password for login (SQI-43)
@@ -90,10 +149,10 @@ export default function AdminStaff() {
       localStorage.setItem(`serviceq_password_${emailKey}`, form.defaultPassword.trim())
     } catch {}
 
-    // Upsert into profiles table so backend is synced
+    // Upsert into profiles table with valid UUID so backend is synced
     try {
       await supabase.from('profiles').upsert({
-        id: `staff-${Date.now()}`,
+        id: memberId,
         email: form.email.trim(),
         full_name: form.name.trim(),
         role: form.role === 'superadmin' ? 'admin' : form.role,

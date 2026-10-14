@@ -162,6 +162,70 @@ export default function AdminProviders() {
         localStorage.setItem('serviceq_kyc_approved', 'true')
       } catch {}
 
+      // SQI-50: Update provider listings in Supabase global catalog and local caches to verified
+      try {
+        // A. Supabase platform_settings (serviceq_global_listings)
+        const { data: gRow } = await supabase
+          .from('platform_settings')
+          .select('value')
+          .eq('key', 'serviceq_global_listings')
+          .maybeSingle()
+
+        if (gRow?.value) {
+          const globalList = JSON.parse(gRow.value) || []
+          let changed = false
+          const updatedGlobal = globalList.map(l => {
+            const matches =
+              (l.providerId && String(l.providerId) === String(providerUserId)) ||
+              (l.userId && String(l.userId) === String(providerUserId)) ||
+              (prof?.full_name && l.provider && l.provider.toLowerCase().trim() === prof.full_name.toLowerCase().trim())
+            if (matches) {
+              changed = true
+              return { ...l, isVerified: true, provider_verified: true, tag: l.tag && l.tag !== 'Verified' ? l.tag : 'Verified' }
+            }
+            return l
+          })
+
+          if (changed) {
+            await supabase.from('platform_settings').upsert({
+              key: 'serviceq_global_listings',
+              value: JSON.stringify(updatedGlobal),
+              updated_at: new Date().toISOString()
+            })
+          }
+        }
+
+        // B. Update provider listings in Supabase listings table if row exists
+        try {
+          await supabase
+            .from('listings')
+            .update({ is_verified: true, status: 'active' })
+            .or(`user_id.eq.${providerUserId},provider_id.eq.${providerUserId}`)
+        } catch {}
+
+        // C. Update local custom listings and provider listings
+        const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
+        const updatedCustom = custom.map(l => {
+          const matches =
+            (l.providerId && String(l.providerId) === String(providerUserId)) ||
+            (prof?.full_name && l.provider && l.provider.toLowerCase().trim() === prof.full_name.toLowerCase().trim())
+          return matches ? { ...l, isVerified: true, tag: 'Verified' } : l
+        })
+        localStorage.setItem('serviceq_custom_listings', JSON.stringify(updatedCustom))
+
+        // D. Update provider-scoped key
+        const pKey = `serviceq_provider_listings_${providerUserId}`
+        const pList = JSON.parse(localStorage.getItem(pKey)) || []
+        const updatedPList = pList.map(l => ({ ...l, isVerified: true, tag: 'Verified' }))
+        localStorage.setItem(pKey, JSON.stringify(updatedPList))
+
+        // Trigger events
+        window.dispatchEvent(new Event('serviceq_listings_updated'))
+        window.dispatchEvent(new Event('storage'))
+      } catch (e) {
+        console.warn('Listing verification sync warning:', e)
+      }
+
       // 5. Update local React state immediately for instant feedback
       setProviders(prev => prev.map(p => p.id === providerUserId ? { ...p, status: 'approved' } : p))
       setQueue(prev => prev.filter(p => p.id !== providerUserId))

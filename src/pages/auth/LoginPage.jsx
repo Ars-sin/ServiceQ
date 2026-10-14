@@ -58,11 +58,10 @@ export default function LoginPage() {
         .maybeSingle()
 
       if (profile?.role) {
-        // SQI-35: Route admin credentials to admin dashboard
+        // SQI-35: Admin credentials cannot log in on customer/provider portal
         if (isAdminAccount(session.user.email, profile.role)) {
-          loginWithProfile({ ...profile, role: 'admin' })
-          toast.success(`Welcome back, ${profile.full_name || 'Admin'}! 👋`)
-          navigate('/admin/dashboard', { replace: true })
+          await supabase.auth.signOut()
+          toast.error('This login screen is for customers and providers only.')
           return
         }
 
@@ -150,8 +149,23 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleSignIn = () => {
-    setShowGoogleModal(true)
+  const handleGoogleSignIn = async () => {
+    try {
+      const redirectUrl = `${window.location.origin}/login?from=google&role=${loginRole || 'customer'}`
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            prompt: 'select_account',
+          },
+        },
+      })
+      if (error) throw error
+    } catch (err) {
+      console.error('Google Sign-In Error:', err)
+      toast.error(err.message || 'Failed to initialize Google Sign-In')
+    }
   }
 
   const handleSubmit = async e => {
@@ -177,21 +191,10 @@ export default function LoginPage() {
 
         const preRole = preCheck.role || 'customer'
 
-        // SQI-35: Admin credentials handling
+        // SQI-35: Admin credentials cannot log in on customer/provider login screen
         if (isAdminAccount(form.email, preRole)) {
-          const emailKey = form.email.trim().toLowerCase().replace(/,com$/i, '.com')
-          const cachedPw = localStorage.getItem(`serviceq_admin_password_${emailKey}`) ||
-                           localStorage.getItem(`serviceq_password_${emailKey}`)
-          const isMatching = form.password === '123456789' || (cachedPw && form.password === cachedPw)
-          if (isMatching) {
-            loginWithProfile({ ...preCheck, role: 'admin' })
-            toast.success(`Welcome back, ${preCheck.full_name || 'Admin'}! 👋`)
-            navigate('/admin/dashboard', { replace: true })
-            return
-          } else {
-            toast.error('Invalid email or password.')
-            return
-          }
+          toast.error('This login screen is for customers and providers only.')
+          return
         }
 
         // Wrong portal — show error, auto-switch tab, don't sign in at all
@@ -206,27 +209,10 @@ export default function LoginPage() {
           return
         }
       } else {
-        // Even if no preCheck profile row found yet, check if email belongs to admin/staff
+        // Even if no preCheck profile row found yet, block if email belongs to admin/staff (SQI-35)
         if (isAdminAccount(form.email, null)) {
-          const emailKey = form.email.trim().toLowerCase().replace(/,com$/i, '.com')
-          const cachedPw = localStorage.getItem(`serviceq_admin_password_${emailKey}`) ||
-                           localStorage.getItem(`serviceq_password_${emailKey}`)
-          const isMatching = form.password === '123456789' || (cachedPw && form.password === cachedPw)
-          if (isMatching) {
-            const adminProf = {
-              id: 'e4a52d79-beb0-467d-8e42-76b83236881e',
-              email: emailKey,
-              full_name: 'Bryce Obien',
-              role: 'admin',
-            }
-            loginWithProfile(adminProf)
-            toast.success(`Welcome back, Bryce Obien! 👋`)
-            navigate('/admin/dashboard', { replace: true })
-            return
-          } else {
-            toast.error('Invalid email or password.')
-            return
-          }
+          toast.error('This login screen is for customers and providers only.')
+          return
         }
       }
 
@@ -266,11 +252,11 @@ export default function LoginPage() {
 
       const userRole = profile.role || 'customer'
 
-      // SQI-35: Route admin credentials to admin dashboard
+      // SQI-35: Block admin credentials on customer/provider login screen
       if (isAdminAccount(profile.email, userRole)) {
-        loginWithProfile({ ...profile, role: 'admin' })
-        toast.success(`Welcome back, ${profile.full_name || 'Admin'}! 👋`)
-        navigate('/admin/dashboard', { replace: true })
+        await supabase.auth.signOut()
+        localStorage.removeItem('serviceq_auth_profile')
+        toast.error('This login screen is for customers and providers only.')
         return
       }
 

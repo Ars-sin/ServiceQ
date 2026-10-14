@@ -33,6 +33,12 @@ const PROVIDER_CATEGORIES = [
   'Other Local Service / Rental',
 ]
 
+const ROLE_REDIRECT = {
+  admin: '/admin/dashboard',
+  provider: '/provider/dashboard',
+  customer: '/customer/explore',
+}
+
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -75,9 +81,52 @@ export default function RegisterPage() {
   // SQI-24: Auto-fill registration form from Google session when returning from OAuth
   useEffect(() => {
     if (fromGoogle || window.location.hash.includes('access_token')) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
         if (session?.user?.email) {
           const uEmail = session.user.email
+
+          // Check if profile already exists in DB
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .ilike('email', uEmail)
+            .maybeSingle()
+
+          if (profile) {
+            let isManualRegistration = false
+            const storedMethod = localStorage.getItem(`serviceq_auth_provider_${uEmail.toLowerCase()}`)
+            if (storedMethod === 'email') {
+              isManualRegistration = true
+            } else if (storedMethod !== 'google') {
+              try {
+                const meta = profile.avatar_url ? JSON.parse(profile.avatar_url) : null
+                if (meta?.auth_provider === 'email') {
+                  isManualRegistration = true
+                } else if (meta?.auth_provider !== 'google') {
+                  isManualRegistration = true
+                }
+              } catch {
+                isManualRegistration = true
+              }
+            }
+
+            if (isManualRegistration) {
+              await supabase.auth.signOut()
+              window.history.replaceState(null, '', window.location.pathname)
+              toast.error('This email was already registered manually with a password. Please sign in with your email and password.', {
+                duration: 6000,
+              })
+              navigate('/login', { replace: true })
+              return
+            }
+
+            // Already registered with Google: sign them in directly
+            toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
+            loginWithProfile(profile)
+            navigate(ROLE_REDIRECT[profile.role] || '/customer/explore', { replace: true })
+            return
+          }
+
           const fullName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || ''
           const parts = fullName.trim().split(' ')
           const first = parts[0] || ''
@@ -92,7 +141,7 @@ export default function RegisterPage() {
         }
       })
     }
-  }, [fromGoogle])
+  }, [fromGoogle, navigate, loginWithProfile])
 
   // Basic form with separated name fields
   const [form, setForm] = useState({
@@ -773,8 +822,23 @@ export default function RegisterPage() {
   }
 
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
-  const handleGoogleSignIn = () => {
-    setShowGoogleModal(true)
+  const handleGoogleSignIn = async () => {
+    try {
+      const redirectUrl = `${window.location.origin}/register?from=google&role=${role || 'customer'}`
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            prompt: 'select_account',
+          },
+        },
+      })
+      if (error) throw error
+    } catch (err) {
+      console.error('Google Sign-Up Error:', err)
+      toast.error(err.message || 'Failed to initialize Google Sign-Up')
+    }
   }
 
   return (
@@ -1133,6 +1197,27 @@ export default function RegisterPage() {
                 ) : (
                   /* ── Customer Account Fields ── */
                   <>
+                    {/* SQI-24 / R2: Prominent Google Sign-Up Button */}
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-gray-50 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 shadow-sm transition-all hover:shadow mb-1"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                      </svg>
+                      <span>Continue with Google</span>
+                    </button>
+
+                    <div className="flex items-center gap-3 my-2">
+                      <div className="flex-1 h-px bg-gray-200" />
+                      <span className="text-xs text-gray-400 font-medium">or register with email</span>
+                      <div className="flex-1 h-px bg-gray-200" />
+                    </div>
+
                     <div className="form-group">
                       <label className="label mb-1.5">
                         Full Name <span className="text-red-500 font-bold">*</span>
@@ -1205,46 +1290,42 @@ export default function RegisterPage() {
                   <ChevronRight size={16} />
                 </button>
 
-                {/* Social Sign-Up Options (Google & Facebook) - Customer & Provider (SQI-24) */}
-                <div className="flex items-center gap-3 my-2 pt-2">
-                  <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-xs text-gray-400">or sign up with</span>
-                  <div className="flex-1 h-px bg-gray-200" />
-                </div>
+                {/* Social Sign-Up Options (Google & Facebook) - Provider (Customer has top Google button) */}
+                {role === 'provider' && (
+                  <>
+                    <div className="flex items-center gap-3 my-2 pt-2">
+                      <div className="flex-1 h-px bg-gray-200" />
+                      <span className="text-xs text-gray-400">or sign up with</span>
+                      <div className="flex-1 h-px bg-gray-200" />
+                    </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={handleGoogleSignIn}
-                    className={`py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-xs ${
-                      role === 'provider'
-                        ? 'border-gray-200 bg-white hover:bg-gray-50'
-                        : 'btn-secondary hover:bg-gray-100'
-                    }`}
-                    title="Sign up with Google"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => toast('Facebook sign-up coming soon!')}
-                    className={`py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-xs ${
-                      role === 'provider'
-                        ? 'border-gray-200 bg-white hover:bg-gray-50'
-                        : 'btn-secondary hover:bg-gray-100'
-                    }`}
-                    title="Sign up with Facebook"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                  </button>
-                </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={handleGoogleSignIn}
+                        className="py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-xs border-gray-200 bg-white hover:bg-gray-50"
+                        title="Sign up with Google"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toast('Facebook sign-up coming soon!')}
+                        className="py-2.5 rounded-xl border flex items-center justify-center transition-colors shadow-xs border-gray-200 bg-white hover:bg-gray-50"
+                        title="Sign up with Facebook"
+                      >
+                        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#1877F2" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </>
+                )}
               </motion.div>
             )}
 

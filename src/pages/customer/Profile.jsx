@@ -121,24 +121,89 @@ export default function CustomerProfile() {
     newsletter:     false,
   })
 
+  // ── SQI-49: Listen for real-time review and booking changes ──
+  const [dataTrigger, setDataTrigger] = useState(0)
+  useEffect(() => {
+    const handleUpdate = () => setDataTrigger(v => v + 1)
+    window.addEventListener('serviceq_reviews_updated', handleUpdate)
+    window.addEventListener('serviceq_bookings_updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('serviceq_reviews_updated', handleUpdate)
+      window.removeEventListener('serviceq_bookings_updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [])
+
+  const effectiveUserId = user?.id || profile?.id || null
+  const effectiveUserEmail = (user?.email || profile?.email || '').trim().toLowerCase()
+  const effectiveUserName = (profile?.full_name || user?.user_metadata?.full_name || '').trim().toLowerCase()
+
   // ── Calculate dynamic stats for customer (Slide 13: default 0 for new users) ──
   const bookingCount = useMemo(() => {
-    if (!user?.id) return 0
-    try {
-      const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
-      if (Array.isArray(stored)) return stored.filter(b => b.status !== 'cancelled').length
-    } catch {}
-    return 0
-  }, [user?.id])
+    let list = []
+    if (effectiveUserId) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${effectiveUserId}`))
+        if (Array.isArray(stored)) list = stored
+      } catch {}
+    }
+    if (list.length === 0 && effectiveUserEmail) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_email_${effectiveUserEmail}`))
+        if (Array.isArray(stored)) list = stored
+      } catch {}
+    }
+    if (list.length === 0) {
+      try {
+        const gen = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        list = gen.filter(b => {
+          if (effectiveUserId && b.customerId && String(b.customerId) === String(effectiveUserId)) return true
+          if (effectiveUserEmail && b.customerEmail && b.customerEmail.toLowerCase().trim() === effectiveUserEmail) return true
+          if (effectiveUserName && b.customer && b.customer.toLowerCase().trim() === effectiveUserName) return true
+          return false
+        })
+      } catch {}
+    }
+    return list.filter(b => b.status !== 'cancelled').length
+  }, [effectiveUserId, effectiveUserEmail, effectiveUserName, dataTrigger])
 
   const reviewCount = useMemo(() => {
-    if (!user?.id) return 0
+    const countedIds = new Set()
+
+    // 1. Check user-scoped bookings with reviewed flag
+    if (effectiveUserId) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${effectiveUserId}`))
+        if (Array.isArray(stored)) {
+          stored.forEach(b => {
+            if (b.reviewed) countedIds.add(b.id || `b-${b.service}`)
+          })
+        }
+      } catch {}
+    }
+
+    // 2. Check general serviceq_reviews created by this customer (SQI-49)
     try {
-      const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
-      if (Array.isArray(stored)) return stored.filter(b => b.reviewed).length
+      const allReviews = JSON.parse(localStorage.getItem('serviceq_reviews')) || []
+      if (Array.isArray(allReviews)) {
+        allReviews.forEach(r => {
+          const isMine =
+            (r.customerId && effectiveUserId && String(r.customerId) === String(effectiveUserId)) ||
+            (r.customerEmail && effectiveUserEmail && r.customerEmail.toLowerCase().trim() === effectiveUserEmail) ||
+            (effectiveUserName && (
+              r.author?.toLowerCase().trim() === effectiveUserName ||
+              r.user?.toLowerCase().trim() === effectiveUserName
+            ))
+          if (isMine) {
+            countedIds.add(r.id || `r-${r.listingId}-${r.date}`)
+          }
+        })
+      }
     } catch {}
-    return 0
-  }, [user?.id])
+
+    return countedIds.size
+  }, [effectiveUserId, effectiveUserEmail, effectiveUserName, dataTrigger])
 
   const savedCount = useMemo(() => {
     return getFavoriteIds().length
@@ -146,21 +211,38 @@ export default function CustomerProfile() {
 
   // ── Derive transactions from user's actual bookings (Slide 14: default empty) ──
   const transactions = useMemo(() => {
-    if (!user?.id) return []
-    try {
-      const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${user.id}`))
-      if (Array.isArray(stored) && stored.length > 0) {
-        return stored.map(b => ({
-          id: b.id,
-          service: b.service,
-          date: b.date,
-          amount: b.amount,
-          status: b.status === 'cancelled' ? 'Cancelled' : b.status === 'refunded' ? 'Refunded' : 'Paid'
-        }))
-      }
-    } catch {}
-    return []
-  }, [user?.id])
+    let list = []
+    if (effectiveUserId) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_${effectiveUserId}`))
+        if (Array.isArray(stored) && stored.length > 0) list = stored
+      } catch {}
+    }
+    if (list.length === 0 && effectiveUserEmail) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(`serviceq_customer_bookings_email_${effectiveUserEmail}`))
+        if (Array.isArray(stored) && stored.length > 0) list = stored
+      } catch {}
+    }
+    if (list.length === 0) {
+      try {
+        const gen = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
+        list = gen.filter(b => {
+          if (effectiveUserId && b.customerId && String(b.customerId) === String(effectiveUserId)) return true
+          if (effectiveUserEmail && b.customerEmail && b.customerEmail.toLowerCase().trim() === effectiveUserEmail) return true
+          if (effectiveUserName && b.customer && b.customer.toLowerCase().trim() === effectiveUserName) return true
+          return false
+        })
+      } catch {}
+    }
+    return list.map(b => ({
+      id: b.id,
+      service: b.service,
+      date: b.date,
+      amount: b.amount,
+      status: b.status === 'cancelled' ? 'Cancelled' : b.status === 'refunded' ? 'Refunded' : 'Paid'
+    }))
+  }, [effectiveUserId, effectiveUserEmail, effectiveUserName, dataTrigger])
 
   // ── Password requirements validation (SQI-10) ──
   const newPass = passwordForm.newPass || ''

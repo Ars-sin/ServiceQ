@@ -142,6 +142,8 @@ export default function ListingDetail() {
       service: listing?.title || 'Service Offering',
       author: customerName,
       user: customerName,
+      customerId: user?.id || profile?.id || null,
+      customerEmail: (user?.email || profile?.email || '').trim().toLowerCase() || null,
       rating: reviewRating,
       comment: reviewComment || 'Service completed successfully.',
       date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
