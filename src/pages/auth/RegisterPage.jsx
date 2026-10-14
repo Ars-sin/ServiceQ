@@ -835,8 +835,8 @@ export default function RegisterPage() {
 
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
   const handleGoogleSignIn = () => {
-    const width = 500
-    const height = 620
+    const width = Math.min(940, window.screen.width - 20)
+    const height = 560
     const left = window.screen.width / 2 - width / 2
     const top = window.screen.height / 2 - height / 2
     const url = `/auth/google?role=${role || 'customer'}&mode=register`
