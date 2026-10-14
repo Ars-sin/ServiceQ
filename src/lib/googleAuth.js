@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 // ─────────────────────────────────────────────────────────────
 
 export const GOOGLE_CLIENT_ID =
-  '459094601528-mutfgi7fjennbkgfjolinfgjasoco16j.apps.googleusercontent.com'
+  '1045351007198-7o3stllfqb4lpnk5vf4borv216t0fids.apps.googleusercontent.com'
 
 // ServiceQ official Supabase endpoint
 export const GOOGLE_AUTH_ENDPOINT =
@@ -36,15 +36,31 @@ export function setGoogleClientId(id) {
 }
 
 /**
- * Initiates Google Sign-In for ServiceQ.
- * If live Google is not yet enabled in Supabase, triggers the authentic Google Account Chooser.
+ * Initiates Google Sign-In for ServiceQ purely through Google's official OAuth.
+ * Uses ServiceQ's configured Supabase project (tgmpyqdulaiwxyqeqxux.supabase.co).
  */
-export function launchGoogleSignIn({ role = 'customer', onOpenChooser } = {}) {
-  if (typeof onOpenChooser === 'function') {
-    onOpenChooser()
-    return
+export async function launchGoogleSignIn({ role = 'customer' } = {}) {
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/login'
+  const isRegister = currentPath.includes('/register')
+  const returnPath = isRegister ? '/register' : '/login'
+  const redirectTarget = `${window.location.origin}${returnPath}?from=google&role=${role || 'customer'}`
+
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectTarget,
+      },
+    })
+    if (error) throw error
+    if (data?.url) {
+      window.location.href = data.url
+      return
+    }
+  } catch (err) {
+    console.warn('supabase.auth.signInWithOAuth fallback:', err)
   }
-  const redirectTarget = `${window.location.origin}/login?from=google&role=${role || 'customer'}`
+
   const targetUrl = `${GOOGLE_AUTH_ENDPOINT}&redirect_to=${encodeURIComponent(redirectTarget)}`
   window.location.href = targetUrl
 }

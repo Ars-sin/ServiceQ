@@ -5,7 +5,6 @@ import { Mail, Lock, Eye, EyeOff, Briefcase, UserCheck, Home } from 'lucide-reac
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
 import { launchGoogleSignIn, parseGoogleOAuthReturn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 
 const ROLE_REDIRECT = {
@@ -41,7 +40,6 @@ export default function LoginPage() {
   const [loading, setLoading]         = useState(false)
   const [unconfirmed, setUnconfirmed] = useState(false)
   const [resending, setResending]     = useState(false)
-  const [showGoogleModal, setShowGoogleModal] = useState(false)
 
   // Listen for active OAuth session (e.g. redirected back from Google OAuth)
   useEffect(() => {
@@ -63,6 +61,13 @@ export default function LoginPage() {
         if (isAdminAccount(cleanEmail, profile.role)) {
           await supabase.auth.signOut()
           toast.error('This login screen is for customers and providers only.')
+          return
+        }
+
+        // Suspended account check
+        if (profile.is_active === false) {
+          await supabase.auth.signOut()
+          toast.error('Your account has been suspended. Please contact support for assistance.')
           return
         }
 
@@ -100,12 +105,23 @@ export default function LoginPage() {
       return
     }
 
-    // 2. Also check standard Supabase session
+    // 2. Check standard Supabase session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) {
         processOAuthUser(session.user.email, session.user.user_metadata?.full_name)
       }
     })
+
+    // 3. Listen for async OAuth state changes (e.g. PKCE code exchange)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        processOAuthUser(session.user.email, session.user.user_metadata?.full_name)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -157,7 +173,6 @@ export default function LoginPage() {
   const handleGoogleSignIn = () => {
     launchGoogleSignIn({
       role: loginRole || 'customer',
-      onOpenChooser: () => setShowGoogleModal(true),
     })
   }
 
@@ -493,23 +508,6 @@ export default function LoginPage() {
           )}
         </div>
       </motion.div>
-
-      {/* Google Sign-In & Verification Modal */}
-      <GoogleSignInModal
-        isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
-        loginRole={loginRole}
-        onSuccessLogin={async (userInfo) => {
-          try {
-            await handleGoogleAuthSuccess(userInfo, loginRole || 'customer', {
-              loginWithProfile,
-              navigate,
-            })
-          } catch (err) {
-            toast.error(err.message || 'Google authentication failed.')
-          }
-        }}
-      />
     </div>
   )
 }

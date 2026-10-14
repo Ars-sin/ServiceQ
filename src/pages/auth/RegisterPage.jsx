@@ -39,7 +39,6 @@ const ROLE_REDIRECT = {
   customer: '/customer/explore',
 }
 
-import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
 import { launchGoogleSignIn, parseGoogleOAuthReturn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -56,7 +55,6 @@ export default function RegisterPage() {
   const [role, setRole]                   = useState(initialRole)
   const [showPw, setShowPw]               = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
-  const [showGoogleModal, setShowGoogleModal] = useState(false)
   const [agreed, setAgreed]               = useState(false)
   const [loading, setLoading]             = useState(false)
   const [verifyLoading, setVerifyLoading] = useState(false)
@@ -126,12 +124,22 @@ export default function RegisterPage() {
       return
     }
 
-    if (fromGoogle || window.location.hash.includes('access_token')) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user?.email) {
-          processOAuthReturn(session.user.email, session.user.user_metadata?.full_name)
-        }
-      })
+    // 2. Also check standard Supabase session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        processOAuthReturn(session.user.email, session.user.user_metadata?.full_name)
+      }
+    })
+
+    // 3. Listen for async OAuth state changes (e.g. PKCE code exchange)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        processOAuthReturn(session.user.email, session.user.user_metadata?.full_name)
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
     }
   }, [fromGoogle, navigate, loginWithProfile])
 
@@ -856,7 +864,6 @@ export default function RegisterPage() {
   const handleGoogleSignIn = () => {
     launchGoogleSignIn({
       role: role || 'customer',
-      onOpenChooser: () => setShowGoogleModal(true),
     })
   }
 
@@ -1866,23 +1873,6 @@ export default function RegisterPage() {
           </button>
         </div>
       </Modal>
-
-      {/* ── Google Sign-In / Sign-Up Modal ── */}
-      <GoogleSignInModal
-        isOpen={showGoogleModal}
-        onClose={() => setShowGoogleModal(false)}
-        loginRole={role}
-        onSuccessLogin={async (userInfo) => {
-          try {
-            await handleGoogleAuthSuccess(userInfo, role || 'customer', {
-              loginWithProfile,
-              navigate,
-            })
-          } catch (err) {
-            toast.error(err.message || 'Google authentication failed.')
-          }
-        }}
-      />
     </div>
   )
 }
