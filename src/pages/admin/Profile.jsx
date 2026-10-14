@@ -52,20 +52,37 @@ export default function AdminProfile() {
       // 0. Verify current password (SQI-38: Reject incorrect existing password)
       let currentPwMatches = false
       const emailKey = adminEmail.toLowerCase()
-      const cachedPw = localStorage.getItem(`serviceq_admin_password_${emailKey}`) ||
-                       localStorage.getItem(`serviceq_password_${emailKey}`)
+      let cachedPw = localStorage.getItem(`serviceq_admin_password_${emailKey}`) ||
+                     localStorage.getItem(`serviceq_password_${emailKey}`)
+
+      if (!cachedPw) {
+        try {
+          const { data: remotePwData } = await supabase
+            .from('platform_settings')
+            .select('value')
+            .eq('key', 'serviceq_admin_passwords')
+            .maybeSingle()
+          if (remotePwData?.value) {
+            const remoteMap = JSON.parse(remotePwData.value)
+            if (remoteMap[emailKey]) cachedPw = remoteMap[emailKey]
+          }
+          if (!cachedPw) {
+            const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
+            const member = Array.isArray(staffList) ? staffList.find(s => s.email?.toLowerCase() === emailKey) : null
+            if (member?.password) cachedPw = member.password
+          }
+        } catch {}
+      }
 
       const { data: testAuth, error: testAuthError } = await supabase.auth.signInWithPassword({
         email: adminEmail,
         password: currentPassword,
       })
 
-      const expectedCurrentPw = cachedPw || '123456789'
-      if (cachedPw) {
-        currentPwMatches = currentPassword === cachedPw
+      const expectedCurrentPw = cachedPw || (emailKey === 'rutilander@gmail.com' ? '123456789' : null)
+      if (expectedCurrentPw) {
+        currentPwMatches = currentPassword === expectedCurrentPw
       } else if (!testAuthError && testAuth?.user) {
-        currentPwMatches = true
-      } else if (currentPassword === expectedCurrentPw) {
         currentPwMatches = true
       }
 

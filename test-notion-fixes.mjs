@@ -95,10 +95,9 @@ test('SQI-38: Admin Login requires exact match to updated password and rejects o
     'Admin Login displays error message when password does not match expectedPw'
   )
 
-  // In AdminProfile:
   assert.ok(
-    adminProfileSrc.includes('if (cachedPw) {\n        currentPwMatches = currentPassword === cachedPw'),
-    'Admin Profile checks current password strictly against cachedPw if set'
+    adminProfileSrc.includes('currentPwMatches = currentPassword === expectedCurrentPw'),
+    'Admin Profile checks current password strictly against expectedCurrentPw'
   )
   assert.ok(
     adminProfileSrc.includes('Current password is incorrect. Please try again.'),
