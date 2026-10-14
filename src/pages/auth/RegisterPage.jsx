@@ -93,34 +93,7 @@ export default function RegisterPage() {
             .maybeSingle()
 
           if (profile) {
-            let isManualRegistration = false
-            const storedMethod = localStorage.getItem(`serviceq_auth_provider_${uEmail.toLowerCase()}`)
-            if (storedMethod === 'email') {
-              isManualRegistration = true
-            } else if (storedMethod !== 'google') {
-              try {
-                const meta = profile.avatar_url ? JSON.parse(profile.avatar_url) : null
-                if (meta?.auth_provider === 'email') {
-                  isManualRegistration = true
-                } else if (meta?.auth_provider !== 'google') {
-                  isManualRegistration = true
-                }
-              } catch {
-                isManualRegistration = true
-              }
-            }
-
-            if (isManualRegistration) {
-              await supabase.auth.signOut()
-              window.history.replaceState(null, '', window.location.pathname)
-              toast.error('This email was already registered manually with a password. Please sign in with your email and password.', {
-                duration: 6000,
-              })
-              navigate('/login', { replace: true })
-              return
-            }
-
-            // Already registered with Google: sign them in directly
+            localStorage.setItem(`serviceq_auth_provider_${uEmail.toLowerCase()}`, 'google')
             toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
             loginWithProfile(profile)
             navigate(ROLE_REDIRECT[profile.role] || '/customer/explore', { replace: true })

@@ -49,15 +49,14 @@ test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', 
   assert.ok(regSrc.includes('or register with email'), 'Customer step 0 must have "or register with email" divider')
 })
 
-test('SQI-24 & SQI-25: Rejects Google OAuth if email was registered manually with password', () => {
-  const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
+test('SQI-24 & SQI-25: Verified Google accounts (confirmed with OTP during registration) can log in seamlessly with Google', () => {
   const popupSrc = fs.readFileSync('src/pages/auth/GoogleAuthPopup.jsx', 'utf8')
   const modalSrc = fs.readFileSync('src/components/auth/GoogleSignInModal.jsx', 'utf8')
 
-  const expectedMsg = 'This email was registered manually with password. Please log in using your email and password.'
-  assert.ok(loginSrc.includes(expectedMsg), 'LoginPage rejects manual account on Google Sign-In')
-  assert.ok(popupSrc.includes(expectedMsg), 'GoogleAuthPopup rejects manual account on Google Sign-In')
-  assert.ok(modalSrc.includes(expectedMsg), 'GoogleSignInModal rejects manual account on Google Sign-In')
+  assert.ok(popupSrc.includes('serviceq_auth_provider_'), 'GoogleAuthPopup sets auth provider to google')
+  assert.ok(popupSrc.includes('Welcome back,'), 'GoogleAuthPopup logs in verified accounts with Welcome back toast')
+  assert.ok(modalSrc.includes('serviceq_auth_provider_'), 'GoogleSignInModal sets auth provider to google')
+  assert.ok(modalSrc.includes('Welcome back,'), 'GoogleSignInModal logs in verified accounts with Welcome back toast')
 })
 
 // -------------------------------------------------------------

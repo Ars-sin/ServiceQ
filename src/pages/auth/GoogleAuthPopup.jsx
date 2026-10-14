@@ -111,31 +111,7 @@ export default function GoogleAuthPopup() {
           return
         }
 
-        // 5. SQI-25: If user registered manually with password, reject Google Sign-In
-        let isManualRegistration = false
-        const storedMethod = localStorage.getItem(`serviceq_auth_provider_${cleanEmail}`)
-        if (storedMethod === 'email') {
-          isManualRegistration = true
-        } else if (storedMethod !== 'google') {
-          try {
-            const meta = profile.avatar_url ? JSON.parse(profile.avatar_url) : null
-            if (meta?.auth_provider === 'email' || meta?.auth_provider !== 'google') {
-              isManualRegistration = true
-            }
-          } catch {
-            isManualRegistration = true
-          }
-        }
-
-        if (isManualRegistration) {
-          toast.error('This email was registered manually with password. Please log in using your email and password.', {
-            duration: 6000,
-          })
-          setLoading(false)
-          return
-        }
-
-        // Valid Google registered account -> Success Login!
+        // Verified Google account (confirmed via OTP during registration or Google sign-up) -> Log in!
         localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
         toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
 

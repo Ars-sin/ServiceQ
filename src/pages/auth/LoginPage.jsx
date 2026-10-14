@@ -65,34 +65,8 @@ export default function LoginPage() {
           return
         }
 
-        // SQI-25: If user registered manually, they cannot log in using Google Sign-In
-        let isManualRegistration = false
-        const storedMethod = localStorage.getItem(`serviceq_auth_provider_${session.user.email.toLowerCase()}`)
-        if (storedMethod === 'email') {
-          isManualRegistration = true
-        } else if (storedMethod !== 'google') {
-          try {
-            const meta = profile.avatar_url ? JSON.parse(profile.avatar_url) : null
-            if (meta?.auth_provider === 'email') {
-              isManualRegistration = true
-            } else if (meta?.auth_provider !== 'google') {
-              isManualRegistration = true
-            }
-          } catch {
-            isManualRegistration = true
-          }
-        }
-
-        if (isManualRegistration && isOAuthRedirect) {
-          await supabase.auth.signOut()
-          window.history.replaceState(null, '', window.location.pathname)
-          setForm(f => ({ ...f, email: session.user.email }))
-          toast.error('This email was registered manually with password. Please log in using your email and password.', {
-            id: 'manual-login-error',
-            duration: 6000,
-          })
-          return
-        }
+        // Verified account -> update auth provider to google and proceed to login
+        localStorage.setItem(`serviceq_auth_provider_${session.user.email.toLowerCase()}`, 'google')
 
         // Check cross-role mismatch (read loginRole from the ref snapshot at mount time)
         if (loginRole === 'customer' && profile.role === 'provider') {
