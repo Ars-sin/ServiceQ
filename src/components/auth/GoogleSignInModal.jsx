@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, ExternalLink, Key, CheckCircle, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { supabase } from '@/lib/supabase'
+import { getGoogleClientId, setGoogleClientId, launchGoogleSignIn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 
 export default function GoogleSignInModal({
   isOpen,
@@ -11,210 +11,79 @@ export default function GoogleSignInModal({
   onProceedRegister,
   loginRole = 'customer',
 }) {
-  const [view, setView] = useState('accounts') // 'accounts' | 'input'
-  const [email, setEmail] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [savedAccounts, setSavedAccounts] = useState([])
-  const [hoveredAccountId, setHoveredAccountId] = useState(null)
+  const [clientIdInput, setClientIdInput] = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!isOpen) return
-    setEmail('')
-    setChecking(false)
-
-    async function loadAccounts() {
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('id, email, full_name, role, is_active, avatar_url')
-          .ilike('email', '%@gmail.com')
-          .limit(10)
-
-        const defaultMockAccounts = [
-          {
-            id: 'mock-1',
-            full_name: 'Mary Kristine Cañeda',
-            email: 'marykristinecaneda@gmail.com',
-            role: 'customer',
-            bg: 'bg-emerald-600',
-          },
-          {
-            id: 'mock-2',
-            full_name: 'Sean Michael Yu Jerez',
-            email: 'seyu.jerez.swu@phinmaed.com',
-            role: 'customer',
-            bg: 'bg-blue-600',
-          },
-          {
-            id: 'mock-3',
-            full_name: 'Yuri Ha',
-            email: 'yuriha143@gmail.com',
-            role: 'customer',
-            bg: 'bg-purple-600',
-          },
-        ]
-
-        if (data && data.length > 0) {
-          const filtered = data
-            .filter(acc => {
-              const r = acc.role?.toLowerCase()
-              const em = acc.email?.toLowerCase()
-              return (
-                r !== 'admin' &&
-                r !== 'superadmin' &&
-                r !== 'staff' &&
-                r !== 'financial_staff' &&
-                r !== 'support_moderator' &&
-                em !== 'rutilander@gmail.com' &&
-                em !== 'admin@serviceq.ph'
-              )
-            })
-            .map((acc, idx) => {
-              const colors = ['bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 'bg-rose-600', 'bg-cyan-600']
-              return {
-                ...acc,
-                bg: colors[idx % colors.length],
-              }
-            })
-
-          if (filtered.length > 0) {
-            setSavedAccounts(filtered)
-            setView('accounts')
-          } else {
-            setSavedAccounts(defaultMockAccounts)
-            setView('accounts')
-          }
-        } else {
-          setSavedAccounts(defaultMockAccounts)
-          setView('accounts')
-        }
-      } catch {
-        setSavedAccounts([
-          {
-            id: 'mock-1',
-            full_name: 'Mary Kristine Cañeda',
-            email: 'marykristinecaneda@gmail.com',
-            role: 'customer',
-            bg: 'bg-emerald-600',
-          },
-          {
-            id: 'mock-2',
-            full_name: 'Sean Michael Yu Jerez',
-            email: 'seyu.jerez.swu@phinmaed.com',
-            role: 'customer',
-            bg: 'bg-blue-600',
-          },
-        ])
-        setView('accounts')
-      }
+    if (isOpen) {
+      setClientIdInput(getGoogleClientId())
     }
-    loadAccounts()
   }, [isOpen])
 
   if (!isOpen) return null
 
-  const handleProcessAccount = async (targetEmail, accountProfile = null) => {
-    const cleanEmail = (targetEmail || email).trim().toLowerCase()
-    if (!cleanEmail) return toast.error('Enter an email or phone number')
-    if (!cleanEmail.includes('@')) return toast.error('Enter a valid Google email address')
+  const handleSaveAndLaunch = async e => {
+    e.preventDefault()
+    const cleanId = clientIdInput.trim()
+    if (!cleanId) {
+      toast.error('Please enter your Google OAuth Client ID.')
+      return
+    }
 
-    setChecking(true)
+    setGoogleClientId(cleanId)
+    setLoading(true)
+
     try {
-      let profile = accountProfile
-      if (!profile || profile.id?.startsWith('mock-')) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', cleanEmail)
-          .maybeSingle()
-        if (data) profile = data
-      }
-
-      // Check admin (SQI-35)
-      const isAdmin =
-        profile?.role === 'admin' ||
-        profile?.role === 'superadmin' ||
-        profile?.role === 'staff' ||
-        profile?.role === 'financial_staff' ||
-        profile?.role === 'support_moderator' ||
-        cleanEmail === 'rutilander@gmail.com' ||
-        cleanEmail === 'admin@serviceq.ph' ||
-        Boolean(localStorage.getItem(`serviceq_admin_password_${cleanEmail}`))
-
-      if (isAdmin) {
-        toast.error('This login screen is for customers and providers only.')
-        setChecking(false)
-        return
-      }
-
-      // Check suspended
-      if (profile && profile.is_active === false) {
-        toast.error('This account has been suspended. Please contact support for assistance.')
-        setChecking(false)
-        return
-      }
-
-      // Check role mismatch
-      if (profile && profile.role && !profile.id?.startsWith('mock-')) {
-        if (loginRole === 'customer' && profile.role === 'provider') {
-          toast.error('This is a Provider account. Please use the Provider tab to sign in.')
-          setChecking(false)
-          return
-        }
-        if (loginRole === 'provider' && profile.role === 'customer') {
-          toast.error('This is a Customer account. Please use the Customer tab to sign in.')
-          setChecking(false)
-          return
-        }
-
-        // Verified Google account -> Log in!
-        localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
-        toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
-        onSuccessLogin?.(profile)
-        onClose()
-        return
-      }
-
-      // User does NOT exist in system -> Proceed to register (SQI-24)
-      localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
-      onProceedRegister?.({
-        email: cleanEmail,
+      await launchGoogleSignIn({
         role: loginRole,
-        name: accountProfile?.full_name || '',
+        onSuccess: async (userInfo) => {
+          onClose()
+          if (onSuccessLogin) {
+            onSuccessLogin(userInfo)
+          }
+        },
+        onError: (err) => {
+          setLoading(false)
+          toast.error(err.message || 'Google Sign-In failed.')
+        },
       })
-      onClose()
     } catch (err) {
-      console.error('Google auth error:', err)
-      toast.error('Could not verify account. Please try again.')
-    } finally {
-      setChecking(false)
+      setLoading(false)
+      toast.error(err.message || 'Could not launch Google Sign-In.')
     }
   }
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs"
           onClick={onClose}
         />
 
-        {/* Modal Window: 2-Column Wide Card matching media_1791995598958.png */}
+        {/* Modal Card */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          transition={{ duration: 0.2 }}
-          className="relative w-full max-w-[940px] bg-[#1e1f20] text-[#e3e3e3] rounded-[28px] shadow-2xl border border-[#444746]/50 overflow-hidden z-10 selection:bg-[#a8c7fa] selection:text-[#041e49]"
+          className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 p-6 sm:p-8"
         >
-          {/* Top Header inside Card */}
-          <div className="px-6 sm:px-8 py-4 border-b border-[#444746]/40 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+          >
+            <X size={20} />
+          </button>
+
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+              <svg viewBox="0 0 24 24" className="w-6 h-6" xmlns="http://www.w3.org/2000/svg">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                   fill="#4285F4"
@@ -232,179 +101,76 @@ export default function GoogleSignInModal({
                   fill="#EA4335"
                 />
               </svg>
-              <span className="text-[14px] sm:text-[15px] font-medium text-[#e3e3e3]">Sign in with Google</span>
             </div>
-
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-full text-[#c4c7c5] hover:text-white hover:bg-[#282a2c] transition-colors"
-            >
-              <X size={18} />
-            </button>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Connect Google API</h3>
+              <p className="text-xs text-slate-500">Sign in purely from Google&apos;s official API (accounts.google.com)</p>
+            </div>
           </div>
 
-          {/* 2-Column Body */}
-          {view === 'accounts' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[#444746]/40 min-h-[380px]">
-              {/* Left Column */}
-              <div className="p-8 sm:p-10 flex flex-col justify-start">
-                <h1 className="text-[32px] sm:text-[38px] font-normal text-white tracking-tight leading-tight">
-                  Choose an account
-                </h1>
-                <p className="text-[15px] text-[#c4c7c5] mt-3">
-                  to continue to <span className="text-white font-medium">ServiceQ</span>
-                </p>
-              </div>
-
-              {/* Right Column: Account rows with dividers */}
-              <div className="p-4 sm:p-6 flex flex-col justify-start">
-                <div className="flex flex-col">
-                  {savedAccounts.map((acc, index) => {
-                    const isHovered = hoveredAccountId === acc.id
-                    return (
-                      <div key={acc.id} className="flex flex-col">
-                        <button
-                          type="button"
-                          onClick={() => handleProcessAccount(acc.email, acc)}
-                          onMouseEnter={() => setHoveredAccountId(acc.id)}
-                          onMouseLeave={() => setHoveredAccountId(null)}
-                          disabled={checking}
-                          className={`w-full flex items-center gap-3.5 px-3.5 py-3 rounded-2xl text-left transition-all ${
-                            isHovered
-                              ? 'bg-[#2b2d30] border border-[#8e918f]/50'
-                              : 'hover:bg-[#282a2c] border border-transparent'
-                          }`}
-                        >
-                          <div
-                            className={`w-8 h-8 rounded-full ${
-                              acc.bg || 'bg-blue-600'
-                            } text-white font-medium text-xs flex items-center justify-center flex-shrink-0 shadow-xs`}
-                          >
-                            {acc.full_name
-                              ? acc.full_name.charAt(0).toUpperCase()
-                              : acc.email.charAt(0).toUpperCase()}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="text-[14px] font-medium text-[#e3e3e3] truncate">
-                              {acc.full_name || acc.email}
-                            </p>
-                            <p className="text-[12px] text-[#c4c7c5] truncate leading-tight mt-0.5">{acc.email}</p>
-                          </div>
-                        </button>
-
-                        {index < savedAccounts.length && (
-                          <div className="border-b border-[#444746]/40 mx-2 my-0.5" />
-                        )}
-                      </div>
-                    )
-                  })}
-
-                  {/* Use another account option */}
-                  <div className="flex flex-col">
-                    <button
-                      type="button"
-                      onClick={() => setView('input')}
-                      onMouseEnter={() => setHoveredAccountId('use-another')}
-                      onMouseLeave={() => setHoveredAccountId(null)}
-                      className={`w-full flex items-center gap-3.5 px-3.5 py-3 rounded-2xl text-left transition-all ${
-                        hoveredAccountId === 'use-another'
-                          ? 'bg-[#2b2d30] border border-[#8e918f]/50'
-                          : 'hover:bg-[#282a2c] border border-transparent'
-                      }`}
-                    >
-                      <div className="w-8 h-8 rounded-full border border-[#8e918f] text-[#c4c7c5] flex items-center justify-center flex-shrink-0">
-                        <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                        </svg>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[14px] font-medium text-[#e3e3e3]">Use another account</p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              </div>
+          <form onSubmit={handleSaveAndLaunch} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <Key size={14} className="text-brand-600" />
+                <span>Google OAuth 2.0 Client ID</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={clientIdInput}
+                onChange={e => setClientIdInput(e.target.value)}
+                placeholder="xxxxxx-xxxxxxxx.apps.googleusercontent.com"
+                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400 font-mono text-xs"
+              />
             </div>
-          ) : (
-            /* Input View (2-Column) */
-            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[#444746]/40 min-h-[380px]">
-              {/* Left Column */}
-              <div className="p-8 sm:p-10 flex flex-col justify-start">
-                <h1 className="text-[32px] sm:text-[38px] font-normal text-white tracking-tight leading-tight">
-                  Sign in
-                </h1>
-                <p className="text-[15px] text-[#c4c7c5] mt-3 leading-relaxed">
-                  with your Google Account. This account will be available to other Google apps in the browser.
-                </p>
-              </div>
 
-              {/* Right Column */}
-              <div className="p-8 sm:p-10 flex flex-col justify-between">
-                <form
-                  onSubmit={e => {
-                    e.preventDefault()
-                    handleProcessAccount(email)
-                  }}
-                  className="space-y-4"
-                >
-                  <div className="relative group">
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      placeholder=" "
-                      autoFocus
-                      className="peer w-full bg-transparent text-[#e3e3e3] text-base px-3.5 pt-4 pb-3 border border-[#8e918f] rounded-[4px] outline-none focus:border-[#a8c7fa] focus:ring-1 focus:ring-[#a8c7fa] transition-all"
-                    />
-                    <label className="absolute left-3.5 top-3.5 text-[#c4c7c5] text-base transition-all duration-150 pointer-events-none peer-focus:-top-2 peer-focus:text-xs peer-focus:text-[#a8c7fa] peer-focus:bg-[#1e1f20] peer-focus:px-1 peer-[:not(:placeholder-shown)]:-top-2 peer-[:not(:placeholder-shown)]:text-xs peer-[:not(:placeholder-shown)]:bg-[#1e1f20] peer-[:not(:placeholder-shown)]:px-1">
-                      Email or phone
-                    </label>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => toast('Please enter your Google account email to sign in.', { icon: 'ℹ️' })}
-                      className="text-[14px] text-[#a8c7fa] hover:underline font-medium"
-                    >
-                      Forgot email?
-                    </button>
-                  </div>
-
-                  <p className="text-[13px] text-[#c4c7c5] pt-4 leading-relaxed">
-                    Not your computer? Use Guest mode to sign in privately.{' '}
-                    <span className="text-[#a8c7fa] hover:underline cursor-pointer">
-                      Learn more about using Guest mode
-                    </span>
-                  </p>
-
-                  <div className="pt-8 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setView('accounts')}
-                      className="text-[14px] text-[#a8c7fa] hover:bg-[#a8c7fa]/10 px-4 py-2 rounded-full font-medium transition-colors"
-                    >
-                      Back
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={checking || !email.trim()}
-                      className="bg-[#a8c7fa] hover:bg-[#b8d4fc] text-[#041e49] font-medium text-[14px] px-6 py-2.5 rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {checking ? (
-                        <span className="w-4 h-4 border-2 border-[#041e49] border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        'Next'
-                      )}
-                    </button>
-                  </div>
-                </form>
-              </div>
+            {/* Quick steps instruction */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs text-slate-600">
+              <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                <span>How to get your Google Client ID:</span>
+              </p>
+              <ol className="list-decimal pl-4 space-y-1 text-slate-600">
+                <li>
+                  Open{' '}
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-600 font-medium underline inline-flex items-center gap-0.5"
+                  >
+                    Google Cloud Credentials <ExternalLink size={11} />
+                  </a>
+                </li>
+                <li>Click <strong>Create Credentials &gt; OAuth client ID</strong> (Web application)</li>
+                <li>Add authorized JavaScript origin: <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">{window.location.origin}</code></li>
+                <li>Paste the generated Client ID above.</li>
+              </ol>
             </div>
-          )}
+
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !clientIdInput.trim()}
+                className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Connecting Google...</span>
+                  </>
+                ) : (
+                  <span>Launch Google Sign-In</span>
+                )}
+              </button>
+            </div>
+          </form>
         </motion.div>
       </div>
     </AnimatePresence>

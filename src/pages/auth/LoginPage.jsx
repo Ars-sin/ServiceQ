@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
+import { launchGoogleSignIn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 
 const ROLE_REDIRECT = {
   customer: '/customer/explore',
@@ -147,24 +148,26 @@ export default function LoginPage() {
   }, [loginRole, navigate, loginWithProfile])
 
   const handleGoogleSignIn = () => {
-    const width = Math.min(940, window.screen.width - 20)
-    const height = 560
-    const left = window.screen.width / 2 - width / 2
-    const top = window.screen.height / 2 - height / 2
-    const url = `/auth/google?role=${loginRole || 'customer'}&mode=login`
-
-    try {
-      const popup = window.open(
-        url,
-        'google_auth_window',
-        `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},top=${top},left=${left}`
-      )
-      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-        setShowGoogleModal(true)
-      }
-    } catch {
-      setShowGoogleModal(true)
-    }
+    launchGoogleSignIn({
+      role: loginRole || 'customer',
+      onSuccess: async (userInfo) => {
+        try {
+          await handleGoogleAuthSuccess(userInfo, loginRole || 'customer', {
+            loginWithProfile,
+            navigate,
+          })
+        } catch (err) {
+          toast.error(err.message || 'Google authentication failed.')
+        }
+      },
+      onError: (err) => {
+        if (err.isConfigurationMissing) {
+          setShowGoogleModal(true)
+        } else {
+          toast.error(err.message || 'Failed to initialize Google Sign-In')
+        }
+      },
+    })
   }
 
   const handleSubmit = async e => {
@@ -505,18 +508,15 @@ export default function LoginPage() {
         isOpen={showGoogleModal}
         onClose={() => setShowGoogleModal(false)}
         loginRole={loginRole}
-        onSuccessLogin={(profile) => {
-          loginWithProfile(profile)
-          const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
-          if (isMaintenance && profile.role !== 'admin') {
-            navigate('/maintenance', { replace: true })
-            return
+        onSuccessLogin={async (userInfo) => {
+          try {
+            await handleGoogleAuthSuccess(userInfo, loginRole || 'customer', {
+              loginWithProfile,
+              navigate,
+            })
+          } catch (err) {
+            toast.error(err.message || 'Google authentication failed.')
           }
-          const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
-          navigate(destination, { replace: true })
-        }}
-        onProceedRegister={({ email, role }) => {
-          navigate(`/register?role=${role || loginRole || 'customer'}&email=${encodeURIComponent(email)}&from=google`, { replace: true })
         }}
       />
     </div>

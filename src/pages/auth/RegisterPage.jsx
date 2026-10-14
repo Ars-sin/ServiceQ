@@ -40,6 +40,7 @@ const ROLE_REDIRECT = {
 }
 
 import GoogleSignInModal from '@/components/auth/GoogleSignInModal'
+import { launchGoogleSignIn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function RegisterPage() {
@@ -835,24 +836,26 @@ export default function RegisterPage() {
 
   // ── Google OAuth Sign-In / Sign-Up (SQI-24) ──────────────────────────
   const handleGoogleSignIn = () => {
-    const width = Math.min(940, window.screen.width - 20)
-    const height = 560
-    const left = window.screen.width / 2 - width / 2
-    const top = window.screen.height / 2 - height / 2
-    const url = `/auth/google?role=${role || 'customer'}&mode=register`
-
-    try {
-      const popup = window.open(
-        url,
-        'google_auth_window',
-        `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${width},height=${height},top=${top},left=${left}`
-      )
-      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-        setShowGoogleModal(true)
-      }
-    } catch {
-      setShowGoogleModal(true)
-    }
+    launchGoogleSignIn({
+      role: role || 'customer',
+      onSuccess: async (userInfo) => {
+        try {
+          await handleGoogleAuthSuccess(userInfo, role || 'customer', {
+            loginWithProfile,
+            navigate,
+          })
+        } catch (err) {
+          toast.error(err.message || 'Google authentication failed.')
+        }
+      },
+      onError: (err) => {
+        if (err.isConfigurationMissing) {
+          setShowGoogleModal(true)
+        } else {
+          toast.error(err.message || 'Failed to initialize Google Sign-In')
+        }
+      },
+    })
   }
 
   return (
@@ -1867,17 +1870,14 @@ export default function RegisterPage() {
         isOpen={showGoogleModal}
         onClose={() => setShowGoogleModal(false)}
         loginRole={role}
-        onSuccessLogin={(p) => {
-          if (p) loginWithProfile(p)
-          navigate(p?.role === 'provider' ? '/provider/dashboard' : '/customer/explore', { replace: true })
-        }}
-        onProceedRegister={({ email: regEmail, role: chosenRole }) => {
-          setShowGoogleModal(false)
-          if (chosenRole && chosenRole !== role) {
-            setRole(chosenRole)
-          }
-          if (regEmail) {
-            setForm(prev => ({ ...prev, email: regEmail }))
+        onSuccessLogin={async (userInfo) => {
+          try {
+            await handleGoogleAuthSuccess(userInfo, role || 'customer', {
+              loginWithProfile,
+              navigate,
+            })
+          } catch (err) {
+            toast.error(err.message || 'Google authentication failed.')
           }
         }}
       />

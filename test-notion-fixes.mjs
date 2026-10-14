@@ -21,26 +21,17 @@ function test(description, fn) {
 // -------------------------------------------------------------
 // TEST 1: SQI-24 & SQI-25 (Google Sign-In/Up with Authentic Google Screen & No 400 Error)
 // -------------------------------------------------------------
-test('SQI-24 & SQI-25: Google Sign-In/Up opens authentic Google window without hitting disabled Supabase 400 endpoint', () => {
+test('SQI-24 & SQI-25: Google Sign-In/Up connects directly to official Google API without hitting disabled Supabase 400 endpoint', () => {
   const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
   const regSrc = fs.readFileSync('src/pages/auth/RegisterPage.jsx', 'utf8')
-  const popupSrc = fs.readFileSync('src/pages/auth/GoogleAuthPopup.jsx', 'utf8')
-  const modalSrc = fs.readFileSync('src/components/auth/GoogleSignInModal.jsx', 'utf8')
-  const appSrc = fs.readFileSync('src/App.jsx', 'utf8')
+  const googleAuthSrc = fs.readFileSync('src/lib/googleAuth.js', 'utf8')
+  const indexHtml = fs.readFileSync('index.html', 'utf8')
 
-  assert.ok(appSrc.includes('path="/auth/google"'), 'App.jsx must declare /auth/google route')
-  assert.ok(loginSrc.includes('/auth/google'), 'LoginPage handleGoogleSignIn opens /auth/google popup')
-  assert.ok(regSrc.includes('/auth/google'), 'RegisterPage handleGoogleSignIn opens /auth/google popup')
-
-  // Both popup and modal match media_1791988577366.png
-  assert.ok(popupSrc.includes('Sign in'), 'GoogleAuthPopup has Sign in title')
-  assert.ok(popupSrc.includes('with your Google Account'), 'GoogleAuthPopup matches Google Account text')
-  assert.ok(popupSrc.includes('Email or phone'), 'GoogleAuthPopup has Email or phone field')
-  assert.ok(popupSrc.includes('Choose an account'), 'GoogleAuthPopup has Google Account Chooser')
-
-  assert.ok(modalSrc.includes('Sign in'), 'GoogleSignInModal has Sign in title')
-  assert.ok(modalSrc.includes('Email or phone'), 'GoogleSignInModal has Email or phone field')
-  assert.ok(modalSrc.includes('Choose an account'), 'GoogleSignInModal has Google Account Chooser')
+  assert.ok(indexHtml.includes('https://accounts.google.com/gsi/client'), 'index.html must load Google Identity Services SDK')
+  assert.ok(googleAuthSrc.includes('google.accounts.oauth2.initTokenClient'), 'googleAuth.js must use Google Identity Services token client')
+  assert.ok(googleAuthSrc.includes('https://www.googleapis.com/oauth2/v3/userinfo'), 'googleAuth.js fetches profile from official Google userinfo endpoint')
+  assert.ok(loginSrc.includes('launchGoogleSignIn'), 'LoginPage must launch official Google Sign-In')
+  assert.ok(regSrc.includes('launchGoogleSignIn'), 'RegisterPage must launch official Google Sign-In')
 })
 
 test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', () => {
@@ -50,13 +41,11 @@ test('SQI-24: Prominent Continue with Google button placed on Customer Step 0', 
 })
 
 test('SQI-24 & SQI-25: Verified Google accounts (confirmed with OTP during registration) can log in seamlessly with Google', () => {
-  const popupSrc = fs.readFileSync('src/pages/auth/GoogleAuthPopup.jsx', 'utf8')
-  const modalSrc = fs.readFileSync('src/components/auth/GoogleSignInModal.jsx', 'utf8')
+  const googleAuthSrc = fs.readFileSync('src/lib/googleAuth.js', 'utf8')
 
-  assert.ok(popupSrc.includes('serviceq_auth_provider_'), 'GoogleAuthPopup sets auth provider to google')
-  assert.ok(popupSrc.includes('Welcome back,'), 'GoogleAuthPopup logs in verified accounts with Welcome back toast')
-  assert.ok(modalSrc.includes('serviceq_auth_provider_'), 'GoogleSignInModal sets auth provider to google')
-  assert.ok(modalSrc.includes('Welcome back,'), 'GoogleSignInModal logs in verified accounts with Welcome back toast')
+  assert.ok(googleAuthSrc.includes('serviceq_auth_provider_'), 'googleAuth sets auth provider to google')
+  assert.ok(googleAuthSrc.includes('Welcome back,'), 'googleAuth logs in verified accounts with Welcome back toast')
+  assert.ok(googleAuthSrc.includes('loginWithProfile(profile)'), 'googleAuth invokes loginWithProfile for verified accounts')
 })
 
 // -------------------------------------------------------------
