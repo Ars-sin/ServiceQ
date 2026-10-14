@@ -172,10 +172,13 @@ export default function ProviderProfile() {
       }
 
       // 2. Persist to Supabase profiles & providers tables so it survives page reloads and refreshes (SQI-3)
-      if (effectiveUserId) {
+      if (effectiveUserId || effectiveUserEmail) {
         try {
           let metaToSave = {}
-          const { data: curProf } = await supabase.from('profiles').select('avatar_url').eq('id', effectiveUserId).maybeSingle()
+          const { data: curProf } = effectiveUserId
+            ? await supabase.from('profiles').select('avatar_url').eq('id', effectiveUserId).maybeSingle()
+            : await supabase.from('profiles').select('avatar_url').ilike('email', effectiveUserEmail).maybeSingle()
+
           if (curProf?.avatar_url && curProf.avatar_url.startsWith('{')) {
             try { metaToSave = JSON.parse(curProf.avatar_url) } catch {}
           }
@@ -183,8 +186,13 @@ export default function ProviderProfile() {
           metaToSave.avatar_photo = compressedDataUrl
           metaToSave.avatar_url = compressedDataUrl
 
-          await supabase.from('profiles').update({ avatar_url: JSON.stringify(metaToSave) }).eq('id', effectiveUserId)
-          await supabase.from('providers').update({ avatar_url: compressedDataUrl }).eq('user_id', effectiveUserId)
+          if (effectiveUserId) {
+            await supabase.from('profiles').update({ avatar_url: JSON.stringify(metaToSave) }).eq('id', effectiveUserId)
+            await supabase.from('providers').update({ avatar_url: compressedDataUrl }).eq('user_id', effectiveUserId)
+          }
+          if (effectiveUserEmail) {
+            await supabase.from('profiles').update({ avatar_url: JSON.stringify(metaToSave) }).ilike('email', effectiveUserEmail)
+          }
           try {
             await supabase.auth.updateUser({ data: { avatar_url: compressedDataUrl, photo_url: compressedDataUrl } })
           } catch {}
@@ -245,18 +253,21 @@ export default function ProviderProfile() {
           } catch {}
         }
       }
-      if (photoFromSupabase) {
+
+      const savedPhoto = (
+        (effectiveUserId && (localStorage.getItem(`serviceq_provider_avatar_${effectiveUserId}`) || localStorage.getItem(`serviceq_avatar_${effectiveUserId}`))) ||
+        (effectiveUserEmail && localStorage.getItem(`serviceq_provider_avatar_${effectiveUserEmail}`)) ||
+        localStorage.getItem('serviceq_provider_avatar_latest')
+      )
+
+      // Ensure uploaded photo (savedPhoto) always persists across refreshes and is not clobbered (SQI-3)
+      if (savedPhoto) {
+        setAvatarPhoto(savedPhoto)
+      } else if (photoFromSupabase) {
         setAvatarPhoto(photoFromSupabase)
         if (effectiveUserId) {
           try { localStorage.setItem(`serviceq_provider_avatar_${effectiveUserId}`, photoFromSupabase) } catch {}
         }
-      } else {
-        const savedPhoto = (
-          (effectiveUserId && (localStorage.getItem(`serviceq_provider_avatar_${effectiveUserId}`) || localStorage.getItem(`serviceq_avatar_${effectiveUserId}`))) ||
-          (effectiveUserEmail && localStorage.getItem(`serviceq_provider_avatar_${effectiveUserEmail}`)) ||
-          localStorage.getItem('serviceq_provider_avatar_latest')
-        )
-        if (savedPhoto) setAvatarPhoto(savedPhoto)
       }
 
       // 2. Fetch provider row if available
