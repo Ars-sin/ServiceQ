@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   MapPin, Star, Shield, Zap, Clock, MessageCircle,
   Search, Calendar, CheckCircle2, ChevronRight, ArrowRight,
@@ -104,10 +104,22 @@ function AnimFade({ children, delay = 0, className = '' }) {
 }
 
 export default function LandingPage() {
+  const navigate = useNavigate()
   const [activeSection, setActiveSection] = useState('hero')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isManualScrolling = useRef(false)
   const scrollTimeout = useRef(null)
+
+  // Forward Google OAuth return parameters to /login if redirected to root
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || ''
+      const search = window.location.search || ''
+      if (hash.includes('access_token') || (search.includes('code=') && search.includes('state='))) {
+        navigate(`/login${search}${hash}`, { replace: true })
+      }
+    }
+  }, [navigate])
 
   // Track active section on scroll
   useEffect(() => {
