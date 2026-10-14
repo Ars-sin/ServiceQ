@@ -1,13 +1,113 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 
 const AuthContext = createContext(null)
+
+// 30 minutes of inactivity before auto-logout (1,800,000 ms)
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000
+const INACTIVITY_WARNING_MS = 28 * 60 * 1000 // 2-minute warning
 
 export function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [devRole, setDevRole] = useState(null)
+
+  const navigate = useNavigate()
+  const lastActivityRef = useRef(Date.now())
+  const warningShownRef = useRef(false)
+
+  // ── Record user activity (throttled) ──────────────────────────
+  const recordActivity = useCallback(() => {
+    const now = Date.now()
+    lastActivityRef.current = now
+    warningShownRef.current = false
+
+    // Throttle localStorage writes to at most once every 10 seconds
+    const stored = Number(localStorage.getItem('serviceq_last_activity') || '0')
+    if (now - stored > 10000) {
+      localStorage.setItem('serviceq_last_activity', now.toString())
+    }
+  }, [])
+
+  // ── Session Inactivity Tracker (Auto-logout after 30 mins) ───
+  useEffect(() => {
+    if (!user && !profile) return
+
+    // Initialize activity timestamp
+    const stored = Number(localStorage.getItem('serviceq_last_activity') || '0')
+    const initialTime = stored && Date.now() - stored < INACTIVITY_TIMEOUT_MS ? stored : Date.now()
+    lastActivityRef.current = initialTime
+    localStorage.setItem('serviceq_last_activity', initialTime.toString())
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
+    const handleEvent = () => recordActivity()
+
+    activityEvents.forEach(evt => {
+      window.addEventListener(evt, handleEvent, { passive: true })
+    })
+
+    // Multi-tab sync via storage events
+    const handleStorage = (e) => {
+      if (e.key === 'serviceq_last_activity' && e.newValue) {
+        lastActivityRef.current = Number(e.newValue)
+        warningShownRef.current = false
+      }
+      if (e.key === 'serviceq_auth_profile' && !e.newValue) {
+        // Another tab logged out
+        setUser(null)
+        setProfile(null)
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+
+    // Check inactivity every 10 seconds
+    const interval = setInterval(async () => {
+      const now = Date.now()
+      const lastActive = Math.max(
+        lastActivityRef.current,
+        Number(localStorage.getItem('serviceq_last_activity') || '0')
+      )
+      const idleMs = now - lastActive
+
+      // 28 minutes: Gentle warning
+      if (idleMs >= INACTIVITY_WARNING_MS && idleMs < INACTIVITY_TIMEOUT_MS) {
+        if (!warningShownRef.current) {
+          warningShownRef.current = true
+          toast('Your session will expire in 2 minutes due to inactivity.', {
+            icon: '⏳',
+            id: 'session-timeout-warning',
+            duration: 9000,
+          })
+        }
+      }
+
+      // 30 minutes: Terminate session
+      if (idleMs >= INACTIVITY_TIMEOUT_MS) {
+        clearInterval(interval)
+        localStorage.removeItem('serviceq_last_activity')
+        const currentRole = profile?.role || 'customer'
+        await signOut()
+        toast.error('Session expired: You have been logged out due to 30 minutes of inactivity.', {
+          id: 'session-timeout-expired',
+          duration: 6000,
+        })
+        const redirectDest =
+          currentRole === 'admin' || currentRole === 'superadmin' || currentRole === 'staff'
+            ? '/admin/login'
+            : '/login'
+        navigate(redirectDest, { replace: true })
+      }
+    }, 10000)
+
+    return () => {
+      activityEvents.forEach(evt => window.removeEventListener(evt, handleEvent))
+      window.removeEventListener('storage', handleStorage)
+      clearInterval(interval)
+    }
+  }, [user, profile, recordActivity, navigate])
 
   useEffect(() => {
     // Get initial session
@@ -113,6 +213,8 @@ export function AuthProvider({ children }) {
     setUser(virtualUser)
     setProfile(profileData)
     localStorage.setItem('serviceq_auth_profile', JSON.stringify(profileData))
+    localStorage.setItem('serviceq_last_activity', Date.now().toString())
+    lastActivityRef.current = Date.now()
   }
 
   async function signOut() {
@@ -120,6 +222,7 @@ export function AuthProvider({ children }) {
       await supabase.auth.signOut()
     } catch {}
     localStorage.removeItem('serviceq_auth_profile')
+    localStorage.removeItem('serviceq_last_activity')
     setUser(null)
     setProfile(null)
     setDevRole(null)
@@ -147,6 +250,7 @@ export function AuthProvider({ children }) {
       signOut,
       loginWithProfile,
       fetchProfile,
+      recordActivity,
     }}>
       {children}
     </AuthContext.Provider>

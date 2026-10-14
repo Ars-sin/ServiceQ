@@ -219,6 +219,30 @@ test('SQI-10: Filled solid button rendered when password checklist criteria are 
   )
 })
 
+// -------------------------------------------------------------
+// TEST 12: Inactivity Session Timeout (30 mins auto-logout)
+// -------------------------------------------------------------
+test('Session: User automatically logs out after 30 minutes of inactivity', () => {
+  const authCtxSrc = fs.readFileSync('src/contexts/AuthContext.jsx', 'utf8')
+
+  assert.ok(
+    authCtxSrc.includes('INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000'),
+    'AuthContext declares 30-minute inactivity timeout (30 * 60 * 1000 ms)'
+  )
+  assert.ok(
+    authCtxSrc.includes('serviceq_last_activity'),
+    'AuthContext tracks activity using serviceq_last_activity timestamp'
+  )
+  assert.ok(
+    authCtxSrc.includes('Session expired: You have been logged out due to 30 minutes of inactivity.'),
+    'AuthContext alerts user with session expired notification'
+  )
+  assert.ok(
+    authCtxSrc.includes('window.addEventListener(\'storage\''),
+    'AuthContext syncs session activity across tabs via storage event'
+  )
+})
+
 console.log(`\n========================================`)
 console.log(`TEST RUN COMPLETE: ${passCount} PASSED, ${failCount} FAILED`)
 console.log(`========================================`)

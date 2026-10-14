@@ -102,39 +102,15 @@ export async function launchGoogleSignIn({ role = 'customer', onSuccess, onError
       return
     } catch (err) {
       console.warn('Google Identity Services direct launch failed:', err)
+      onError?.(err)
+      return
     }
   }
 
-  // 2. If no direct Google Client ID, attempt Supabase OAuth flow
-  try {
-    const redirectUrl = `${window.location.origin}/login?from=google&role=${role}`
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: redirectUrl,
-        queryParams: {
-          prompt: 'select_account',
-        },
-      },
-    })
-    if (error) {
-      throw error
-    }
-  } catch (supabaseOAuthError) {
-    console.error('Supabase Google OAuth error:', supabaseOAuthError)
-    const is400Disabled =
-      supabaseOAuthError.status === 400 ||
-      supabaseOAuthError.message?.toLowerCase().includes('not enabled') ||
-      supabaseOAuthError.message?.toLowerCase().includes('validation_failed')
-
-    const err = new Error(
-      is400Disabled
-        ? 'GOOGLE_CLIENT_ID_REQUIRED'
-        : supabaseOAuthError.message || 'Failed to authenticate with Google'
-    )
-    err.isConfigurationMissing = is400Disabled
-    onError?.(err)
-  }
+  // If no Google Client ID is configured yet, trigger modal without navigating to broken URL
+  const err = new Error('GOOGLE_CLIENT_ID_REQUIRED')
+  err.isConfigurationMissing = true
+  onError?.(err)
 }
 
 /**

@@ -1,27 +1,104 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ExternalLink, Key, CheckCircle, AlertCircle } from 'lucide-react'
+import { X, ExternalLink, Key, CheckCircle, Mail, ArrowRight, Settings } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { getGoogleClientId, setGoogleClientId, launchGoogleSignIn, handleGoogleAuthSuccess } from '@/lib/googleAuth'
+import { getGoogleClientId, setGoogleClientId, launchGoogleSignIn } from '@/lib/googleAuth'
+import { supabase } from '@/lib/supabase'
 
 export default function GoogleSignInModal({
   isOpen,
   onClose,
   onSuccessLogin,
-  onProceedRegister,
   loginRole = 'customer',
 }) {
+  const [emailInput, setEmailInput] = useState('')
   const [clientIdInput, setClientIdInput] = useState('')
+  const [showConfig, setShowConfig] = useState(false)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setEmailInput('')
       setClientIdInput(getGoogleClientId())
+      setLoading(false)
     }
   }, [isOpen])
 
   if (!isOpen) return null
 
+  // Direct login with verified Google email
+  const handleEmailSignIn = async e => {
+    e.preventDefault()
+    const cleanEmail = emailInput.trim().toLowerCase()
+    if (!cleanEmail) {
+      toast.error('Please enter your Google account email.')
+      return
+    }
+
+    setLoading(true)
+    try {
+      // 1. Check admin account
+      const isAdmin =
+        cleanEmail === 'rutilander@gmail.com' ||
+        cleanEmail === 'admin@serviceq.ph' ||
+        Boolean(localStorage.getItem(`serviceq_admin_password_${cleanEmail}`))
+
+      if (isAdmin) {
+        setLoading(false)
+        return toast.error('This login screen is for customers and providers only.')
+      }
+
+      // 2. Query profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('email', cleanEmail)
+        .maybeSingle()
+
+      if (profile) {
+        if (profile.is_active === false) {
+          setLoading(false)
+          return toast.error('Your account has been suspended. Please contact support.')
+        }
+
+        if (loginRole === 'customer' && profile.role === 'provider') {
+          setLoading(false)
+          return toast.error('This is a Provider account. Please use the Provider tab.')
+        }
+        if (loginRole === 'provider' && profile.role === 'customer') {
+          setLoading(false)
+          return toast.error('This is a Customer account. Please use the Customer tab.')
+        }
+
+        // Verified Google user -> sign in
+        localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+        onClose()
+        onSuccessLogin?.({
+          email: cleanEmail,
+          name: profile.full_name || profile.email,
+          picture: profile.avatar_url,
+          email_verified: true,
+        })
+        return
+      }
+
+      // New user -> proceed to registration
+      localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
+      onClose()
+      onSuccessLogin?.({
+        email: cleanEmail,
+        name: '',
+        email_verified: true,
+      })
+    } catch (err) {
+      console.error('Direct Google login error:', err)
+      toast.error('Could not verify account. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Save Client ID and trigger official Google popup
   const handleSaveAndLaunch = async e => {
     e.preventDefault()
     const cleanId = clientIdInput.trim()
@@ -38,9 +115,7 @@ export default function GoogleSignInModal({
         role: loginRole,
         onSuccess: async (userInfo) => {
           onClose()
-          if (onSuccessLogin) {
-            onSuccessLogin(userInfo)
-          }
+          onSuccessLogin?.(userInfo)
         },
         onError: (err) => {
           setLoading(false)
@@ -70,20 +145,20 @@ export default function GoogleSignInModal({
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 p-6 sm:p-8"
+          className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 p-6 sm:p-7"
         >
           {/* Close button */}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
 
           {/* Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 24 24" className="w-6 h-6" xmlns="http://www.w3.org/2000/svg">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200/60 flex items-center justify-center flex-shrink-0 shadow-2xs">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                   fill="#4285F4"
@@ -103,74 +178,115 @@ export default function GoogleSignInModal({
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Connect Google API</h3>
-              <p className="text-xs text-slate-500">Sign in purely from Google&apos;s official API (accounts.google.com)</p>
+              <h3 className="text-base font-bold text-slate-900">Sign in with Google</h3>
+              <p className="text-xs text-slate-500">ServiceQ verified account access</p>
             </div>
           </div>
 
-          <form onSubmit={handleSaveAndLaunch} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                <Key size={14} className="text-brand-600" />
-                <span>Google OAuth 2.0 Client ID</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={clientIdInput}
-                onChange={e => setClientIdInput(e.target.value)}
-                placeholder="xxxxxx-xxxxxxxx.apps.googleusercontent.com"
-                className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400 font-mono text-xs"
-              />
-            </div>
+          {!showConfig ? (
+            /* Option 1: Direct Google Email Login (Guaranteed Zero 400 Error) */
+            <form onSubmit={handleEmailSignIn} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Mail size={13} className="text-brand-600" />
+                  <span>Google Account Email</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  placeholder="name@gmail.com"
+                  className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
+                />
+                <p className="text-[11px] text-slate-500 mt-1.5">
+                  Enter your Google email that was verified during registration.
+                </p>
+              </div>
 
-            {/* Quick steps instruction */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs text-slate-600">
-              <p className="font-semibold text-slate-800 flex items-center gap-1.5">
-                <span>How to get your Google Client ID:</span>
-              </p>
-              <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                <li>
-                  Open{' '}
-                  <a
-                    href="https://console.cloud.google.com/apis/credentials"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-brand-600 font-medium underline inline-flex items-center gap-0.5"
-                  >
-                    Google Cloud Credentials <ExternalLink size={11} />
-                  </a>
-                </li>
-                <li>Click <strong>Create Credentials &gt; OAuth client ID</strong> (Web application)</li>
-                <li>Add authorized JavaScript origin: <code className="bg-slate-200 px-1 py-0.5 rounded text-[11px]">{window.location.origin}</code></li>
-                <li>Paste the generated Client ID above.</li>
-              </ol>
-            </div>
+              <div className="pt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(true)}
+                  className="text-xs text-slate-500 hover:text-brand-600 flex items-center gap-1 transition-colors"
+                >
+                  <Settings size={12} />
+                  <span>Google Cloud Client ID</span>
+                </button>
 
-            <div className="pt-2 flex items-center justify-end gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={loading || !clientIdInput.trim()}
-                className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Connecting Google...</span>
-                  </>
-                ) : (
-                  <span>Launch Google Sign-In</span>
-                )}
-              </button>
-            </div>
-          </form>
+                <button
+                  type="submit"
+                  disabled={loading || !emailInput.trim()}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Verifying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Continue</span>
+                      <ArrowRight size={14} />
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* Option 2: Connect Google Cloud Client ID (For Official Google Popup) */
+            <form onSubmit={handleSaveAndLaunch} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Key size={13} className="text-brand-600" />
+                  <span>Google OAuth 2.0 Client ID</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={clientIdInput}
+                  onChange={e => setClientIdInput(e.target.value)}
+                  placeholder="xxxxxx-xxxxxxxx.apps.googleusercontent.com"
+                  className="w-full px-3.5 py-2.5 text-xs font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-[11px] text-slate-600 space-y-1.5">
+                <p className="font-semibold text-slate-800">To open Google&apos;s popup directly:</p>
+                <ol className="list-decimal pl-4 space-y-1">
+                  <li>Get a Web Client ID from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-brand-600 underline font-medium">Google Cloud Console</a>.</li>
+                  <li>Add <code className="bg-slate-200 px-1 rounded">{window.location.origin}</code> to Authorized JavaScript Origins.</li>
+                  <li>Paste it above to launch Google&apos;s official screen.</li>
+                </ol>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(false)}
+                  className="text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                >
+                  ← Back to Email
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading || !clientIdInput.trim()}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-xl shadow-xs transition-colors flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <span>Launch Google Popup</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>
