@@ -93,10 +93,15 @@ export default function RegisterPage() {
         .maybeSingle()
 
       if (profile) {
+        if (profile.is_active === false) {
+          toast.error('Your account has been suspended. Please contact support.')
+          return
+        }
         localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
         toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`)
         loginWithProfile(profile)
-        navigate(ROLE_REDIRECT[profile.role] || '/customer/explore', { replace: true })
+        const destination = ROLE_REDIRECT[profile.role] || (profile.role === 'provider' ? '/provider/dashboard' : '/customer/explore')
+        navigate(destination, { replace: true })
         return
       }
 

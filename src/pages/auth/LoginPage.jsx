@@ -68,19 +68,8 @@ export default function LoginPage() {
 
         // Verified account -> update auth provider to google and proceed to login
         localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'google')
-
-        // Check cross-role mismatch
-        if (loginRole === 'customer' && profile.role === 'provider') {
-          await supabase.auth.signOut()
-          toast.error('This account is registered as a Provider. Please use the Provider tab to sign in.')
-          setLoginRole('provider')
-          return
-        }
-        if (loginRole === 'provider' && profile.role === 'customer') {
-          await supabase.auth.signOut()
-          toast.error('This account is registered as a Customer. Please use the Customer tab to sign in.')
-          setLoginRole('customer')
-          return
+        if (profile.role) {
+          setLoginRole(profile.role)
         }
 
         loginWithProfile(profile)
@@ -89,7 +78,7 @@ export default function LoginPage() {
           navigate('/maintenance', { replace: true })
           return
         }
-        const destination = ROLE_REDIRECT[profile.role] || '/customer/explore'
+        const destination = ROLE_REDIRECT[profile.role] || (profile.role === 'provider' ? '/provider/dashboard' : '/customer/explore')
         toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
         navigate(destination, { replace: true })
       } else {
