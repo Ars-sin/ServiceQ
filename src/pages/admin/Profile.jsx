@@ -51,28 +51,30 @@ export default function AdminProfile() {
     try {
       // 0. Verify current password (SQI-38: Reject incorrect existing password)
       let currentPwMatches = false
-      const cachedPw = localStorage.getItem(`serviceq_admin_password_${adminEmail.toLowerCase()}`) ||
-                       localStorage.getItem(`serviceq_password_${adminEmail.toLowerCase()}`)
+      const emailKey = adminEmail.toLowerCase()
+      const cachedPw = localStorage.getItem(`serviceq_admin_password_${emailKey}`) ||
+                       localStorage.getItem(`serviceq_password_${emailKey}`)
 
       const { data: testAuth, error: testAuthError } = await supabase.auth.signInWithPassword({
         email: adminEmail,
         password: currentPassword,
       })
 
+      const expectedCurrentPw = cachedPw || '123456789'
       if (!testAuthError && testAuth?.user) {
         currentPwMatches = true
-      } else if (cachedPw && cachedPw === currentPassword) {
-        currentPwMatches = true
-      } else if (
-        (adminEmail.toLowerCase() === 'rutilander@gmail.com' || adminEmail.toLowerCase() === 'admin@serviceq.ph') &&
-        (!cachedPw ? currentPassword === '123456789' : currentPassword === cachedPw || currentPassword === '123456789')
-      ) {
+      } else if (currentPassword === expectedCurrentPw) {
         currentPwMatches = true
       }
 
       if (!currentPwMatches) {
         setLoading(false)
         return toast.error('Current password is incorrect. Please try again.')
+      }
+
+      if (newPassword === currentPassword) {
+        setLoading(false)
+        return toast.error('New password must be different from your current password.')
       }
 
       // 1. Update password in Supabase Auth
@@ -85,9 +87,18 @@ export default function AdminProfile() {
       }
 
       // 2. Cache new password locally for immediate sign-in resilience
-      const emailKey = adminEmail.toLowerCase()
       localStorage.setItem(`serviceq_admin_password_${emailKey}`, newPassword)
       localStorage.setItem(`serviceq_password_${emailKey}`, newPassword)
+
+      try {
+        const staffList = JSON.parse(localStorage.getItem('serviceq_admin_staff') || '[]')
+        if (Array.isArray(staffList)) {
+          const updatedStaff = staffList.map(s =>
+            s.email?.toLowerCase() === emailKey ? { ...s, password: newPassword } : s
+          )
+          localStorage.setItem('serviceq_admin_staff', JSON.stringify(updatedStaff))
+        }
+      } catch {}
 
       // 3. Log to audit trail
       try {

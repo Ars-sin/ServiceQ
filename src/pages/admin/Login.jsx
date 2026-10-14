@@ -57,7 +57,7 @@ export default function AdminLogin() {
         authError = err
       }
 
-      // Check cached password fallback or default admin credentials
+      // Check cached password fallback or default admin credentials (SQI-38)
       if (authError || !authData?.user) {
         const cachedPw =
           localStorage.getItem(`serviceq_admin_password_${emailClean}`) ||
@@ -72,13 +72,17 @@ export default function AdminLogin() {
           resolvedProfile?.role === 'admin' ||
           resolvedProfile?.role === 'superadmin' ||
           resolvedProfile?.role === 'staff' ||
+          resolvedProfile?.role === 'financial_staff' ||
+          resolvedProfile?.role === 'support_moderator' ||
+          Boolean(staffMember) ||
           emailClean === 'rutilander@gmail.com' ||
           emailClean === 'admin@serviceq.ph'
 
-        const isMatchingPassword =
-          form.password === '123456789' ||
-          (cachedPw && form.password === cachedPw) ||
-          (staffMember && (staffMember.password ? form.password === staffMember.password : form.password === '123456789'))
+        // SQI-38: Strict password check.
+        // If a password was explicitly set or updated, ONLY that password is valid.
+        // Default to '123456789' ONLY if no password was ever set/cached.
+        const expectedPw = cachedPw || staffMember?.password || '123456789'
+        const isMatchingPassword = Boolean(expectedPw && form.password === expectedPw)
 
         if (isRegisteredAdmin && isMatchingPassword) {
           authError = null
@@ -89,15 +93,6 @@ export default function AdminLogin() {
               user_metadata: {
                 full_name: resolvedProfile?.full_name || staffMember?.name || 'Bryce Obien',
               },
-            },
-          }
-        } else if (staffMember && (!cachedPw || cachedPw === form.password || form.password === '123456789')) {
-          authError = null
-          authData = {
-            user: {
-              id: staffMember?.id || 'admin-cached-id',
-              email: emailClean,
-              user_metadata: { full_name: staffMember?.name || 'Staff' },
             },
           }
         }
