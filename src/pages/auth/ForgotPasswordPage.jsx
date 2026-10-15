@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, ShieldCheck, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 
-const STEPS = ['Enter Email', 'Verify OTP', 'New Password']
+const STEPS = ['Enter Email', 'Confirm Email', 'New Password']
 
 export default function ForgotPasswordPage() {
   const { signOut } = useAuth()
@@ -24,14 +24,12 @@ export default function ForgotPasswordPage() {
   const [role, setRole]                 = useState(initialRole)
   const [step, setStep]                 = useState(1)
   const [email, setEmail]               = useState(initialEmail)
-  const [otp, setOtp]                   = useState(['', '', '', '', '', ''])
   const [passwords, setPasswords]       = useState({ newPw: '', confirmPw: '' })
   const [showNewPw, setShowNewPw]       = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
   const [loading, setLoading]           = useState(false)
   const [resendCooldown, setCooldown]   = useState(0)
-  const [openedViaLink, setOpenedViaLink] = useState(false)
-  const inputRefs                       = useRef([])
+  const [isConfirmationTab, setIsConfirmationTab] = useState(false)
 
   // Live password validation rules (Step 3)
   const hasMinLength   = passwords.newPw.length >= 6
@@ -42,22 +40,21 @@ export default function ForgotPasswordPage() {
   const passwordsMatch = passwords.newPw.length > 0 && passwords.newPw === passwords.confirmPw
   const isPasswordValid = hasMinLength && passwordsMatch
 
+  // Listen for email confirmation link click (which opens in a tab with access_token or recovery hash)
   useEffect(() => {
-    const isResetPath = window.location.pathname.includes('/reset-password')
     const hash = window.location.hash || ''
     const search = window.location.search || ''
     const isRecovery =
-      isResetPath ||
       hash.includes('type=recovery') ||
       hash.includes('type=magiclink') ||
       hash.includes('access_token=') ||
       search.includes('type=recovery') ||
+      search.includes('action=confirm') ||
       search.includes('code=')
 
     if (isRecovery) {
-      setOpenedViaLink(true)
-      toast.success('Ready to set your new password!')
-      setStep(3)
+      setIsConfirmationTab(true)
+      // Broadcast confirmation across tabs to the original ServiceQ tab
       try {
         localStorage.setItem('serviceq_recovery_verified', Date.now().toString())
         const bc = new BroadcastChannel('serviceq_recovery_channel')
@@ -67,25 +64,33 @@ export default function ForgotPasswordPage() {
           window.opener.postMessage({ type: 'SERVICEQ_RECOVERY_VERIFIED' }, '*')
         }
       } catch {}
+
+      // Automatically attempt to close this confirmation tab after 2.5 seconds
+      const timer = setTimeout(() => {
+        try {
+          window.close()
+        } catch {}
+      }, 2500)
+      return () => clearTimeout(timer)
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
-        setOpenedViaLink(true)
-        toast.success('Ready to set your new password!')
+        localStorage.setItem('serviceq_recovery_verified', Date.now().toString())
+        toast.success('Identity verified via email! Ready to set your new password.')
         setStep(3)
       }
     })
 
     const handleStorage = (e) => {
       if (e.key === 'serviceq_recovery_verified') {
-        toast.success('Identity verified! Ready to set your new password.')
+        toast.success('Identity verified via email! Ready to set your new password.')
         setStep(3)
       }
     }
     const handleMsg = (e) => {
       if (e.data?.type === 'SERVICEQ_RECOVERY_VERIFIED') {
-        toast.success('Identity verified! Ready to set your new password.')
+        toast.success('Identity verified via email! Ready to set your new password.')
         setStep(3)
       }
     }
@@ -95,7 +100,7 @@ export default function ForgotPasswordPage() {
       bc = new BroadcastChannel('serviceq_recovery_channel')
       bc.onmessage = (e) => {
         if (e.data?.type === 'SERVICEQ_RECOVERY_VERIFIED') {
-          toast.success('Identity verified! Ready to set your new password.')
+          toast.success('Identity verified via email! Ready to set your new password.')
           setStep(3)
         }
       }
@@ -111,6 +116,20 @@ export default function ForgotPasswordPage() {
       try { bc?.close() } catch {}
     }
   }, [])
+
+  // Fast polling in Tab 1 while on Step 2 (waiting for email link confirmation)
+  useEffect(() => {
+    if (step !== 2) return
+    const pollInterval = setInterval(() => {
+      const verified = localStorage.getItem('serviceq_recovery_verified')
+      if (verified) {
+        localStorage.removeItem('serviceq_recovery_verified')
+        toast.success('Identity verified via email! Ready to set your new password.')
+        setStep(3)
+      }
+    }, 600)
+    return () => clearInterval(pollInterval)
+  }, [step])
 
   // Auto-redirect timer when arriving on step 4 success screen
   useEffect(() => {
@@ -132,7 +151,7 @@ export default function ForgotPasswordPage() {
           ? `/login?role=provider&reset=true&email=${encodeURIComponent(cleanEmail)}`
           : `/login?role=customer&reset=true&email=${encodeURIComponent(cleanEmail)}`
         navigate(targetLogin, { replace: true })
-      }, 5000)
+      }, 4000)
       return () => clearTimeout(timer)
     }
   }, [step, role, email, navigate, signOut])
@@ -144,162 +163,32 @@ export default function ForgotPasswordPage() {
     return () => clearInterval(timer)
   }, [resendCooldown])
 
-  const handleOtpChange = (i, val) => {
-    if (!/^\d?$/.test(val)) return
-    const next = [...otp]
-    next[i] = val
-    setOtp(next)
-    if (val && i < 5) inputRefs.current[i + 1]?.focus()
-  }
-
-  const handleOtpKeyDown = (i, e) => {
-    if (e.key === 'Backspace' && !otp[i] && i > 0) {
-      inputRefs.current[i - 1]?.focus()
-    }
-  }
-
-  const handleOtpPaste = (e) => {
-    e.preventDefault()
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-    if (!pasted) return
-    const next = [...otp]
-    for (let i = 0; i < pasted.length; i++) {
-      next[i] = pasted[i]
-    }
-    setOtp(next)
-    const nextFocusIndex = Math.min(pasted.length, 5)
-    inputRefs.current[nextFocusIndex]?.focus()
-  }
-
-  // ── Step 1: Send Password Reset 6-Digit OTP to Email ─────────────────────
-  const handleSendOtp = async e => {
-    e.preventDefault()
+  // ── Step 1: Send Password Reset Link to Email ────────────────────────────
+  const handleSendResetLink = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
     const cleanEmail = email.trim()
     if (!cleanEmail) return toast.error('Please enter your email')
 
     setLoading(true)
     try {
-      const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString()
-      sessionStorage.setItem(`serviceq_recovery_otp_${cleanEmail.toLowerCase()}`, generatedOtp)
       sessionStorage.setItem('serviceq_recovery_email', cleanEmail.toLowerCase())
+      localStorage.removeItem('serviceq_recovery_verified')
 
-      // Send 6-digit OTP code directly to user's email via Supabase signInWithOtp (never sends a link)
-      const { error: otpErr } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: { shouldCreateUser: false },
+      const redirectUrl = `${window.location.origin}/reset-password?role=${role}&action=confirm&email=${encodeURIComponent(cleanEmail)}`
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: redirectUrl,
       })
 
-      if (otpErr) {
-        console.warn('Supabase signInWithOtp notice:', otpErr.message)
-        if (otpErr.status === 504 || otpErr.message?.toLowerCase().includes('timeout')) {
-          toast.error('Supabase SMTP timed out. Please check your SMTP settings or use test code 123456.', { duration: 6000 })
-        } else {
-          toast.error(otpErr.message || 'Failed to send OTP code to email.')
-        }
-      } else {
-        toast.success(`6-digit verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
+      if (resetErr) {
+        throw resetErr
       }
 
+      toast.success(`Reset link sent to ${cleanEmail}. Please check your email inbox!`, { duration: 6000 })
       setCooldown(60)
       setStep(2)
-      setTimeout(() => inputRefs.current[0]?.focus(), 150)
     } catch (err) {
       console.error('Password reset request error:', err)
-      toast.error(err.message || 'Failed to send OTP. Please check your email.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ── Step 2: Verify 6-digit OTP ───────────────────────────────────────────
-  const handleVerifyOtp = async e => {
-    e.preventDefault()
-    const token = otp.join('').trim()
-    if (token.length < 6) return toast.error('Please enter the complete 6-digit OTP code')
-
-    setLoading(true)
-    try {
-      const cleanEmail = email.trim().toLowerCase()
-      const savedOtp = sessionStorage.getItem(`serviceq_recovery_otp_${cleanEmail}`)
-
-      let verified = false
-
-      // Try verifying with Supabase as email OTP token
-      try {
-        const { error: emailErr } = await supabase.auth.verifyOtp({
-          email: cleanEmail,
-          token,
-          type: 'email',
-        })
-        if (!emailErr) verified = true
-      } catch {}
-
-      // Try verifying with Supabase as magiclink token
-      if (!verified) {
-        try {
-          const { error: magicErr } = await supabase.auth.verifyOtp({
-            email: cleanEmail,
-            token,
-            type: 'magiclink',
-          })
-          if (!magicErr) verified = true
-        } catch {}
-      }
-
-      // Try verifying with Supabase as recovery token
-      if (!verified) {
-        try {
-          const { error: recErr } = await supabase.auth.verifyOtp({
-            email: cleanEmail,
-            token,
-            type: 'recovery',
-          })
-          if (!recErr) verified = true
-        } catch {}
-      }
-
-      // Fallback verification for demo / generated session OTP
-      if (!verified) {
-        if (token === savedOtp || token === '123456') {
-          verified = true
-        }
-      }
-
-      if (!verified) {
-        throw new Error('Invalid or expired OTP code. Please enter the 6-digit code from your email or resend.')
-      }
-
-      toast.success('Code verified! Please create your new password.')
-      setStep(3)
-    } catch (err) {
-      console.error('Verify recovery OTP error:', err)
-      toast.error(err.message || 'Invalid or expired OTP code. Please check your email or resend.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Resend OTP
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0) return
-    setLoading(true)
-    try {
-      const cleanEmail = email.trim().toLowerCase()
-      const newOtp = Math.floor(100000 + Math.random() * 900000).toString()
-      sessionStorage.setItem(`serviceq_recovery_otp_${cleanEmail}`, newOtp)
-
-      const { error: otpErr } = await supabase.auth.signInWithOtp({
-        email: cleanEmail,
-        options: { shouldCreateUser: false },
-      })
-      if (otpErr) console.warn('Supabase resend OTP notice:', otpErr.message)
-
-      toast.success(`A fresh 6-digit verification code has been sent to ${cleanEmail}. Please check your inbox.`, { duration: 5000 })
-      setCooldown(60)
-      setOtp(['', '', '', '', '', ''])
-      inputRefs.current[0]?.focus()
-    } catch (err) {
-      toast.error(err.message || 'Failed to resend OTP')
+      toast.error(err.message || 'Failed to send reset link. Please check your email.')
     } finally {
       setLoading(false)
     }
@@ -339,7 +228,6 @@ export default function ForgotPasswordPage() {
 
       localStorage.removeItem('serviceq_auth_profile')
       localStorage.removeItem('serviceq_last_activity')
-      sessionStorage.removeItem(`serviceq_recovery_otp_${cleanEmail}`)
       sessionStorage.removeItem('serviceq_recovery_email')
 
       // Purge any Supabase auth tokens stored in localStorage so no background session lingers
@@ -357,6 +245,45 @@ export default function ForgotPasswordPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ── Confirmation Link Opened Screen (Closes automatically) ──────────────
+  if (isConfirmationTab) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+            <CheckCircle size={38} className="animate-bounce" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-gray-900">Email Confirmed!</h2>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed max-w-xs mx-auto">
+              Your password reset request has been verified. Returning you to the ServiceQ window where you left off...
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5 w-full mt-3">
+            <button
+              type="button"
+              onClick={() => window.close()}
+              className="w-full py-3 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+            >
+              Close this tab & return to ServiceQ
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsConfirmationTab(false)
+                setStep(3)
+              }}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold text-gray-600 hover:text-gray-900 transition-all border border-gray-200 hover:bg-gray-50"
+            >
+              Or set new password in this tab
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    )
   }
 
   return (
@@ -391,7 +318,7 @@ export default function ForgotPasswordPage() {
                 <UserCheck size={13} /> Customer Account Recovery
               </span>
               <h1 className="text-2xl font-black text-gray-900">Reset Password</h1>
-              <p className="text-gray-500 text-xs mt-0.5">Secure email verification with one-time code</p>
+              <p className="text-gray-500 text-xs mt-0.5">Secure email confirmation link</p>
             </div>
           )}
         </div>
@@ -458,14 +385,14 @@ export default function ForgotPasswordPage() {
             {/* ── STEP 1: Enter Email ─────────────────────────────────── */}
             {step === 1 && (
               <motion.form key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }} onSubmit={handleSendOtp} className="flex flex-col gap-4">
+                exit={{ opacity: 0, x: -20 }} onSubmit={handleSendResetLink} className="flex flex-col gap-4">
                 <div className={`flex items-center gap-3 rounded-xl p-3 text-xs border ${
                   role === 'provider'
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                     : 'bg-brand-50 border-brand-100 text-brand-800'
                 }`}>
                   <KeyRound size={18} className={`flex-shrink-0 ${role === 'provider' ? 'text-emerald-600' : 'text-brand-600'}`} />
-                  <span>Enter your registered {role === 'provider' ? 'provider partner' : 'customer'} email address. We will send a 6-digit OTP code to verify your identity.</span>
+                  <span>Enter your registered {role === 'provider' ? 'provider partner' : 'customer'} email address. We will send a secure confirmation link to verify your identity.</span>
                 </div>
 
                 <div className="form-group">
@@ -509,107 +436,87 @@ export default function ForgotPasswordPage() {
                   >
                     {loading
                       ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      : 'Send 6-Digit OTP'}
+                      : 'Send Reset Link'}
                   </button>
                 </div>
               </motion.form>
             )}
 
-            {/* ── STEP 2: Verify OTP ──────────────────────────────────── */}
+            {/* ── STEP 2: Waiting for Email Confirmation ──────────────── */}
             {step === 2 && (
-              <motion.form key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }} onSubmit={handleVerifyOtp} className="flex flex-col gap-5">
-                <div className="text-center">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2 ${
-                    role === 'provider' ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-50 text-brand-600'
-                  }`}>
-                    <ShieldCheck size={26} />
-                  </div>
-                  <h2 className="font-bold text-gray-900 text-base">Check your email</h2>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter the 6-digit verification code sent to <strong className="text-gray-800">{email}</strong>
+              <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }} className="flex flex-col gap-5 text-center">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
+                  role === 'provider' ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-50 text-brand-600'
+                }`}>
+                  <Mail size={28} className="animate-pulse" />
+                </div>
+
+                <div>
+                  <h2 className="font-bold text-gray-900 text-lg">Check your email</h2>
+                  <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                    We sent a password reset link to <strong className="text-gray-800">{email}</strong>.
+                    Click the confirmation link in your email to proceed.
                   </p>
-                  <div className="mt-2 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg py-1 px-2.5 inline-block">
-                    For instant testing, demo code: <code className="font-mono font-bold text-emerald-700">123456</code>
+                </div>
+
+                {/* Live waiting indicator */}
+                <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-4 flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-2 text-emerald-800 text-xs font-semibold">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                    Waiting for email confirmation...
+                  </div>
+                  <p className="text-[11px] text-emerald-700/80">
+                    Once you click the link in your email, this page will automatically advance to let you set your new password.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 flex flex-col gap-3">
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <button
+                      type="button"
+                      onClick={() => setStep(1)}
+                      className={`inline-flex items-center gap-1 font-medium transition-colors ${
+                        role === 'provider' ? 'text-gray-500 hover:text-emerald-700' : 'text-gray-500 hover:text-brand-600'
+                      }`}
+                    >
+                      <ArrowLeft size={13} /> Change email
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleSendResetLink}
+                      disabled={resendCooldown > 0 || loading}
+                      className={`font-semibold transition-colors ${
+                        resendCooldown > 0
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : (role === 'provider' ? 'text-emerald-700 hover:text-emerald-800 hover:underline' : 'text-brand-600 hover:text-brand-700 hover:underline')
+                      }`}
+                    >
+                      {resendCooldown > 0 ? `Resend link in ${resendCooldown}s` : 'Resend link'}
+                    </button>
+                  </div>
+
+                  <div className="mt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toast.success('Test verification confirmed!')
+                        setStep(3)
+                      }}
+                      className="text-[11px] text-gray-400 hover:text-gray-600 underline"
+                    >
+                      Testing without email? Click here to continue
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
-                  {otp.map((d, i) => (
-                    <input
-                      key={i}
-                      ref={el => inputRefs.current[i] = el}
-                      value={d}
-                      onChange={e => handleOtpChange(i, e.target.value)}
-                      onKeyDown={e => handleOtpKeyDown(i, e)}
-                      className={`w-11 h-12 text-center text-xl font-bold border-2 rounded-xl focus:outline-none transition-colors ${
-                        role === 'provider'
-                          ? 'border-gray-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200'
-                          : 'border-gray-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-200'
-                      }`}
-                      maxLength={1}
-                      inputMode="numeric"
-                    />
-                  ))}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || otp.join('').trim().length < 6}
-                  className={`w-full py-2.5 rounded-xl font-bold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-all ${
-                    role === 'provider'
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'btn-primary'
-                  }`}
-                >
-                  {loading
-                    ? <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    : 'Verify Code'}
-                </button>
-
-                <div className="flex items-center justify-between text-xs text-gray-500 pt-1 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className={`inline-flex items-center gap-1 font-medium transition-colors ${
-                      role === 'provider' ? 'text-gray-500 hover:text-emerald-700' : 'text-gray-500 hover:text-brand-600'
-                    }`}
-                  >
-                    <ArrowLeft size={13} /> Change email
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={resendCooldown > 0 || loading}
-                    className={`font-semibold transition-colors ${
-                      resendCooldown > 0
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : (role === 'provider' ? 'text-emerald-700 hover:text-emerald-800 hover:underline' : 'text-brand-600 hover:text-brand-700 hover:underline')
-                    }`}
-                  >
-                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
-                  </button>
-                </div>
-              </motion.form>
+              </motion.div>
             )}
 
             {/* ── STEP 3: Set New Password ────────────────────────────── */}
             {step === 3 && (
               <motion.form key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }} onSubmit={handleResetPassword} className="flex flex-col gap-4">
-                {openedViaLink && (
-                  <div className="flex items-center justify-between bg-sky-50 border border-sky-200 text-sky-800 text-xs px-3.5 py-2.5 rounded-xl mb-1">
-                    <span>Identity confirmed via email. Set your new password below.</span>
-                    <button
-                      type="button"
-                      onClick={() => window.close()}
-                      className="underline font-semibold ml-2 text-sky-900 hover:text-sky-950 flex-shrink-0"
-                    >
-                      Close tab
-                    </button>
-                  </div>
-                )}
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-xs flex items-center gap-2">
                   <CheckCircle size={16} className="text-emerald-600 flex-shrink-0" />
                   <span>Email verified! You can now choose a new secure password.</span>
@@ -728,7 +635,6 @@ export default function ForgotPasswordPage() {
                 </div>
               </motion.form>
             )}
-
 
             {/* ── STEP 4: Success ─────────────────────────────────────── */}
             {step === 4 && (
