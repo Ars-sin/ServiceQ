@@ -3,8 +3,9 @@ import { motion } from 'framer-motion'
 import {
   CheckCircle, Clock, Upload, Save,
   Building, Phone, CreditCard, ShieldCheck,
-  Loader, RefreshCw, Pencil, ArrowLeft
+  Loader, RefreshCw, Pencil, ArrowLeft, AlertTriangle, X
 } from 'lucide-react'
+
 import toast from 'react-hot-toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -58,6 +59,8 @@ export default function ProviderProfile() {
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
   const [providerRow, setProviderRow] = useState(null)
+  const [correctionNotif, setCorrectionNotif] = useState(null) // { message, requestedAt }
+
 
   const [form, setForm] = useState({
     // Personal / Profile
@@ -321,8 +324,28 @@ export default function ProviderProfile() {
         } catch {}
       }
 
+      // ── Check for correction notification from admin ────────────────
+      if (targetUserId) {
+        try {
+          const { data: corrData } = await supabase
+            .from('platform_settings')
+            .select('value')
+            .eq('key', `serviceq_kyc_correction_${targetUserId}`)
+            .maybeSingle()
+          if (corrData?.value) {
+            const parsed = typeof corrData.value === 'string' ? JSON.parse(corrData.value) : corrData.value
+            if (parsed?.status === 'pending_correction') {
+              setCorrectionNotif(parsed)
+            } else {
+              setCorrectionNotif(null)
+            }
+          }
+        } catch {}
+      }
+
       // 3. User metadata
       const meta = user?.user_metadata || {}
+
 
       // 4. Local storage caches from registration (scoped strictly to targetUserId or effectiveUserEmail)
       let localCache = {}
@@ -600,7 +623,42 @@ export default function ProviderProfile() {
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-6 w-full pb-16">
       
+      {/* ── KYC Correction Notification Banner ─────────────────────── */}
+      {correctionNotif && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-2xl px-4 py-4 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle size={18} className="text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-amber-900">Action Required: KYC Correction Requested</p>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              The admin has reviewed your application and requires corrections before approval.
+            </p>
+            {correctionNotif.message && (
+              <div className="mt-2 bg-white border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-900 font-medium">
+                <span className="text-amber-600 font-semibold">Admin note: </span>
+                {correctionNotif.message}
+              </div>
+            )}
+            <p className="text-[11px] text-amber-600 mt-2">
+              Please update your profile and KYC documents, then re-submit for review.
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              // Dismiss — mark as acknowledged locally
+              setCorrectionNotif(null)
+            }}
+            className="text-amber-500 hover:text-amber-700 flex-shrink-0"
+            title="Dismiss"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* ── Top Header (Slide 42 vs Slide 43) ─────────────────────────── */}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">

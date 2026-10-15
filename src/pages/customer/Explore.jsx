@@ -16,6 +16,8 @@ import MapView from '@/components/ui/MapView'
 import { calculateDistanceKm, getCurrentUserCoordinates } from '@/lib/googleMaps'
 
 import { BASE_LISTINGS, loadCachedListings, fetchBackendListings } from '@/lib/listingsService'
+import { CEBU_CITIES } from '@/pages/provider/Listings'
+
 
 const TYPE_TABS = [
   { id: 'all',      label: 'All Listings', icon: LayoutGrid },
@@ -151,7 +153,9 @@ export default function CustomerExplore() {
   const [minRating, setMinRating]       = useState(0)
   const [radiusKm, setRadiusKm]         = useState(0) // 0 = all
   const [quickFilters, setQuickFilters] = useState([])
+  const [coverageFilter, setCoverageFilter] = useState('all') // 'all' | city name
   const [showFilters, setShowFilters]   = useState(false)
+
   const [favoriteIds, setFavoriteIds]   = useState(() => getFavoriteIds(user?.id))
   const [viewMode, setViewMode]         = useState('grid') // 'grid' | 'map'
   const [userCoords, setUserCoords]     = useState(null)
@@ -228,7 +232,9 @@ export default function CustomerExplore() {
     minPrice === 0 &&
     minRating === 0 &&
     radiusKm === 0 &&
-    quickFilters.length === 0
+    quickFilters.length === 0 &&
+    coverageFilter === 'all'
+
 
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 12
@@ -236,7 +242,8 @@ export default function CustomerExplore() {
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setPage(1)
-  }, [search, selectedType, sort, minPrice, minRating, radiusKm, quickFilters])
+  }, [search, selectedType, sort, minPrice, minRating, radiusKm, quickFilters, coverageFilter])
+
 
   // Filter and sort listings
   const filtered = allListings
@@ -292,6 +299,20 @@ export default function CustomerExplore() {
         if (d > 2.5) return false
       }
 
+      // Coverage area filter — match city-level service area
+      if (coverageFilter !== 'all') {
+        const itemArea = (item.serviceArea || '').trim()
+        const itemLoc  = (item.location || '').trim()
+        // Metro-wide listings always pass through
+        const isMetroWide =
+          itemArea === 'Entire Metro Cebu' ||
+          itemArea === 'All Cebu Province' ||
+          itemArea === 'Metro Cebu'
+        if (!isMetroWide && itemArea !== coverageFilter && itemLoc !== coverageFilter) {
+          return false
+        }
+      }
+
       return true
     })
     .sort((a, b) => {
@@ -337,6 +358,7 @@ export default function CustomerExplore() {
     setMinRating(0)
     setRadiusKm(0)
     setQuickFilters([])
+    setCoverageFilter('all')
     setPage(1)
   }
 
@@ -347,7 +369,9 @@ export default function CustomerExplore() {
     minPrice > 0 ||
     minRating > 0 ||
     radiusKm > 0 ||
-    quickFilters.length > 0
+    quickFilters.length > 0 ||
+    coverageFilter !== 'all'
+
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6 pb-12">
@@ -440,7 +464,22 @@ export default function CustomerExplore() {
             <option value={20}>Within 20 km</option>
           </select>
 
+          {/* Coverage Area filter */}
+          <select
+            value={coverageFilter}
+            onChange={e => setCoverageFilter(e.target.value)}
+            className={`input w-full sm:w-48 text-xs font-medium cursor-pointer ${
+              coverageFilter !== 'all' ? 'border-brand-400 bg-brand-50 text-brand-800' : ''
+            }`}
+          >
+            <option value="all">📍 Area: All Cebu</option>
+            {(CEBU_CITIES || []).map(city => (
+              <option key={city} value={city}>{city}</option>
+            ))}
+          </select>
+
           {/* Sort selector */}
+
           <select
             value={sort}
             onChange={e => setSort(e.target.value)}

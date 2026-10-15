@@ -884,10 +884,50 @@ export default function AdminProviders() {
                   <XCircle size={16} /> Reject
                 </button>
                 <button
-                  onClick={() => {
-                    toast.success('Correction request sent to provider')
-                    setReview(null)
+                  onClick={async () => {
+                    const note = rejectReason.trim() || 'Please review and correct your KYC documents.'
+                    try {
+                      // 1. Save correction note to platform_settings
+                      await supabase.from('platform_settings').upsert({
+                        key: `serviceq_kyc_correction_${reviewItem.id}`,
+                        value: JSON.stringify({
+                          message: note,
+                          requestedAt: new Date().toISOString(),
+                          status: 'pending_correction',
+                          adminNote: rejectReason.trim() || '',
+                        }),
+                        updated_at: new Date().toISOString(),
+                      }, { onConflict: 'key' })
+
+                      // 2. Update providers table status
+                      await supabase.from('providers').update({
+                        status: 'correction_requested',
+                        rejection_reason: note,
+                      }).eq('user_id', reviewItem.id)
+
+                      // 3. Update profiles metadata
+                      const { data: profData } = await supabase
+                        .from('profiles').select('avatar_url').eq('id', reviewItem.id).maybeSingle()
+                      let meta = {}
+                      if (profData?.avatar_url?.startsWith('{')) {
+                        try { meta = JSON.parse(profData.avatar_url) } catch {}
+                      }
+                      meta.status = 'correction_requested'
+                      meta.correction_message = note
+                      await supabase.from('profiles').update({
+                        avatar_url: JSON.stringify(meta)
+                      }).eq('id', reviewItem.id)
+
+                      toast.success('✅ Correction request sent! Provider will be notified on their dashboard.')
+                    } catch (err) {
+                      console.error('Failed to send correction request:', err)
+                      toast.error('Failed to send correction request. Please try again.')
+                    } finally {
+                      setRR('')
+                      setReview(null)
+                    }
                   }}
+                  disabled={actionLoading === reviewItem.id}
                   className="btn-secondary flex-1 gap-1.5"
                 >
                   <AlertCircle size={16} /> Request Correction
