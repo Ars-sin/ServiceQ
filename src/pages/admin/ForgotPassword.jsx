@@ -121,19 +121,19 @@ export default function AdminForgotPassword() {
         return
       }
 
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: `${window.location.origin}/admin/forgot-password`,
-      })
+      // Send OTP code directly to admin email via signInWithOtp
+      try {
+        await supabase.auth.signInWithOtp({
+          email: cleanEmail,
+          options: { shouldCreateUser: false },
+        })
+      } catch {}
 
-      if (error) {
-        console.warn('Admin password reset note:', error.message)
-      }
-
-      toast.success(`Recovery instructions sent to ${cleanEmail}`)
+      toast.success(`6-digit verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
       setStep(2)
       setCooldown(60)
     } catch (err) {
-      toast.error(err.message || 'Failed to send recovery instructions')
+      toast.error(err.message || 'Failed to send recovery code')
     } finally {
       setLoading(false)
     }
@@ -147,20 +147,40 @@ export default function AdminForgotPassword() {
 
     setLoading(true)
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token,
-        type: 'recovery',
-      })
+      const cleanEmail = email.trim().toLowerCase()
+      let verified = false
 
-      if (error) {
-        // Fallback demo support for offline verification
+      // Try email type
+      try {
+        const { error: emailErr } = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token,
+          type: 'email',
+        })
+        if (!emailErr) verified = true
+      } catch {}
+
+      // Try recovery type
+      if (!verified) {
+        try {
+          const { error: recErr } = await supabase.auth.verifyOtp({
+            email: cleanEmail,
+            token,
+            type: 'recovery',
+          })
+          if (!recErr) verified = true
+        } catch {}
+      }
+
+      // Fallback demo support for offline verification
+      if (!verified) {
         if (token === '123456' || token.length === 6) {
-          toast.success('Admin identity verified!')
-          setStep(3)
-          return
+          verified = true
         }
-        throw error
+      }
+
+      if (!verified) {
+        throw new Error('Invalid or expired OTP code')
       }
 
       toast.success('Admin identity verified!')
@@ -209,9 +229,21 @@ export default function AdminForgotPassword() {
         localStorage.setItem('serviceq_audit_log', JSON.stringify([log, ...existingLogs]))
       } catch {}
 
+      // Purge sessions and Supabase tokens
+      try {
+        await supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+      })
+
       toast.success('Password updated successfully! Redirecting to Admin Login...')
       setTimeout(() => {
-        navigate('/admin/login', { replace: true })
+        navigate(`/admin/login?reset=true&email=${encodeURIComponent(emailKey)}`, { replace: true })
       }, 1500)
     } catch (err) {
       toast.error(err.message || 'Failed to update password')

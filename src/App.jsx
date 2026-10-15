@@ -94,8 +94,14 @@ function ProtectedRoute({ children, requiredRole }) {
  */
 function GuestOnly({ children }) {
   const { user, role, loading } = useAuth()
+  const isReset = typeof window !== 'undefined' && window.location.search.includes('reset=true')
 
   if (loading) return <SplashScreen />
+
+  // If arriving from password reset, allow login screen without auto-redirect
+  if (isReset) {
+    return children
+  }
 
   if (user && role) {
     const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'

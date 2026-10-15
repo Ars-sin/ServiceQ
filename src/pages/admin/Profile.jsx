@@ -168,7 +168,12 @@ export default function AdminProfile() {
       } catch {}
       localStorage.removeItem('serviceq_auth_profile')
       localStorage.removeItem('serviceq_last_activity')
-      navigate('/admin/login', { replace: true })
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+      })
+      navigate(`/admin/login?reset=true&email=${encodeURIComponent(emailKey)}`, { replace: true })
     } catch (err) {
       toast.error(err.message || 'Failed to update password')
     } finally {

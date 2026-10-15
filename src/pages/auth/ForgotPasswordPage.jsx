@@ -4,10 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, ArrowLeft, CheckCircle, CheckCircle2, Circle, ShieldCheck, KeyRound, Home, Briefcase, UserCheck, Eye, EyeOff, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 
 const STEPS = ['Enter Email', 'Verify OTP', 'New Password']
 
 export default function ForgotPasswordPage() {
+  const { signOut } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -18,15 +20,17 @@ export default function ForgotPasswordPage() {
   }, [searchParams, navigate])
 
   const initialRole = searchParams.get('role') === 'provider' ? 'provider' : 'customer'
+  const initialEmail = searchParams.get('email') || ''
   const [role, setRole]                 = useState(initialRole)
   const [step, setStep]                 = useState(1)
-  const [email, setEmail]               = useState('')
+  const [email, setEmail]               = useState(initialEmail)
   const [otp, setOtp]                   = useState(['', '', '', '', '', ''])
   const [passwords, setPasswords]       = useState({ newPw: '', confirmPw: '' })
   const [showNewPw, setShowNewPw]       = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
   const [loading, setLoading]           = useState(false)
   const [resendCooldown, setCooldown]   = useState(0)
+  const [openedViaLink, setOpenedViaLink] = useState(false)
   const inputRefs                       = useRef([])
 
   // Live password validation rules (Step 3)
@@ -38,7 +42,6 @@ export default function ForgotPasswordPage() {
   const passwordsMatch = passwords.newPw.length > 0 && passwords.newPw === passwords.confirmPw
   const isPasswordValid = hasMinLength && passwordsMatch
 
-
   useEffect(() => {
     const isResetPath = window.location.pathname.includes('/reset-password')
     const hash = window.location.hash || ''
@@ -46,23 +49,93 @@ export default function ForgotPasswordPage() {
     const isRecovery =
       isResetPath ||
       hash.includes('type=recovery') ||
+      hash.includes('type=magiclink') ||
       hash.includes('access_token=') ||
       search.includes('type=recovery') ||
       search.includes('code=')
 
     if (isRecovery) {
+      setOpenedViaLink(true)
       toast.success('Ready to set your new password!')
       setStep(3)
+      try {
+        localStorage.setItem('serviceq_recovery_verified', Date.now().toString())
+        const bc = new BroadcastChannel('serviceq_recovery_channel')
+        bc.postMessage({ type: 'SERVICEQ_RECOVERY_VERIFIED' })
+        bc.close()
+        if (window.opener) {
+          window.opener.postMessage({ type: 'SERVICEQ_RECOVERY_VERIFIED' }, '*')
+        }
+      } catch {}
     }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
+        setOpenedViaLink(true)
         toast.success('Ready to set your new password!')
         setStep(3)
       }
     })
-    return () => subscription?.unsubscribe()
+
+    const handleStorage = (e) => {
+      if (e.key === 'serviceq_recovery_verified') {
+        toast.success('Identity verified! Ready to set your new password.')
+        setStep(3)
+      }
+    }
+    const handleMsg = (e) => {
+      if (e.data?.type === 'SERVICEQ_RECOVERY_VERIFIED') {
+        toast.success('Identity verified! Ready to set your new password.')
+        setStep(3)
+      }
+    }
+
+    let bc
+    try {
+      bc = new BroadcastChannel('serviceq_recovery_channel')
+      bc.onmessage = (e) => {
+        if (e.data?.type === 'SERVICEQ_RECOVERY_VERIFIED') {
+          toast.success('Identity verified! Ready to set your new password.')
+          setStep(3)
+        }
+      }
+    } catch {}
+
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener('message', handleMsg)
+
+    return () => {
+      subscription?.unsubscribe()
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('message', handleMsg)
+      try { bc?.close() } catch {}
+    }
   }, [])
+
+  // Auto-redirect timer when arriving on step 4 success screen
+  useEffect(() => {
+    if (step === 4) {
+      const timer = setTimeout(async () => {
+        try {
+          if (signOut) await signOut()
+          await supabase.auth.signOut()
+        } catch {}
+        localStorage.removeItem('serviceq_auth_profile')
+        localStorage.removeItem('serviceq_last_activity')
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+            localStorage.removeItem(k)
+          }
+        })
+        const cleanEmail = (email.trim() || sessionStorage.getItem('serviceq_recovery_email') || '').toLowerCase()
+        const targetLogin = role === 'provider'
+          ? `/login?role=provider&reset=true&email=${encodeURIComponent(cleanEmail)}`
+          : `/login?role=customer&reset=true&email=${encodeURIComponent(cleanEmail)}`
+        navigate(targetLogin, { replace: true })
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [step, role, email, navigate, signOut])
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -98,7 +171,7 @@ export default function ForgotPasswordPage() {
     inputRefs.current[nextFocusIndex]?.focus()
   }
 
-  // ── Step 1: Send Password Reset OTP to Email ─────────────────────────────
+  // ── Step 1: Send Password Reset 6-Digit OTP to Email ─────────────────────
   const handleSendOtp = async e => {
     e.preventDefault()
     const cleanEmail = email.trim()
@@ -110,16 +183,17 @@ export default function ForgotPasswordPage() {
       sessionStorage.setItem(`serviceq_recovery_otp_${cleanEmail.toLowerCase()}`, generatedOtp)
       sessionStorage.setItem('serviceq_recovery_email', cleanEmail.toLowerCase())
 
-      const redirectUrl = `${window.location.origin}/reset-password?role=${role}&email=${encodeURIComponent(cleanEmail)}`
-      try {
-        await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: redirectUrl,
-        })
-      } catch (err) {
-        console.warn('Supabase resetPasswordForEmail notice:', err)
+      // Send 6-digit OTP code directly to user's email via Supabase signInWithOtp (never sends a link)
+      const { error: otpErr } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
+        options: { shouldCreateUser: false },
+      })
+
+      if (otpErr) {
+        console.warn('Supabase signInWithOtp notice:', otpErr.message)
       }
 
-      toast.success(`Verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
+      toast.success(`6-digit verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
       setCooldown(60)
       setStep(2)
       setTimeout(() => inputRefs.current[0]?.focus(), 150)
@@ -143,24 +217,53 @@ export default function ForgotPasswordPage() {
       const savedOtp = sessionStorage.getItem(`serviceq_recovery_otp_${cleanEmail}`)
 
       let verified = false
-      if (token === savedOtp || token === '123456') {
-        verified = true
-      } else {
+
+      // Try verifying with Supabase as email OTP token
+      try {
+        const { error: emailErr } = await supabase.auth.verifyOtp({
+          email: cleanEmail,
+          token,
+          type: 'email',
+        })
+        if (!emailErr) verified = true
+      } catch {}
+
+      // Try verifying with Supabase as magiclink token
+      if (!verified) {
         try {
-          const { error } = await supabase.auth.verifyOtp({
-            email: email.trim(),
+          const { error: magicErr } = await supabase.auth.verifyOtp({
+            email: cleanEmail,
             token,
-            type: 'recovery',
+            type: 'magiclink',
           })
-          if (!error) verified = true
+          if (!magicErr) verified = true
         } catch {}
       }
 
+      // Try verifying with Supabase as recovery token
       if (!verified) {
-        throw new Error('Invalid or expired OTP code. Please enter the 6-digit code or resend.')
+        try {
+          const { error: recErr } = await supabase.auth.verifyOtp({
+            email: cleanEmail,
+            token,
+            type: 'recovery',
+          })
+          if (!recErr) verified = true
+        } catch {}
       }
 
-      toast.success('Email verified! Please enter your new password.')
+      // Fallback verification for demo / generated session OTP
+      if (!verified) {
+        if (token === savedOtp || token === '123456') {
+          verified = true
+        }
+      }
+
+      if (!verified) {
+        throw new Error('Invalid or expired OTP code. Please enter the 6-digit code from your email or resend.')
+      }
+
+      toast.success('Code verified! Please create your new password.')
       setStep(3)
     } catch (err) {
       console.error('Verify recovery OTP error:', err)
@@ -179,14 +282,13 @@ export default function ForgotPasswordPage() {
       const newOtp = Math.floor(100000 + Math.random() * 900000).toString()
       sessionStorage.setItem(`serviceq_recovery_otp_${cleanEmail}`, newOtp)
 
-      const redirectUrl = `${window.location.origin}/reset-password?role=${role}&email=${encodeURIComponent(cleanEmail)}`
-      try {
-        await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: redirectUrl,
-        })
-      } catch {}
+      const { error: otpErr } = await supabase.auth.signInWithOtp({
+        email: cleanEmail,
+        options: { shouldCreateUser: false },
+      })
+      if (otpErr) console.warn('Supabase resend OTP notice:', otpErr.message)
 
-      toast.success(`A fresh verification code has been sent to ${cleanEmail}. Please check your inbox.`, { duration: 5000 })
+      toast.success(`A fresh 6-digit verification code has been sent to ${cleanEmail}. Please check your inbox.`, { duration: 5000 })
       setCooldown(60)
       setOtp(['', '', '', '', '', ''])
       inputRefs.current[0]?.focus()
@@ -207,7 +309,7 @@ export default function ForgotPasswordPage() {
     try {
       const cleanEmail = (email.trim() || sessionStorage.getItem('serviceq_recovery_email') || '').toLowerCase()
       
-      // Update password in Supabase Auth
+      // 1. Update password in Supabase Auth
       try {
         await supabase.auth.updateUser({
           password: passwords.newPw,
@@ -216,20 +318,32 @@ export default function ForgotPasswordPage() {
         console.warn('Supabase updateUser note:', authErr)
       }
 
-      // Persist password to local storage so password login works seamlessly
+      // 2. Persist password across local storage keys
       if (cleanEmail) {
         localStorage.setItem(`serviceq_password_${cleanEmail}`, passwords.newPw)
         localStorage.setItem(`serviceq_provider_password_${cleanEmail}`, passwords.newPw)
         localStorage.setItem(`serviceq_customer_password_${cleanEmail}`, passwords.newPw)
       }
 
+      // 3. Strict complete sign out — purge all active sessions so user CANNOT be logged in automatically!
       try {
+        if (signOut) await signOut()
         await supabase.auth.signOut()
       } catch {}
+
       localStorage.removeItem('serviceq_auth_profile')
       localStorage.removeItem('serviceq_last_activity')
+      sessionStorage.removeItem(`serviceq_recovery_otp_${cleanEmail}`)
+      sessionStorage.removeItem('serviceq_recovery_email')
 
-      toast.success('Password updated successfully! Please sign in with your new credentials.')
+      // Purge any Supabase auth tokens stored in localStorage so no background session lingers
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+      })
+
+      toast.success('Password updated successfully! Please sign in with your new password.', { duration: 5000 })
       setStep(4)
     } catch (err) {
       console.error('Update password error:', err)
@@ -475,6 +589,18 @@ export default function ForgotPasswordPage() {
             {step === 3 && (
               <motion.form key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }} onSubmit={handleResetPassword} className="flex flex-col gap-4">
+                {openedViaLink && (
+                  <div className="flex items-center justify-between bg-sky-50 border border-sky-200 text-sky-800 text-xs px-3.5 py-2.5 rounded-xl mb-1">
+                    <span>Identity confirmed via email. Set your new password below.</span>
+                    <button
+                      type="button"
+                      onClick={() => window.close()}
+                      className="underline font-semibold ml-2 text-sky-900 hover:text-sky-950 flex-shrink-0"
+                    >
+                      Close tab
+                    </button>
+                  </div>
+                )}
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-800 text-xs flex items-center gap-2">
                   <CheckCircle size={16} className="text-emerald-600 flex-shrink-0" />
                   <span>Email verified! You can now choose a new secure password.</span>
@@ -608,14 +734,32 @@ export default function ForgotPasswordPage() {
                     Your password has been successfully updated. You can now log in with your new credentials.
                   </p>
                 </div>
-                <Link
-                  to={role === 'provider' ? '/login?role=provider' : '/login'}
-                  className={`w-full py-2.5 rounded-xl font-bold text-sm text-center shadow-sm flex items-center justify-center transition-all ${
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      if (signOut) await signOut()
+                      await supabase.auth.signOut()
+                    } catch {}
+                    localStorage.removeItem('serviceq_auth_profile')
+                    localStorage.removeItem('serviceq_last_activity')
+                    Object.keys(localStorage).forEach(k => {
+                      if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+                        localStorage.removeItem(k)
+                      }
+                    })
+                    const cleanEmail = (email.trim() || sessionStorage.getItem('serviceq_recovery_email') || '').toLowerCase()
+                    const targetLogin = role === 'provider'
+                      ? `/login?role=provider&reset=true&email=${encodeURIComponent(cleanEmail)}`
+                      : `/login?role=customer&reset=true&email=${encodeURIComponent(cleanEmail)}`
+                    navigate(targetLogin, { replace: true })
+                  }}
+                  className={`w-full py-3 rounded-xl font-bold text-sm text-center shadow-sm flex items-center justify-center transition-all ${
                     role === 'provider' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'btn-primary'
                   }`}
                 >
-                  Sign In to ServiceQ {role === 'provider' ? 'Provider Portal' : ''}
-                </Link>
+                  Proceed to {role === 'provider' ? 'Provider' : 'Customer'} Login
+                </button>
               </motion.div>
             )}
           </AnimatePresence>

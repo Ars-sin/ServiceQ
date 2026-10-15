@@ -9,18 +9,42 @@ import { useAuth } from '@/contexts/AuthContext'
 export default function AdminLogin() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { user, profile: authProfile, loginWithProfile } = useAuth()
+  const { user, profile: authProfile, loginWithProfile, signOut } = useAuth()
   const initialEmail = searchParams.get('email') || ''
   const [form, setForm] = useState({ email: initialEmail, password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // Sync email from search params
+  useEffect(() => {
+    const urlEmail = searchParams.get('email')
+    if (urlEmail) {
+      setForm(f => ({ ...f, email: urlEmail }))
+    }
+  }, [searchParams])
+
   // If already logged in as admin, redirect directly to admin dashboard
   useEffect(() => {
+    if (searchParams.get('reset') === 'true') {
+      try {
+        if (signOut) signOut()
+        supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+      })
+      toast.success('Admin password updated! Please sign in with your new password.', { id: 'admin-reset-success' })
+      return
+    }
+
     if (user && (authProfile?.role === 'admin' || user?.email?.toLowerCase() === 'rutilander@gmail.com')) {
       navigate('/admin/dashboard', { replace: true })
     }
-  }, [user, authProfile, navigate])
+  }, [user, authProfile, navigate, searchParams, signOut])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

@@ -30,19 +30,49 @@ function isAdminAccount(email, role) {
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { loginWithProfile } = useAuth()
+  const { loginWithProfile, signOut } = useAuth()
   const [searchParams] = useSearchParams()
   const initialRole = searchParams.get('role') === 'provider' ? 'provider' : 'customer'
   const [loginRole, setLoginRole] = useState(initialRole)
 
-  const [form, setForm] = useState({ email: '', password: '' })
+  const initialEmail = searchParams.get('email') || ''
+  const [form, setForm] = useState({ email: initialEmail, password: '' })
   const [showPw, setShowPw]           = useState(false)
   const [loading, setLoading]         = useState(false)
   const [unconfirmed, setUnconfirmed] = useState(false)
   const [resending, setResending]     = useState(false)
 
+  // Sync role and pre-filled email from URL query params
+  useEffect(() => {
+    const urlRole = searchParams.get('role')
+    if (urlRole === 'provider' || urlRole === 'customer') {
+      setLoginRole(urlRole)
+    }
+    const urlEmail = searchParams.get('email')
+    if (urlEmail) {
+      setForm(f => ({ ...f, email: urlEmail }))
+    }
+  }, [searchParams])
+
   // Listen for active OAuth session (e.g. redirected back from Google OAuth)
   useEffect(() => {
+    // If arriving from password reset, purge any leftover recovery sessions and DO NOT auto-login
+    if (searchParams.get('reset') === 'true') {
+      try {
+        if (signOut) signOut()
+        supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+      })
+      toast.success('Password updated successfully! Please sign in with your new password.', { id: 'pwd-reset-success' })
+      return
+    }
+
     let handled = false
 
     async function processOAuthUser(rawEmail, fullName) {
@@ -103,24 +133,6 @@ export default function LoginPage() {
       }
       processOAuthUser(googleUser.email, googleUser.name)
       return
-    }
-
-    // 2. Check standard Supabase session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        processOAuthUser(session.user.email, session.user.user_metadata?.full_name)
-      }
-    })
-
-    // 3. Listen for async OAuth state changes (e.g. PKCE code exchange)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) {
-        processOAuthUser(session.user.email, session.user.user_metadata?.full_name)
-      }
-    })
-
-    return () => {
-      subscription.unsubscribe()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

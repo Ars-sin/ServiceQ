@@ -116,7 +116,12 @@ export default function ProviderSettings() {
       } catch {}
       localStorage.removeItem('serviceq_auth_profile')
       localStorage.removeItem('serviceq_last_activity')
-      navigate('/login?role=provider', { replace: true })
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('sb-') && k.endsWith('-auth-token')) {
+          localStorage.removeItem(k)
+        }
+      })
+      navigate(`/login?role=provider&reset=true&email=${encodeURIComponent(provEmail.toLowerCase())}`, { replace: true })
     } catch (err) {
       toast.error(err.message || 'Failed to update password')
     } finally {
