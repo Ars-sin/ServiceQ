@@ -105,7 +105,23 @@ export default function ProviderDashboard() {
   const totalListings = listings.length
   const totalBookings = bookings.length
   const uniqueCustomers = new Set(bookings.map(b => b.customer || b.customer_name)).size
-  const avgRating = bookings.length > 0 ? '5.0★' : '—'
+  const avgRating = (() => {
+    try {
+      const allRev = JSON.parse(localStorage.getItem('serviceq_reviews')) || []
+      const myListingIds = new Set(listings.map(l => String(l.id)))
+      const myListingTitles = new Set(listings.map(l => l.title?.trim().toLowerCase()))
+      const matching = allRev.filter(r =>
+        (r.listingId && myListingIds.has(String(r.listingId))) ||
+        (r.service && myListingTitles.has(r.service.trim().toLowerCase()))
+      )
+      if (matching.length > 0) {
+        return `${(matching.reduce((sum, r) => sum + Number(r.rating || 5), 0) / matching.length).toFixed(1)}★`
+      }
+      return '—'
+    } catch {
+      return '—'
+    }
+  })()
 
   const statusCounts = {
     pending: bookings.filter(b => b.status === 'pending').length,

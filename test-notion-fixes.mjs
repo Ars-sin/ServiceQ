@@ -226,6 +226,69 @@ test('Session: User automatically logs out after 30 minutes of inactivity', () =
   )
 })
 
+// -------------------------------------------------------------
+// TEST 13: Provider Listing Photo Upload & Preview
+// -------------------------------------------------------------
+test('Provider Listings: Photo upload with preview grid, cover badge, removal, and publish preview', () => {
+  const listingsSrc = fs.readFileSync('src/pages/provider/Listings.jsx', 'utf8')
+
+  assert.ok(
+    listingsSrc.includes('handlePhotoUpload'),
+    'Listings.jsx implements handlePhotoUpload'
+  )
+  assert.ok(
+    listingsSrc.includes('FileReader') && listingsSrc.includes('readAsDataURL'),
+    'Listings.jsx uses FileReader.readAsDataURL to convert images to base64 preview'
+  )
+  assert.ok(
+    listingsSrc.includes('handleRemovePhoto'),
+    'Listings.jsx implements handleRemovePhoto'
+  )
+  assert.ok(
+    listingsSrc.includes('handleSetCoverPhoto'),
+    'Listings.jsx implements handleSetCoverPhoto'
+  )
+  assert.ok(
+    listingsSrc.includes('Listing Preview') && listingsSrc.includes('form.photos[0]'),
+    'Step 5 Review & Publish previews uploaded cover photo'
+  )
+  assert.ok(
+    listingsSrc.includes('photos: Array.isArray(form.photos) ? form.photos : []'),
+    'handlePublish saves photos array in newListing'
+  )
+})
+
+// -------------------------------------------------------------
+// TEST 14: Fresh Listing Isolation (0 reviews, 0 rating, empty reviews)
+// -------------------------------------------------------------
+test('Listing Freshness: Newly published listings have strictly 0 reviews, 0 rating, and empty reviews list', () => {
+  const listingsSrc = fs.readFileSync('src/pages/provider/Listings.jsx', 'utf8')
+  const listingsSvcSrc = fs.readFileSync('src/lib/listingsService.js', 'utf8')
+  const detailSrc = fs.readFileSync('src/pages/customer/ListingDetail.jsx', 'utf8')
+  const exploreSrc = fs.readFileSync('src/pages/customer/Explore.jsx', 'utf8')
+
+  assert.ok(
+    listingsSrc.includes('rating: 0') && listingsSrc.includes('reviews: 0') && listingsSrc.includes('reviews_list: []'),
+    'Listings.jsx handlePublish initializes rating: 0, reviews: 0, reviews_list: []'
+  )
+  assert.ok(
+    listingsSvcSrc.includes('const rating = reviews === 0 ? 0 :'),
+    'listingsService.js normalizeListing sets rating: 0 when reviews is 0'
+  )
+  assert.ok(
+    detailSrc.includes('isBaseMock') && detailSrc.includes('fallbackReviews = isBaseMock'),
+    'ListingDetail.jsx isolates mock reviews to base mock items only'
+  )
+  assert.ok(
+    detailSrc.includes('No reviews yet') && detailSrc.includes('Be the first customer to book and review this service!'),
+    'ListingDetail.jsx displays friendly empty state when a listing has 0 reviews'
+  )
+  assert.ok(
+    exploreSrc.includes('<span>New</span>'),
+    'Explore.jsx displays New badge when a listing has 0 reviews'
+  )
+})
+
 console.log(`\n========================================`)
 console.log(`TEST RUN COMPLETE: ${passCount} PASSED, ${failCount} FAILED`)
 console.log(`========================================`)

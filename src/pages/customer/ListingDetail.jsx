@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import { formatPHP, calcFees } from '@/lib/utils'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
 import { isFavorite, toggleFavorite } from '@/lib/favorites'
-import { fetchBackendListings } from '@/lib/listingsService'
+import { fetchBackendListings, BASE_LISTINGS } from '@/lib/listingsService'
 import Modal from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -202,11 +202,22 @@ export default function ListingDetail() {
       })
     } catch {}
 
-    const combinedReviews = [...dynamicReviews, ...(matched.reviews_list || DEFAULT_MOCK.reviews_list || [])]
-    const calculatedReviews = Math.max((matched.reviews || 0), dynamicReviews.length)
+    const isBaseMock = BASE_LISTINGS.some(b => String(b.id) === String(matched.id))
+    const fallbackReviews = isBaseMock ? (DEFAULT_MOCK.reviews_list || []) : []
+    const combinedReviews = [...dynamicReviews, ...(matched.reviews_list || fallbackReviews)]
+
+    // Fresh listings must strictly have 0 reviews and 0 rating unless real reviews exist
+    const calculatedReviews = dynamicReviews.length > 0
+      ? dynamicReviews.length
+      : (matched.reviews !== undefined && matched.reviews !== null ? Number(matched.reviews) : (isBaseMock ? 42 : 0))
+
     const calculatedRating = dynamicReviews.length > 0
       ? (dynamicReviews.reduce((sum, r) => sum + Number(r.rating || 5), 0) / dynamicReviews.length).toFixed(1)
-      : (matched.rating || 5.0)
+      : (calculatedReviews > 0 ? (matched.rating || 5.0) : 0)
+
+    const calculatedBookings = matched.bookings !== undefined && matched.bookings !== null
+      ? Number(matched.bookings)
+      : (isBaseMock ? 134 : 0)
 
     const initials = (matched.provider || 'SP')
       .split(' ')
@@ -219,10 +230,16 @@ export default function ListingDetail() {
       ? ['from-emerald-500 to-teal-600', 'from-teal-500 to-cyan-600', 'from-emerald-400 to-teal-500', 'from-cyan-500 to-emerald-600']
       : ['from-blue-500 to-indigo-600', 'from-indigo-500 to-purple-600', 'from-sky-400 to-blue-500', 'from-cyan-500 to-blue-600']
 
+    // Use uploaded photos if present, otherwise fall back to color gradients
+    const displayPhotos = (Array.isArray(matched.photos) && matched.photos.length > 0)
+      ? matched.photos
+      : colorGradients
+
     return {
       ...DEFAULT_MOCK,
       id: matched.id,
       title: matched.title,
+      type: matched.type,
       category: `${matched.category}${matched.subCategory ? ` · ${matched.subCategory}` : ''}`,
       description: matched.description || `${matched.title} provided by ${matched.provider}. Available for immediate booking with verified quality guarantee and secure digital payment via ServiceQ. Located ${matched.distance || '1.0'} km away in Metro Cebu.`,
       price: matched.price,
@@ -230,16 +247,16 @@ export default function ListingDetail() {
       rating: Number(calculatedRating),
       reviews: calculatedReviews,
       reviews_list: combinedReviews,
-      bookings: Math.round((calculatedReviews || 10) * 2.8) || 45,
+      bookings: calculatedBookings,
       provider: {
         name: matched.provider || 'Service Provider',
         avatar: initials,
-        rating: Number(calculatedRating),
+        rating: Number(calculatedRating) || 5.0,
         verified: !!(matched.isVerified || matched.provider_verified || matched.providerVerified),
         joined: 'January 2024',
       },
       providerId: matched.providerId || null,
-      photos: colorGradients,
+      photos: displayPhotos,
     }
   }, [id, backendListing, reviewsTrigger])
 
@@ -293,14 +310,40 @@ export default function ListingDetail() {
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Gallery */}
           <div>
-            <div className={`h-72 rounded-2xl bg-gradient-to-br ${listing.photos[selectedPhoto]} mb-3 shadow-inner flex items-center justify-center text-white/40 text-4xl font-black`}>
-              ServiceQ Verified
-            </div>
-            <div className="flex gap-2">
-              {listing.photos.map((p, i) => (
-                <button key={i} onClick={() => setSelectedPhoto(i)}
-                  className={`w-16 h-16 rounded-xl bg-gradient-to-br ${p} transition-all ${selectedPhoto === i ? 'ring-2 ring-brand-500 ring-offset-2 scale-105' : 'opacity-60 hover:opacity-90'}`} />
-              ))}
+            {listing.photos && listing.photos[selectedPhoto] && (listing.photos[selectedPhoto].startsWith('data:') || listing.photos[selectedPhoto].startsWith('http') || listing.photos[selectedPhoto].startsWith('/')) ? (
+              <div className="h-72 w-full rounded-2xl overflow-hidden mb-3 shadow-inner bg-gray-100 flex items-center justify-center border border-gray-100">
+                <img
+                  src={listing.photos[selectedPhoto]}
+                  alt={listing.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className={`h-72 rounded-2xl bg-gradient-to-br ${listing.photos?.[selectedPhoto] || 'from-emerald-400 to-teal-500'} mb-3 shadow-inner flex items-center justify-center text-white/40 text-4xl font-black`}>
+                ServiceQ Verified
+              </div>
+            )}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {listing.photos.map((p, i) => {
+                const isImg = p && (p.startsWith('data:') || p.startsWith('http') || p.startsWith('/'))
+                return (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedPhoto(i)}
+                    className={`w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 transition-all border ${
+                      selectedPhoto === i
+                        ? 'ring-2 ring-brand-500 ring-offset-2 scale-105 border-brand-500'
+                        : 'opacity-60 hover:opacity-90 border-gray-200'
+                    }`}
+                  >
+                    {isImg ? (
+                      <img src={p} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-br ${p}`} />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -309,8 +352,14 @@ export default function ListingDetail() {
             <span className="badge-brand mb-2">{listing.category}</span>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">{listing.title}</h1>
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-              <span className="flex items-center gap-1"><Star size={14} className="fill-amber-400 text-amber-400" />{listing.rating} ({listing.reviews} reviews)</span>
-              <span className="flex items-center gap-1"><CheckCircle size={14} className="text-green-500" />{listing.bookings} bookings</span>
+              <span className="flex items-center gap-1">
+                <Star size={14} className="fill-amber-400 text-amber-400" />
+                {listing.reviews > 0 ? `${listing.rating} (${listing.reviews} reviews)` : 'New (No reviews yet)'}
+              </span>
+              <span className="flex items-center gap-1">
+                <CheckCircle size={14} className="text-green-500" />
+                {listing.bookings} booking{listing.bookings === 1 ? '' : 's'}
+              </span>
             </div>
           </div>
 
@@ -355,22 +404,30 @@ export default function ListingDetail() {
                 <PenLine size={13} /> Write a Review
               </button>
             </div>
-            <div className="flex flex-col gap-4">
-              {listing.reviews_list.map((r, i) => (
-                <div key={i} className={`${i < listing.reviews_list.length - 1 ? 'pb-4 border-b border-gray-100' : ''}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-sm text-gray-900">{r.user || r.author || 'Customer'}</span>
-                    <span className="text-xs text-gray-400">{r.date}</span>
+            {listing.reviews_list && listing.reviews_list.length > 0 ? (
+              <div className="flex flex-col gap-4">
+                {listing.reviews_list.map((r, i) => (
+                  <div key={i} className={`${i < listing.reviews_list.length - 1 ? 'pb-4 border-b border-gray-100' : ''}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm text-gray-900">{r.user || r.author || 'Customer'}</span>
+                      <span className="text-xs text-gray-400">{r.date}</span>
+                    </div>
+                    <div className="flex gap-0.5 mb-1">
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <Star key={j} size={12} className={j < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200 fill-gray-200'} />
+                      ))}
+                    </div>
+                    <p className="text-sm text-gray-600">{r.comment}</p>
                   </div>
-                  <div className="flex gap-0.5 mb-1">
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <Star key={j} size={12} className={j < r.rating ? 'fill-amber-400 text-amber-400' : 'text-gray-200 fill-gray-200'} />
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-600">{r.comment}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center bg-gray-50/70 border border-dashed border-gray-200 rounded-xl">
+                <Star size={28} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-gray-700">No reviews yet</p>
+                <p className="text-xs text-gray-400 mt-1">Be the first customer to book and review this service!</p>
+              </div>
+            )}
           </div>
         </div>
 

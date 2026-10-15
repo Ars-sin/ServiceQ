@@ -252,9 +252,19 @@ export default function AdminListings() {
       <Modal open={!!viewListing} onClose={() => setViewListing(null)} title="Listing Details" size="md">
         {viewListing && (
           <div className="flex flex-col gap-4">
-            <div className={`w-full h-16 rounded-2xl flex items-center justify-center text-white font-bold text-sm px-4 text-center ${CAT_COLOR[viewListing.category] ?? 'bg-gradient-to-br from-brand-400 to-accent-400'}`}>
-              {viewListing.title}
-            </div>
+            {viewListing.photos && viewListing.photos[0] && !viewListing.photos[0].startsWith('from-') ? (
+              <div className="w-full h-36 rounded-2xl overflow-hidden shadow-xs border border-gray-100">
+                <img
+                  src={viewListing.photos[0]}
+                  alt={viewListing.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className={`w-full h-16 rounded-2xl flex items-center justify-center text-white font-bold text-sm px-4 text-center ${CAT_COLOR[viewListing.category] ?? 'bg-gradient-to-br from-brand-400 to-accent-400'}`}>
+                {viewListing.title}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2.5 text-sm">
               {[
                 ['Provider',   viewListing.provider],

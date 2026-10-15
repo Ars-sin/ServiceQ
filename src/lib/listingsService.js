@@ -30,6 +30,19 @@ export function normalizeListing(raw) {
   const rawType = String(raw.type || raw.listing_type || 'services').toLowerCase()
   const type = rawType.includes('rental') ? 'rentals' : 'services'
 
+  const reviews = parseInt(raw.reviews ?? raw.reviews_count ?? 0) || 0
+  const rawRating = raw.rating ?? raw.avg_rating
+  const rating = reviews === 0 ? 0 : (rawRating !== undefined && rawRating !== null && rawRating !== '' ? parseFloat(rawRating) : 5.0)
+
+  let photos = []
+  if (Array.isArray(raw.photos) && raw.photos.length > 0) {
+    photos = raw.photos
+  } else if (Array.isArray(raw.images) && raw.images.length > 0) {
+    photos = raw.images
+  } else if (raw.image && typeof raw.image === 'string') {
+    photos = [raw.image]
+  }
+
   return {
     id,
     title: raw.title || 'Untitled Offering',
@@ -46,8 +59,9 @@ export function normalizeListing(raw) {
       : (raw.provider_name || raw.business_name || 'Service Provider'),
     providerId: raw.providerId || raw.provider_id || raw.userId || raw.user_id || null,
     distance: parseFloat(raw.distance) || 1.0,
-    rating: parseFloat(raw.rating || raw.avg_rating) || 5.0,
-    reviews: parseInt(raw.reviews || raw.reviews_count || raw.total_bookings) || 0,
+    rating,
+    reviews,
+    reviews_list: Array.isArray(raw.reviews_list) ? raw.reviews_list : [],
     tag: (raw.tag && raw.tag !== 'Verified')
       ? raw.tag
       : ((raw.isVerified || raw.provider_verified || raw.providerVerified) ? 'Verified' : ''),
@@ -66,7 +80,7 @@ export function normalizeListing(raw) {
     location: raw.location || raw.location_text || raw.city || 'Cebu City',
     serviceArea: raw.serviceArea || raw.service_area || 'Metro Cebu',
     description: raw.description || raw.title || '',
-    photos: Array.isArray(raw.photos) ? raw.photos : (raw.images || []),
+    photos,
     updatedAt: raw.updatedAt || raw.updated_at || new Date().toISOString(),
   }
 }

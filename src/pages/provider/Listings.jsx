@@ -4,7 +4,8 @@ import { motion } from 'framer-motion'
 import {
   Plus, Archive, Eye, ToggleLeft, ToggleRight,
   ShieldAlert, MapPin, Calendar, Clock,
-  ArrowLeft, ArrowRight, Package, Star
+  ArrowLeft, ArrowRight, Package, Star,
+  Trash2, Camera
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
@@ -39,6 +40,7 @@ const INITIAL_FORM = {
   category: '',
   title: '',
   description: '',
+  photos: [],
   price: '0',
   unit: 'per session',
   minDuration: '1',
@@ -186,6 +188,74 @@ export default function ProviderListings() {
     setWizardStep(0)
   }
 
+  const handlePhotoUpload = (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+
+    const currentPhotos = Array.isArray(form.photos) ? form.photos : []
+    const remainingSlots = 5 - currentPhotos.length
+    if (remainingSlots <= 0) {
+      toast.error('Maximum 5 photos allowed per listing')
+      return
+    }
+
+    const filesToProcess = files.slice(0, remainingSlots)
+    let processedCount = 0
+
+    filesToProcess.forEach(file => {
+      if (!file.type.startsWith('image/')) {
+        toast.error(`${file.name} is not an image file`)
+        return
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} exceeds 5MB limit`)
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const dataUrl = event.target.result
+        setForm(f => {
+          const list = Array.isArray(f.photos) ? f.photos : []
+          if (list.length >= 5) return f
+          return {
+            ...f,
+            photos: [...list, dataUrl]
+          }
+        })
+        processedCount++
+        if (processedCount === filesToProcess.length) {
+          toast.success(`Photo${filesToProcess.length > 1 ? 's' : ''} uploaded successfully!`)
+        }
+      }
+      reader.onerror = () => {
+        toast.error(`Failed to read ${file.name}`)
+      }
+      reader.readAsDataURL(file)
+    })
+
+    e.target.value = ''
+  }
+
+  const handleRemovePhoto = (indexToRemove) => {
+    setForm(f => ({
+      ...f,
+      photos: (f.photos || []).filter((_, idx) => idx !== indexToRemove)
+    }))
+    toast.success('Photo removed')
+  }
+
+  const handleSetCoverPhoto = (indexToCover) => {
+    if (indexToCover === 0) return
+    setForm(f => {
+      const photos = [...(f.photos || [])]
+      const [chosen] = photos.splice(indexToCover, 1)
+      photos.unshift(chosen)
+      return { ...f, photos }
+    })
+    toast.success('Cover photo updated!')
+  }
+
   const openEditAvailability = (listing) => {
     setEditingAvailability(listing)
     setAvailForm({
@@ -302,8 +372,11 @@ export default function ProviderListings() {
       tag: (profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true') ? 'Verified' : '',
       isVerified: !!(profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true'),
       distance: 1.0,
-      rating: 5.0,
+      rating: 0,
       reviews: 0,
+      reviews_list: [],
+      photos: Array.isArray(form.photos) ? form.photos : [],
+      image: form.photos?.[0] || null,
       days: form.days && form.days.length > 0 ? form.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       hoursFrom: form.hoursFrom || '08:00',
       hoursTo: form.hoursTo || '17:00',
@@ -389,9 +462,17 @@ export default function ProviderListings() {
                 >
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${l.color} flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
-                        ✓
-                      </div>
+                      {l.photos && l.photos[0] ? (
+                        <img
+                          src={l.photos[0]}
+                          alt={l.title}
+                          className="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-sm border border-gray-100"
+                        />
+                      ) : (
+                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${l.color} flex-shrink-0 flex items-center justify-center text-white font-bold text-xs shadow-sm`}>
+                          ✓
+                        </div>
+                      )}
                       <div>
                         <div className="font-semibold text-gray-900 text-sm group-hover:text-emerald-700 transition-colors">{l.title}</div>
                         <div className="text-xs text-gray-400">{l.category}</div>
@@ -534,11 +615,77 @@ export default function ProviderListings() {
               />
             </div>
             <div className="form-group">
-              <label className="label">Photos (Optional)</label>
-              <label className="border-2 border-dashed border-gray-300 rounded-xl h-24 flex items-center justify-center gap-2 cursor-pointer hover:border-emerald-400 bg-gray-50/50">
-                <Plus size={18} className="text-gray-400" /><span className="text-xs text-gray-500">Attach photos</span>
-                <input type="file" multiple accept="image/*" className="hidden" onChange={() => toast.success('1 photo selected')} />
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="label !mb-0">Listing Photos (Optional)</label>
+                <span className="text-[11px] text-gray-400">
+                  {form.photos?.length || 0}/5 photos · First photo is cover
+                </span>
+              </div>
+
+              {/* Photos Preview Grid */}
+              {form.photos && form.photos.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5 mb-3">
+                  {form.photos.map((photo, index) => (
+                    <div
+                      key={index}
+                      className={`relative group aspect-square rounded-xl overflow-hidden border-2 transition-all ${
+                        index === 0 ? 'border-emerald-500 shadow-sm' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <img
+                        src={photo}
+                        alt={`Listing upload ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      {index === 0 && (
+                        <span className="absolute top-1 left-1 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs">
+                          Cover
+                        </span>
+                      )}
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 p-1">
+                        {index !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetCoverPhoto(index)}
+                            title="Set as Cover"
+                            className="p-1 bg-white/90 text-gray-800 hover:bg-white rounded-md text-[10px] font-semibold"
+                          >
+                            Cover
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePhoto(index)}
+                          title="Remove Photo"
+                          className="p-1.5 bg-red-600/90 text-white hover:bg-red-600 rounded-md"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload Dropzone */}
+              {(form.photos?.length || 0) < 5 && (
+                <label className="border-2 border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:border-emerald-500 hover:bg-emerald-50/20 transition-all bg-gray-50/50">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <Camera size={18} />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700">
+                    {form.photos?.length > 0 ? 'Add more photos' : 'Click to select and upload photos'}
+                  </span>
+                  <span className="text-[10px] text-gray-400">PNG, JPG, WEBP up to 5MB each (Max 5 photos)</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                  />
+                </label>
+              )}
             </div>
           </div>
         )}
@@ -688,15 +835,41 @@ export default function ProviderListings() {
         {/* Step 5: Review & Publish */}
         {wizardStep === 5 && (
           <div className="flex flex-col gap-4">
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2">
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Listing Preview</p>
-              <div className="w-full h-24 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow-inner">
-                {form.title || 'New Listing'}
-              </div>
+
+              {form.photos && form.photos.length > 0 ? (
+                <div className="w-full h-44 rounded-xl overflow-hidden relative shadow-sm border border-gray-200">
+                  <img
+                    src={form.photos[0]}
+                    alt={form.title || 'Listing Preview'}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-3">
+                    <span className="text-white font-bold text-base drop-shadow-sm line-clamp-1">{form.title || 'New Listing'}</span>
+                  </div>
+                  {form.photos.length > 1 && (
+                    <span className="absolute top-2 right-2 bg-black/60 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                      +{form.photos.length - 1} more photo{form.photos.length > 2 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full h-24 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold text-lg shadow-inner">
+                  {form.title || 'New Listing'}
+                </div>
+              )}
+
               <div>
                 <p className="font-bold text-gray-900 text-base">{form.title || 'Untitled Listing'}</p>
                 <p className="text-xs text-gray-500">{form.type} · {form.category} · {form.location}</p>
                 <p className="text-emerald-700 font-extrabold text-lg mt-1">{formatPHP(parseFloat(form.price) || 0)} <span className="text-xs font-normal text-gray-500">{form.unit}</span></p>
+              </div>
+
+              {/* Fresh listing guarantee badge */}
+              <div className="bg-emerald-50/70 border border-emerald-100 rounded-lg p-2.5 flex items-center gap-2 text-xs text-emerald-800">
+                <Star size={14} className="fill-emerald-600 text-emerald-600 flex-shrink-0" />
+                <span>Publishes as a <strong>fresh listing</strong> with 0 reviews and 0 bookings until real customers test and review your service.</span>
               </div>
             </div>
 
@@ -752,9 +925,35 @@ export default function ProviderListings() {
       >
         {viewingListing && (
           <div className="flex flex-col gap-4">
-            <div className={`w-full h-28 rounded-2xl bg-gradient-to-br ${viewingListing.color || 'from-emerald-400 to-teal-500'} flex items-center justify-center text-white font-extrabold text-xl shadow-inner p-4 text-center`}>
-              {viewingListing.title}
-            </div>
+            {viewingListing.photos && viewingListing.photos.length > 0 ? (
+              <div className="w-full h-44 rounded-2xl overflow-hidden relative shadow-inner border border-gray-200">
+                <img
+                  src={viewingListing.photos[0]}
+                  alt={viewingListing.title}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end p-4">
+                  <p className="text-white font-extrabold text-lg drop-shadow-sm">{viewingListing.title}</p>
+                </div>
+              </div>
+            ) : (
+              <div className={`w-full h-28 rounded-2xl bg-gradient-to-br ${viewingListing.color || 'from-emerald-400 to-teal-500'} flex items-center justify-center text-white font-extrabold text-xl shadow-inner p-4 text-center`}>
+                {viewingListing.title}
+              </div>
+            )}
+
+            {viewingListing.photos && viewingListing.photos.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {viewingListing.photos.map((p, idx) => (
+                  <img
+                    key={idx}
+                    src={p}
+                    alt=""
+                    className="w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-gray-200 shadow-xs"
+                  />
+                ))}
+              </div>
+            )}
 
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>

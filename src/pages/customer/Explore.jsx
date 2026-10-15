@@ -52,22 +52,31 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
       onClick={onClick}
     >
       {/* Visual Header */}
-      <div className={`h-32 ${listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? 'bg-cover bg-center' : 'bg-gradient-to-br from-brand-50/80 to-slate-100'} border-b border-gray-100 relative flex items-center justify-center overflow-hidden`}
-        style={listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? { backgroundImage: `url(${listing.photos[0]})` } : {}}
-      >
+      <div className="h-32 bg-gray-100 border-b border-gray-100 relative flex items-center justify-center overflow-hidden">
+        {listing.photos?.[0] && !listing.photos[0].startsWith('from-') ? (
+          <img
+            src={listing.photos[0]}
+            alt={listing.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-brand-50/80 to-slate-100 flex items-center justify-center text-brand-600">
+            {getListingIcon(listing.subCategory || listing.category)}
+          </div>
+        )}
 
         <button
           onClick={e => {
             e.stopPropagation()
             onToggleFav?.(listing.id)
           }}
-          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition-colors"
+          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition-colors z-10"
           title={isFav ? "Remove from favorites" : "Add to favorites"}
         >
           <span className={isFav ? 'text-red-500 font-bold' : 'text-gray-400'}>♥</span>
         </button>
 
-        <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 flex-wrap">
+        <div className="absolute bottom-2.5 left-3 flex items-center gap-1.5 flex-wrap z-10">
           <span className={`font-bold px-2.5 py-0.5 rounded-full text-[11px] ${
             listing.type === 'services'
               ? 'bg-blue-100 text-blue-800'
@@ -76,12 +85,12 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
             {listing.type === 'services' ? 'Service' : 'Rental'}
           </span>
           {listing.subCategory && (
-            <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200">
+            <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200 shadow-2xs">
               {listing.subCategory}
             </span>
           )}
           {listing.tag && (listing.tag !== 'Verified' || listing.isVerified || listing.provider_verified || listing.providerVerified) && (
-            <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200">
+            <span className="bg-white/90 text-gray-700 text-[10px] font-medium px-2 py-0.5 rounded-full border border-gray-200 shadow-2xs">
               {listing.tag}
             </span>
           )}
@@ -108,11 +117,18 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
             <span className="text-[11px] text-gray-400 ml-1">{listing.unit}</span>
           </div>
 
-          <div className="flex items-center gap-1 text-xs font-semibold text-gray-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
-            <Star size={12} className="fill-amber-400 text-amber-400" />
-            <span>{listing.rating}</span>
-            <span className="text-gray-400 text-[10px]">({listing.reviews})</span>
-          </div>
+          {listing.reviews > 0 ? (
+            <div className="flex items-center gap-1 text-xs font-semibold text-gray-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">
+              <Star size={12} className="fill-amber-400 text-amber-400" />
+              <span>{listing.rating}</span>
+              <span className="text-gray-400 text-[10px]">({listing.reviews})</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+              <Star size={11} className="fill-emerald-500 text-emerald-500" />
+              <span>New</span>
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
