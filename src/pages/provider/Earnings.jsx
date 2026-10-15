@@ -8,12 +8,13 @@ import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import { Tabs } from '@/components/ui/Tabs'
 import { useAuth } from '@/contexts/AuthContext'
-import {
-  submitWithdrawalRequestBackend,
+import { submitWithdrawalRequestBackend,
   fetchBackendWithdrawals,
   saveProviderBalancesBackend,
   fetchProviderBookings
 } from '@/lib/bookingsService'
+import { supabase } from '@/lib/supabase'
+
 
 const wdVariant = s => ({
   pending_review: 'warning',
@@ -30,6 +31,29 @@ export default function ProviderEarnings() {
   const [showWithdraw, setShowWithdraw] = useState(false)
   const [wAmount, setWAmount]           = useState('')
   const [wMethod, setWMethod]           = useState('')
+  const [kycPayoutMethod, setKycPayoutMethod] = useState('') // from KYC registration
+
+  // Load registered payout method from providers table / localStorage KYC data
+  useEffect(() => {
+    if (!user?.id) return
+    // 1. Try localStorage KYC data first (fastest)
+    try {
+      const kycRaw = localStorage.getItem(`serviceq_provider_kyc_${user.id}`)
+      if (kycRaw) {
+        const kyc = JSON.parse(kycRaw)
+        const m = (kyc?.payoutMethod || kyc?.payout_method || '').toLowerCase()
+        if (m) { setKycPayoutMethod(m) ; setWMethod(m) ; return }
+      }
+    } catch {}
+    // 2. Supabase providers table
+    supabase.from('providers').select('payout_method').eq('user_id', user.id).maybeSingle()
+      .then(({ data }) => {
+        const m = (data?.payout_method || '').toLowerCase()
+        if (m) { setKycPayoutMethod(m) ; setWMethod(m) }
+      }).catch(() => {})
+  }, [user?.id])
+
+
 
   // Helper to derive transactions from bookings
   const deriveTransactionsFromBookings = (bookingList) => {
@@ -230,11 +254,22 @@ export default function ProviderEarnings() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Gross Revenue"     value={formatPHP(grossRevenue)}   icon={TrendingUp}   color="success" />
-        <StatCard label="Platform Fees"     value={formatPHP(platformFees)}   icon={DollarSign}   color="danger" />
-        <StatCard label="Net Revenue"       value={formatPHP(netRevenue)}     icon={DollarSign}   color="brand" />
+        <StatCard label="ServiceQ Fee (10%)" value={`−${formatPHP(platformFees)}`} icon={DollarSign} color="danger" />
+        <StatCard label="Your Net Revenue"  value={formatPHP(netRevenue)}     icon={DollarSign}   color="brand" />
         <StatCard label="Available Balance" value={formatPHP(availBalance)}   icon={Wallet}       color="success" />
         <StatCard label="Pending Balance"   value={formatPHP(pendingBalance)} icon={Clock}        color="warning" />
       </div>
+
+      {/* Fee note */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700 flex items-start gap-2">
+        <span className="text-base leading-none mt-0.5">ℹ️</span>
+        <span>
+          <strong>How earnings work:</strong> ServiceQ deducts a <strong>10% platform fee</strong> from each booking.
+          Example: if a booking is <strong>₱700</strong>, ServiceQ takes <strong>₱70</strong> (10%), and you receive <strong>₱630</strong> net.
+          The fee is <em>not</em> charged on top — it's deducted from the booking total.
+        </span>
+      </div>
+
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
@@ -261,8 +296,8 @@ export default function ProviderEarnings() {
                   <th className="p-4 font-medium">Customer</th>
                   <th className="p-4 font-medium">Service</th>
                   <th className="p-4 font-medium">Gross</th>
-                  <th className="p-4 font-medium">Fee (10%)</th>
-                  <th className="p-4 font-medium">Net</th>
+                  <th className="p-4 font-medium text-red-500">Fee Deducted (10%)</th>
+                  <th className="p-4 font-medium text-emerald-700">You Receive</th>
                   <th className="p-4 font-medium">Date</th>
                   <th className="p-4 font-medium">Payout</th>
                 </tr>
@@ -341,26 +376,40 @@ export default function ProviderEarnings() {
       {/* Withdrawal Modal */}
       <Modal open={showWithdraw} onClose={() => setShowWithdraw(false)} title="Request Payout Withdrawal">
         <div className="flex flex-col gap-4">
+          {/* Available balance */}
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-sm text-emerald-800 flex items-center justify-between">
             <span>Available to Withdraw:</span>
             <strong className="text-base font-extrabold text-emerald-900">{formatPHP(availBalance)}</strong>
           </div>
 
+          {/* Payout method — pre-selected from KYC, can be changed */}
           <div className="form-group">
             <label className="label">Payout Destination Method</label>
+            {kycPayoutMethod && (
+              <p className="text-[11px] text-emerald-700 mb-2 flex items-center gap-1">
+                <span>✅</span> Registered payout method from your KYC:&nbsp;
+                <strong className="uppercase">{kycPayoutMethod}</strong>
+              </p>
+            )}
             <div className="flex gap-2">
               {[
-                { id: 'gcash', l: '💚 GCash' },
-                { id: 'maya',  l: '💙 Maya' },
-                { id: 'bank',  l: '🏦 Bank' }
+                { id: 'gcash', label: 'GCash', icon: (
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#007DFF] text-white text-[10px] font-black">G</span>
+                )},
+                { id: 'maya',  label: 'Maya',  icon: (
+                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#00B85F] text-white text-[10px] font-black">M</span>
+                )},
+                { id: 'bank',  label: 'Bank',  icon: (
+                  <span className="text-base">🏦</span>
+                )},
               ].map(m => (
                 <label
                   key={m.id}
-                  className={`flex-1 p-2.5 border-2 rounded-xl text-xs font-semibold text-center cursor-pointer transition-all ${
+                  className={`flex-1 p-2.5 border-2 rounded-xl text-xs font-semibold text-center cursor-pointer transition-all flex items-center justify-center gap-1.5 ${
                     wMethod === m.id
-                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                  }`}
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-800 shadow-sm ring-1 ring-emerald-400'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-500'
+                  } ${kycPayoutMethod && m.id !== kycPayoutMethod ? 'opacity-50' : ''}`}
                 >
                   <input
                     type="radio"
@@ -370,12 +419,22 @@ export default function ProviderEarnings() {
                     onChange={() => setWMethod(m.id)}
                     className="hidden"
                   />
-                  {m.l}
+                  {m.icon}
+                  {m.label}
+                  {kycPayoutMethod === m.id && (
+                    <span className="text-emerald-600">✓</span>
+                  )}
                 </label>
               ))}
             </div>
+            {kycPayoutMethod && wMethod && wMethod !== kycPayoutMethod && (
+              <p className="text-[11px] text-amber-600 mt-1.5">
+                ⚠ This differs from your registered KYC payout method ({kycPayoutMethod.toUpperCase()}). Admin may require verification.
+              </p>
+            )}
           </div>
 
+          {/* Amount */}
           <div className="form-group">
             <label className="label">Withdrawal Amount (₱)</label>
             <input
@@ -424,3 +483,4 @@ export default function ProviderEarnings() {
     </motion.div>
   )
 }
+
