@@ -78,7 +78,14 @@ export default function AdminStaff() {
 
         setStaff(prev => {
           const map = new Map()
-          STAFF.forEach(s => map.set(s.email.toLowerCase(), s))
+          const hasCustomStaff =
+            (Array.isArray(prev) && prev.length > 0 && JSON.stringify(prev) !== JSON.stringify(STAFF)) ||
+            (Array.isArray(remoteStaff) && remoteStaff.length > 0) ||
+            (Array.isArray(dbProfiles) && dbProfiles.length > 0)
+
+          if (!hasCustomStaff) {
+            STAFF.forEach(s => map.set(s.email.toLowerCase(), s))
+          }
           prev.forEach(s => map.set(s.email.toLowerCase(), s))
           if (Array.isArray(remoteStaff)) {
             remoteStaff.forEach(s => map.set(s.email.toLowerCase(), { ...map.get(s.email.toLowerCase()), ...s }))

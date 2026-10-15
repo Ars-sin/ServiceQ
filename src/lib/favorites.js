@@ -3,13 +3,15 @@ export function getFavoriteStorageKey(userId) {
   try {
     const cachedProfile = JSON.parse(localStorage.getItem('serviceq_auth_profile') || '{}')
     if (cachedProfile?.id) return `serviceq_customer_favorites_${cachedProfile.id}`
+    if (cachedProfile?.email) return `serviceq_customer_favorites_email_${cachedProfile.email.toLowerCase().trim()}`
   } catch {}
-  return 'serviceq_customer_favorites'
+  return null
 }
 
 export function getFavoriteIds(userId) {
   try {
     const key = getFavoriteStorageKey(userId)
+    if (!key) return []
     const raw = localStorage.getItem(key)
     if (raw !== null) {
       const parsed = JSON.parse(raw)
@@ -43,7 +45,9 @@ export function toggleFavorite(id, userId) {
 
   try {
     const key = getFavoriteStorageKey(userId)
-    localStorage.setItem(key, JSON.stringify(nextIds))
+    if (key) {
+      localStorage.setItem(key, JSON.stringify(nextIds))
+    }
   } catch {}
 
   window.dispatchEvent(new CustomEvent('serviceq_favorites_updated', {

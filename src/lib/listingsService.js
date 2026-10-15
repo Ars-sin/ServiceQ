@@ -69,7 +69,10 @@ export function normalizeListing(raw) {
       raw.isVerified ||
       raw.provider_verified ||
       raw.providerVerified ||
-      (raw.providerId && typeof window !== 'undefined' && window.localStorage?.getItem(`provider_verified_${raw.providerId}`) === 'true')
+      (raw.providerId && typeof window !== 'undefined' && (
+        window.localStorage?.getItem(`provider_verified_${raw.providerId}`) === 'true' ||
+        window.localStorage?.getItem('serviceq_kyc_approved') === 'true'
+      ))
     ),
     days: Array.isArray(raw.days) && raw.days.length > 0 ? raw.days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
     hoursFrom: raw.hoursFrom || raw.hours_from || '08:00',
@@ -145,6 +148,31 @@ export async function fetchBackendListings(includeBase = true) {
   const seenIds = new Set()
   const backendItems = []
 
+  // 0. Fetch approved provider IDs from Supabase so all their listings are marked verified (SQI-50)
+  const approvedProvIds = new Set()
+  try {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, avatar_url, is_active')
+      .eq('role', 'provider')
+      .eq('is_active', true)
+
+    if (Array.isArray(profs)) {
+      profs.forEach(p => {
+        let isAppr = false
+        try {
+          if (p.avatar_url && p.avatar_url.startsWith('{')) {
+            const meta = JSON.parse(p.avatar_url)
+            if (meta.status === 'approved') isAppr = true
+          }
+        } catch {}
+        if (isAppr || localStorage.getItem(`provider_verified_${p.id}`) === 'true') {
+          approvedProvIds.add(String(p.id))
+        }
+      })
+    }
+  } catch {}
+
   // 1. Fetch from Supabase platform_settings (Global Provider Catalog)
   try {
     const { data: settingRow, error: settingErr } = await supabase
@@ -159,6 +187,10 @@ export async function fetchBackendListings(includeBase = true) {
         for (const item of parsed) {
           const norm = normalizeListing(item)
           if (norm && !seenIds.has(norm.id) && norm.status !== 'archived') {
+            if (norm.providerId && approvedProvIds.has(String(norm.providerId))) {
+              norm.isVerified = true
+              norm.tag = 'Verified'
+            }
             seenIds.add(norm.id)
             backendItems.push(norm)
           }
@@ -180,6 +212,10 @@ export async function fetchBackendListings(includeBase = true) {
       for (const item of tableListings) {
         const norm = normalizeListing(item)
         if (norm && !seenIds.has(norm.id)) {
+          if (norm.providerId && approvedProvIds.has(String(norm.providerId))) {
+            norm.isVerified = true
+            norm.tag = 'Verified'
+          }
           seenIds.add(norm.id)
           backendItems.push(norm)
         }

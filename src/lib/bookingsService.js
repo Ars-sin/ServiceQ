@@ -118,6 +118,11 @@ export async function recordCustomerBooking(raw) {
       const cBk = JSON.parse(localStorage.getItem(cKey)) || []
       localStorage.setItem(cKey, JSON.stringify([booking, ...cBk.filter(b => b.id !== booking.id)]))
     }
+    if (booking.customerEmail) {
+      const eKey = `serviceq_customer_bookings_email_${booking.customerEmail.toLowerCase().trim()}`
+      const eBk = JSON.parse(localStorage.getItem(eKey)) || []
+      localStorage.setItem(eKey, JSON.stringify([booking, ...eBk.filter(b => b.id !== booking.id)]))
+    }
     const custBk = JSON.parse(localStorage.getItem('serviceq_customer_bookings')) || []
     localStorage.setItem('serviceq_customer_bookings', JSON.stringify([booking, ...custBk.filter(b => b.id !== booking.id)]))
 

@@ -26,26 +26,83 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
+      const userMap = new Map()
+
+      // 1. Fetch live profiles from Supabase
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) throw error
+      if (!error && Array.isArray(data)) {
+        data.forEach(u => {
+          if (!u) return
+          const key = (u.email || u.id || '').toLowerCase().trim()
+          if (!key) return
+          userMap.set(key, {
+            id: u.id,
+            name: u.full_name || 'Unnamed User',
+            email: u.email,
+            phone: u.phone || 'N/A',
+            role: u.role || 'customer',
+            joined: u.created_at ? u.created_at.slice(0, 10) : 'Recent',
+            bookings: 0,
+            status: u.is_active === false ? 'suspended' : 'active',
+            address: [u.address, u.barangay, u.city, u.province].filter(Boolean).join(', ') || 'N/A',
+          })
+        })
+      }
 
-      const formatted = (data || []).map(u => ({
-        id: u.id,
-        name: u.full_name || 'Unnamed User',
-        email: u.email,
-        phone: u.phone || 'N/A',
-        role: u.role || 'customer',
-        joined: u.created_at ? u.created_at.slice(0, 10) : 'Recent',
-        bookings: 0,
-        status: u.is_active === false ? 'suspended' : 'active',
-        address: [u.address, u.barangay, u.city, u.province].filter(Boolean).join(', ') || 'N/A',
-      }))
+      // 2. Fetch providers table to ensure all registered providers appear
+      try {
+        const { data: provRows } = await supabase.from('providers').select('*')
+        if (Array.isArray(provRows)) {
+          provRows.forEach(p => {
+            const key = (p.email || p.user_id || p.id || '').toLowerCase().trim()
+            if (key && !userMap.has(key)) {
+              userMap.set(key, {
+                id: p.user_id || p.id,
+                name: p.business_name || p.full_name || 'Service Provider',
+                email: p.email || 'N/A',
+                phone: p.phone || 'N/A',
+                role: 'provider',
+                joined: p.created_at ? p.created_at.slice(0, 10) : 'Recent',
+                bookings: 0,
+                status: p.status === 'suspended' ? 'suspended' : 'active',
+                address: p.address || 'Cebu City, Cebu',
+              })
+            }
+          })
+        }
+      } catch {}
 
-      setUsers(formatted)
+      // 3. Merge locally registered provider profiles (SQI-53)
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)
+          if (k && k.startsWith('serviceq_provider_profile_')) {
+            const parsed = JSON.parse(localStorage.getItem(k) || 'null')
+            if (parsed && parsed.email) {
+              const key = parsed.email.toLowerCase().trim()
+              if (!userMap.has(key)) {
+                userMap.set(key, {
+                  id: `prov_${key.replace(/[^a-z0-9]/g, '')}`,
+                  name: parsed.fullName || parsed.businessName || 'Service Provider',
+                  email: parsed.email,
+                  phone: parsed.phone || 'N/A',
+                  role: 'provider',
+                  joined: 'Recent',
+                  bookings: 0,
+                  status: 'active',
+                  address: [parsed.address, parsed.barangay, parsed.city, parsed.province].filter(Boolean).join(', ') || 'Cebu',
+                })
+              }
+            }
+          }
+        }
+      } catch {}
+
+      setUsers(Array.from(userMap.values()))
     } catch (err) {
       console.error('Error fetching users:', err)
       toast.error('Failed to load users from database')
