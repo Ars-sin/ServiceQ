@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Pagination from '@/components/ui/Pagination'
@@ -6,12 +6,14 @@ import {
   MapPin, Search, Star, X, Sparkles,
   Home, Laptop, GraduationCap, Hammer, PartyPopper,
   Car, Package, Utensils, Wrench, SlidersHorizontal,
-  RotateCcw, LayoutGrid
+  RotateCcw, LayoutGrid, Map as MapIcon, Navigation, Compass
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP } from '@/lib/utils'
 import { getFavoriteIds, toggleFavorite } from '@/lib/favorites'
 import { useAuth } from '@/contexts/AuthContext'
+import MapView from '@/components/ui/MapView'
+import { calculateDistanceKm, getCurrentUserCoordinates } from '@/lib/googleMaps'
 
 import { BASE_LISTINGS, loadCachedListings, fetchBackendListings } from '@/lib/listingsService'
 
@@ -43,7 +45,11 @@ export function getListingIcon(subCategory) {
   }
 }
 
-function ListingCard({ listing, onClick, isFav, onToggleFav }) {
+function ListingCard({ listing, onClick, isFav, onToggleFav, userCoords }) {
+  const displayDist = userCoords && listing.lat && listing.lng
+    ? calculateDistanceKm(userCoords.lat, userCoords.lng, listing.lat, listing.lng)
+    : listing.distance
+
   return (
     <motion.div
       whileHover={{ y: -4 }}
@@ -106,7 +112,7 @@ function ListingCard({ listing, onClick, isFav, onToggleFav }) {
           <p className="text-xs text-gray-500 mb-3 flex items-center justify-between">
             <span>{(listing.provider && listing.provider !== 'Verified Provider') ? listing.provider : 'Service Provider'}</span>
             <span className="text-gray-400 flex items-center gap-0.5 text-[11px]">
-              <MapPin size={11} className="text-gray-400" /> {listing.distance} km away
+              <MapPin size={11} className="text-gray-400" /> {displayDist ? `${displayDist} km away` : 'Cebu'}
             </span>
           </p>
         </div>
@@ -143,11 +149,28 @@ export default function CustomerExplore() {
   const [sort, setSort]                 = useState('recommended')
   const [minPrice, setMinPrice]         = useState(0)
   const [minRating, setMinRating]       = useState(0)
+  const [radiusKm, setRadiusKm]         = useState(0) // 0 = all
   const [quickFilters, setQuickFilters] = useState([])
   const [showFilters, setShowFilters]   = useState(false)
   const [favoriteIds, setFavoriteIds]   = useState(() => getFavoriteIds(user?.id))
+  const [viewMode, setViewMode]         = useState('grid') // 'grid' | 'map'
+  const [userCoords, setUserCoords]     = useState(null)
+  const [locating, setLocating]         = useState(false)
 
   const [allListings, setAllListings] = useState(loadCachedListings)
+
+  const handleLocateMe = async () => {
+    setLocating(true)
+    try {
+      const coords = await getCurrentUserCoordinates()
+      setUserCoords(coords)
+      toast.success('Location detected! Distances updated from your GPS position.')
+    } catch (err) {
+      toast.error('Could not detect location. Please allow browser location access.')
+    } finally {
+      setLocating(false)
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -204,6 +227,7 @@ export default function CustomerExplore() {
     sort === 'recommended' &&
     minPrice === 0 &&
     minRating === 0 &&
+    radiusKm === 0 &&
     quickFilters.length === 0
 
   const [page, setPage] = useState(1)
@@ -212,7 +236,7 @@ export default function CustomerExplore() {
   // Reset pagination to page 1 whenever filters change
   useEffect(() => {
     setPage(1)
-  }, [search, selectedType, sort, minPrice, minRating, quickFilters])
+  }, [search, selectedType, sort, minPrice, minRating, radiusKm, quickFilters])
 
   // Filter and sort listings
   const filtered = allListings
@@ -250,10 +274,23 @@ export default function CustomerExplore() {
       // Min rating
       if ((item.rating ?? 5.0) < minRating) return false
 
+      // Radius filter
+      if (radiusKm > 0) {
+        const d = userCoords && item.lat && item.lng
+          ? calculateDistanceKm(userCoords.lat, userCoords.lng, item.lat, item.lng)
+          : (item.distance || 1.0)
+        if (d > radiusKm) return false
+      }
+
       // Quick filters (multi-select array)
       if (quickFilters.includes('under500') && (item.price || 0) > 500) return false
       if (quickFilters.includes('toprated') && (item.rating ?? 5.0) < 4.8) return false
-      if (quickFilters.includes('nearby') && (item.distance ?? 1.0) > 2.0) return false
+      if (quickFilters.includes('nearby')) {
+        const d = userCoords && item.lat && item.lng
+          ? calculateDistanceKm(userCoords.lat, userCoords.lng, item.lat, item.lng)
+          : (item.distance || 1.0)
+        if (d > 2.5) return false
+      }
 
       return true
     })
@@ -262,8 +299,12 @@ export default function CustomerExplore() {
       const priceB = b.price || 0
       const ratingA = a.rating ?? 5.0
       const ratingB = b.rating ?? 5.0
-      const distA = a.distance ?? 1.0
-      const distB = b.distance ?? 1.0
+      const distA = userCoords && a.lat && a.lng
+        ? calculateDistanceKm(userCoords.lat, userCoords.lng, a.lat, a.lng)
+        : (a.distance ?? 1.0)
+      const distB = userCoords && b.lat && b.lng
+        ? calculateDistanceKm(userCoords.lat, userCoords.lng, b.lat, b.lng)
+        : (b.distance ?? 1.0)
 
       if (sort === 'price_asc')  return priceA - priceB
       if (sort === 'price_desc') return priceB - priceA
@@ -294,6 +335,7 @@ export default function CustomerExplore() {
     setSort('recommended')
     setMinPrice(0)
     setMinRating(0)
+    setRadiusKm(0)
     setQuickFilters([])
     setPage(1)
   }
@@ -304,6 +346,7 @@ export default function CustomerExplore() {
     sort !== 'recommended' ||
     minPrice > 0 ||
     minRating > 0 ||
+    radiusKm > 0 ||
     quickFilters.length > 0
 
   return (
@@ -318,10 +361,47 @@ export default function CustomerExplore() {
           </p>
         </div>
 
-        {/* Location pill */}
-        <div className="inline-flex items-center gap-1.5 bg-brand-50 border border-brand-200 text-brand-800 text-xs font-semibold px-3 py-1.5 rounded-full self-start sm:self-auto">
-          <MapPin size={13} className="text-brand-600" />
-          <span>Cebu City & Vicinity</span>
+        {/* Location & View Mode Switcher */}
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <button
+            onClick={handleLocateMe}
+            disabled={locating}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition shadow-2xs ${
+              userCoords
+                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+            title="Detect GPS location"
+          >
+            <Navigation size={13} className={`text-blue-600 ${locating ? 'animate-spin' : ''}`} />
+            <span>{locating ? 'Locating...' : userCoords ? 'GPS Active' : 'My Location'}</span>
+          </button>
+
+          {/* View mode toggle */}
+          <div className="inline-flex p-0.5 bg-gray-100 rounded-full border border-gray-200">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white text-gray-900 shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <LayoutGrid size={13} />
+              <span>Grid</span>
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                viewMode === 'map'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              <MapIcon size={13} />
+              <span>Google Map</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -347,6 +427,19 @@ export default function CustomerExplore() {
             )}
           </div>
 
+          {/* Distance Radius selector */}
+          <select
+            value={radiusKm}
+            onChange={e => setRadiusKm(Number(e.target.value))}
+            className="input w-full sm:w-36 text-xs font-medium cursor-pointer"
+          >
+            <option value={0}>Distance: Any</option>
+            <option value={3}>Within 3 km</option>
+            <option value={5}>Within 5 km</option>
+            <option value={10}>Within 10 km</option>
+            <option value={20}>Within 20 km</option>
+          </select>
+
           {/* Sort selector */}
           <select
             value={sort}
@@ -354,10 +447,10 @@ export default function CustomerExplore() {
             className="input w-full sm:w-44 text-xs font-medium cursor-pointer"
           >
             <option value="recommended">Sort: Recommended</option>
+            <option value="distance">Nearest Distance (GPS)</option>
             <option value="price_asc">Price: Low to High</option>
             <option value="price_desc">Price: High to Low</option>
             <option value="rating">Highest Rated (★)</option>
-            <option value="distance">Nearest Distance</option>
           </select>
 
           {/* Advanced Filter Toggle */}
@@ -514,7 +607,15 @@ export default function CustomerExplore() {
       </div>
 
       {/* ── Listings Grid ─────────────────────────────────────────── */}
-      {filtered.length === 0 ? (
+      {/* ── Main View (Google Map or Grid) ─────────────────────────── */}
+      {viewMode === 'map' ? (
+        <MapView
+          listings={filtered}
+          userCoords={userCoords}
+          onUserCoordsChange={setUserCoords}
+          height="620px"
+        />
+      ) : filtered.length === 0 ? (
         <div className="card text-center py-16 flex flex-col items-center justify-center gap-3">
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center text-3xl mb-1">
             🔍
@@ -537,6 +638,7 @@ export default function CustomerExplore() {
               <ListingCard
                 key={listing.id}
                 listing={listing}
+                userCoords={userCoords}
                 isFav={favoriteIds.includes(String(listing.id))}
                 onToggleFav={handleToggleFav}
                 onClick={() => navigate(`/customer/listings/${listing.id}`)}

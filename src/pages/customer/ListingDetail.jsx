@@ -1,12 +1,13 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Star, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar, PenLine } from 'lucide-react'
+import { Star, CheckCircle, Heart, MessageCircle, ChevronLeft, Clock, Calendar, PenLine, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, calcFees } from '@/lib/utils'
 import { ALL_LISTINGS } from '@/pages/customer/Explore'
 import { isFavorite, toggleFavorite } from '@/lib/favorites'
 import { fetchBackendListings, BASE_LISTINGS } from '@/lib/listingsService'
+import { loadGoogleMaps } from '@/lib/googleMaps'
 import Modal from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -28,6 +29,47 @@ const DEFAULT_MOCK = {
     { user: 'Marco L.', rating: 4, comment: 'Good service, carefully cleaned every corner. Highly recommended.', date: '1 week ago' },
     { user: 'Grace T.', rating: 5, comment: 'Excellent! Everything is in spotless condition.', date: '2 weeks ago' },
   ],
+}
+
+function ListingMiniMap({ lat, lng, title }) {
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (!containerRef.current || !lat || !lng) return
+    let isMounted = true
+
+    loadGoogleMaps()
+      .then((gMaps) => {
+        if (!isMounted || !containerRef.current) return
+        const pos = { lat: parseFloat(lat), lng: parseFloat(lng) }
+        const map = new gMaps.Map(containerRef.current, {
+          center: pos,
+          zoom: 15,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+          zoomControl: true,
+        })
+        new gMaps.Marker({
+          position: pos,
+          map,
+          title: title || 'Location',
+          icon: {
+            path: gMaps.SymbolPath.BACKWARD_CLOSED_ARROW,
+            scale: 5,
+            fillColor: '#059669',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2,
+          }
+        })
+      })
+      .catch((err) => console.warn('MiniMap load error:', err))
+
+    return () => { isMounted = false }
+  }, [lat, lng, title])
+
+  return <div ref={containerRef} className="w-full h-full" />
 }
 
 export default function ListingDetail() {
@@ -248,6 +290,11 @@ export default function ListingDetail() {
       reviews: calculatedReviews,
       reviews_list: combinedReviews,
       bookings: calculatedBookings,
+      location: matched.location || 'Metro Cebu',
+      serviceArea: matched.serviceArea || 'Metro Cebu Area',
+      lat: matched.lat || null,
+      lng: matched.lng || null,
+      distance: matched.distance || null,
       provider: {
         name: matched.provider || 'Service Provider',
         avatar: initials,
@@ -288,6 +335,10 @@ export default function ListingDetail() {
       subtotal,
       fee,
       total,
+      location: listing.location,
+      serviceArea: listing.serviceArea,
+      lat: listing.lat,
+      lng: listing.lng,
     }
 
     // Persist to session storage for resilience
@@ -360,6 +411,13 @@ export default function ListingDetail() {
                 <CheckCircle size={14} className="text-green-500" />
                 {listing.bookings} booking{listing.bookings === 1 ? '' : 's'}
               </span>
+              {listing.location && (
+                <span className="flex items-center gap-1 text-gray-600">
+                  <MapPin size={14} className="text-brand-600" />
+                  {listing.location}
+                  {listing.distance ? ` · ${listing.distance} km away` : ''}
+                </span>
+              )}
             </div>
           </div>
 
@@ -390,6 +448,41 @@ export default function ListingDetail() {
               className="btn-secondary btn-sm">
               <MessageCircle size={14} /> Contact
             </button>
+          </div>
+
+          {/* Location & Service Area */}
+          <div className="card">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h2 className="font-semibold text-gray-900 flex items-center gap-1.5">
+                  <MapPin size={16} className="text-brand-600" /> Location & Service Area
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Based in <span className="font-medium text-gray-800">{listing.location || 'Metro Cebu'}</span> · Coverage: {listing.serviceArea || 'Metro Cebu Area'}
+                </p>
+              </div>
+              {listing.lat && listing.lng && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-brand-600 hover:text-brand-700 font-medium hover:underline flex items-center gap-1"
+                >
+                  Open in Google Maps ↗
+                </a>
+              )}
+            </div>
+
+            {listing.lat && listing.lng ? (
+              <div className="h-52 rounded-xl overflow-hidden border border-gray-200 relative shadow-inner">
+                <ListingMiniMap lat={listing.lat} lng={listing.lng} title={listing.title} />
+              </div>
+            ) : (
+              <div className="p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-xs text-gray-500 flex items-center gap-2">
+                <MapPin size={16} className="text-gray-400 shrink-0" />
+                <span>Service available across {listing.serviceArea || 'Metro Cebu'}. Exact meeting point or service address is verified at checkout.</span>
+              </div>
+            )}
           </div>
 
           {/* Reviews */}

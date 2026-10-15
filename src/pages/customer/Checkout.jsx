@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { CheckCircle, Printer, Download, ArrowRight, ShoppingBag } from 'lucide-react'
+import { CheckCircle, Printer, Download, ArrowRight, ShoppingBag, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, calcFees, genBookingId } from '@/lib/utils'
 import { jsPDF } from 'jspdf'
@@ -11,6 +11,7 @@ import { ALL_LISTINGS } from '@/pages/customer/Explore'
 import { loadCachedListings } from '@/lib/listingsService'
 import { useAuth } from '@/contexts/AuthContext'
 import { recordCustomerBooking } from '@/lib/bookingsService'
+import LocationPicker from '@/components/ui/LocationPicker'
 
 const DEFAULT_ORDER = {
   id: '1',
@@ -31,6 +32,15 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [bookingId] = useState(genBookingId())
+  const [addressDetails, setAddressDetails] = useState(() => ({
+    address: profile?.address || '',
+    barangay: profile?.barangay || '',
+    city: profile?.city || 'Cebu City',
+    province: profile?.province || 'Cebu',
+    postalCode: profile?.postal_code || profile?.postalCode || '6000',
+    lat: null,
+    lng: null,
+  }))
 
   // Resolve order details from location state, sessionStorage, or ALL_LISTINGS fallback
   const order = useMemo(() => {
@@ -75,6 +85,10 @@ export default function Checkout() {
       const effectiveCustomerId = user?.id || profile?.id || null
       const effectiveCustomerEmail = (user?.email || profile?.email || '').trim().toLowerCase() || null
       const customerName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || profile?.email?.split('@')[0] || 'Customer'
+      const formattedServiceAddress = addressDetails.address
+        ? `${addressDetails.address}${addressDetails.barangay ? `, ${addressDetails.barangay}` : ''}, ${addressDetails.city || 'Cebu City'}`
+        : (order.location || 'Metro Cebu Area')
+
       await recordCustomerBooking({
         id: bookingId,
         bookingRef: bookingId,
@@ -82,6 +96,7 @@ export default function Checkout() {
         service: order.title,
         provider: order.provider || 'Verified Provider',
         providerId: order.providerId || null,
+        providerLocation: order.location || 'Metro Cebu',
         customer: customerName,
         customerEmail: effectiveCustomerEmail,
         customerId: effectiveCustomerId,
@@ -93,6 +108,8 @@ export default function Checkout() {
         net: (order.subtotal || subtotal),
         status: 'scheduled',
         paymentMethod: method,
+        serviceAddress: formattedServiceAddress,
+        addressDetails,
         createdAt: new Date().toISOString(),
       })
     } catch (e) {
@@ -146,59 +163,65 @@ export default function Checkout() {
       // Service Details Box
       doc.setFillColor(248, 250, 252)
       doc.setDrawColor(226, 232, 240)
-      doc.roundedRect(20, 62, 170, 52, 3, 3, 'FD')
+      doc.roundedRect(20, 62, 170, 58, 3, 3, 'FD')
 
       doc.setFont('helvetica', 'bold')
-      doc.text('Service Offering:', 26, 73)
+      doc.text('Service Offering:', 26, 72)
       doc.setFont('helvetica', 'normal')
-      doc.text(String(order.title || 'Service Offering'), 75, 73)
+      doc.text(String(order.title || 'Service Offering'), 75, 72)
 
       doc.setFont('helvetica', 'bold')
-      doc.text('Service Provider:', 26, 82)
+      doc.text('Service Provider:', 26, 80)
       doc.setFont('helvetica', 'normal')
-      doc.text(String(order.provider || 'Service Provider'), 75, 82)
+      doc.text(String(order.provider || 'Service Provider'), 75, 80)
 
       doc.setFont('helvetica', 'bold')
-      doc.text('Scheduled Date:', 26, 91)
+      doc.text('Service Location:', 26, 88)
       doc.setFont('helvetica', 'normal')
-      doc.text(String(order.date || 'Immediate'), 75, 91)
+      const dispLoc = addressDetails.address ? `${addressDetails.address}, ${addressDetails.city || 'Cebu'}` : (order.location || 'Metro Cebu Area')
+      doc.text(String(dispLoc.length > 36 ? dispLoc.substring(0, 33) + '...' : dispLoc), 75, 88)
 
       doc.setFont('helvetica', 'bold')
-      doc.text('Sessions / Qty:', 26, 100)
+      doc.text('Scheduled Date:', 26, 96)
       doc.setFont('helvetica', 'normal')
-      doc.text(String(sessions), 75, 100)
+      doc.text(String(order.date || 'Immediate'), 75, 96)
 
       doc.setFont('helvetica', 'bold')
-      doc.text('Payment Channel:', 26, 108)
+      doc.text('Sessions / Qty:', 26, 104)
       doc.setFont('helvetica', 'normal')
-      doc.text(String(channelName), 75, 108)
+      doc.text(String(sessions), 75, 104)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('Payment Channel:', 26, 112)
+      doc.setFont('helvetica', 'normal')
+      doc.text(String(channelName), 75, 112)
 
       // Financial Breakdown Box
       doc.setFillColor(248, 250, 252)
-      doc.roundedRect(20, 120, 170, 36, 3, 3, 'FD')
+      doc.roundedRect(20, 125, 170, 36, 3, 3, 'FD')
 
       doc.setFont('helvetica', 'normal')
-      doc.text('Subtotal:', 26, 131)
-      doc.text(`PHP ${subtotal.toFixed(2)}`, 184, 131, { align: 'right' })
+      doc.text('Subtotal:', 26, 136)
+      doc.text(`PHP ${subtotal.toFixed(2)}`, 184, 136, { align: 'right' })
 
-      doc.text('Platform Service Fee (10%):', 26, 139)
-      doc.text(`PHP ${fee.toFixed(2)}`, 184, 139, { align: 'right' })
+      doc.text('Platform Service Fee (10%):', 26, 144)
+      doc.text(`PHP ${fee.toFixed(2)}`, 184, 144, { align: 'right' })
 
       doc.setDrawColor(203, 213, 225)
-      doc.line(26, 144, 184, 144)
+      doc.line(26, 149, 184, 149)
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
       doc.setTextColor(37, 99, 235)
-      doc.text('TOTAL PAID:', 26, 151)
-      doc.text(`PHP ${total.toFixed(2)}`, 184, 151, { align: 'right' })
+      doc.text('TOTAL PAID:', 26, 156)
+      doc.text(`PHP ${total.toFixed(2)}`, 184, 156, { align: 'right' })
 
       // Footer
       doc.setTextColor(148, 163, 184)
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
-      doc.text('Thank you for trusting ServiceQ — Cebu\'s Premier Services & Rentals Platform.', 105, 172, { align: 'center' })
-      doc.text('Support: support@serviceq.ph | Cebu City, Philippines', 105, 177, { align: 'center' })
+      doc.text('Thank you for trusting ServiceQ — Cebu\'s Premier Services & Rentals Platform.', 105, 176, { align: 'center' })
+      doc.text('Support: support@serviceq.ph | Cebu City, Philippines', 105, 181, { align: 'center' })
 
       // Save PDF file
       doc.save(`ServiceQ-Receipt-${bookingId}.pdf`)
@@ -260,6 +283,7 @@ export default function Checkout() {
   <div class="section">
     <div class="row"><span class="k">Service</span><span class="v">${order.title}</span></div>
     <div class="row"><span class="k">Provider</span><span class="v">${order.provider}</span></div>
+    <div class="row"><span class="k">Location</span><span class="v">${addressDetails.address ? `${addressDetails.address}, ${addressDetails.city || 'Cebu'}` : (order.location || 'Metro Cebu')}</span></div>
     <div class="row"><span class="k">Scheduled Date</span><span class="v">${order.date}</span></div>
     <div class="row"><span class="k">Sessions / Qty</span><span class="v">${sessions}</span></div>
     <div class="row"><span class="k">Payment Channel</span><span class="v">${channelName}</span></div>
@@ -303,37 +327,62 @@ export default function Checkout() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Order Summary */}
-        <div className="card flex flex-col gap-4 border border-gray-200/80 shadow-sm">
-          <h2 className="font-bold text-gray-900 flex items-center gap-2">
-            <ShoppingBag size={18} className="text-brand-600" /> Order Summary
-          </h2>
+        {/* Left Column: Order Summary & Service Address */}
+        <div className="flex flex-col gap-6">
+          {/* Order Summary */}
+          <div className="card flex flex-col gap-4 border border-gray-200/80 shadow-sm">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <ShoppingBag size={18} className="text-brand-600" /> Order Summary
+            </h2>
 
-          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-1.5">
-            <p className="font-bold text-gray-900 text-sm">{order.title}</p>
-            <p className="text-xs text-gray-600">Provider: <span className="font-medium text-gray-800">{order.provider}</span></p>
-            <p className="text-xs text-gray-600">📅 Scheduled Date: <span className="font-medium text-gray-800">{order.date}</span></p>
-            <p className="text-xs text-gray-600">🔁 Quantity / Sessions: <span className="font-medium text-gray-800">{sessions}</span></p>
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-1.5">
+              <p className="font-bold text-gray-900 text-sm">{order.title}</p>
+              <p className="text-xs text-gray-600">Provider: <span className="font-medium text-gray-800">{order.provider}</span></p>
+              <p className="text-xs text-gray-600">📅 Scheduled Date: <span className="font-medium text-gray-800">{order.date}</span></p>
+              <p className="text-xs text-gray-600">🔁 Quantity / Sessions: <span className="font-medium text-gray-800">{sessions}</span></p>
+              {order.location && (
+                <p className="text-xs text-gray-600 flex items-center gap-1">
+                  <MapPin size={12} className="text-brand-600" /> Provider Base: <span className="font-medium text-gray-800">{order.location}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 text-sm pt-2">
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal ({sessions} × {formatPHP(price)})</span>
+                <span>{formatPHP(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>ServiceQ Platform Fee (10%)</span>
+                <span>{formatPHP(fee)}</span>
+              </div>
+              <div className="border-t border-gray-100 pt-3 flex justify-between font-bold text-base">
+                <span className="text-gray-900">Total Amount Due</span>
+                <span className="text-brand-600 text-lg">{formatPHP(total)}</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2 text-sm pt-2">
-            <div className="flex justify-between text-gray-600">
-              <span>Subtotal ({sessions} × {formatPHP(price)})</span>
-              <span>{formatPHP(subtotal)}</span>
+          {/* Service / Delivery Location */}
+          <div className="card flex flex-col gap-4 border border-gray-200/80 shadow-sm">
+            <div>
+              <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                <MapPin size={18} className="text-brand-600" /> Service & Delivery Location
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Confirm your service or drop-off address in Metro Cebu.
+              </p>
             </div>
-            <div className="flex justify-between text-gray-600">
-              <span>ServiceQ Platform Fee (10%)</span>
-              <span>{formatPHP(fee)}</span>
-            </div>
-            <div className="border-t border-gray-100 pt-3 flex justify-between font-bold text-base">
-              <span className="text-gray-900">Total Amount Due</span>
-              <span className="text-brand-600 text-lg">{formatPHP(total)}</span>
-            </div>
+            <LocationPicker
+              value={addressDetails}
+              onChange={setAddressDetails}
+              label="Service Address"
+            />
           </div>
         </div>
 
         {/* Payment Method */}
-        <div className="card flex flex-col gap-4 border border-gray-200/80 shadow-sm">
+        <div className="card flex flex-col gap-4 border border-gray-200/80 shadow-sm h-fit">
           <h2 className="font-bold text-gray-900">Select Payment Method</h2>
           <div className="flex flex-col gap-2">
             {PAYMENT_METHODS.map(pm => (
@@ -394,6 +443,7 @@ export default function Checkout() {
             <div className="bg-gray-50 rounded-xl p-4 w-full text-left text-sm flex flex-col gap-2 border border-gray-100">
               <div className="flex justify-between"><span className="text-gray-500">Service:</span><span className="font-semibold text-gray-900">{order.title}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Provider:</span><span className="font-medium text-gray-800">{order.provider}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Service Location:</span><span className="font-medium text-gray-800 text-right max-w-[55%] truncate">{addressDetails.address ? `${addressDetails.address}, ${addressDetails.city || 'Cebu'}` : (order.location || 'Metro Cebu')}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Scheduled Date:</span><span>{order.date}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Payment Channel:</span><span className="capitalize font-medium">{method || 'GCash'}</span></div>
               <div className="border-t border-gray-200/70 pt-2 flex justify-between font-bold"><span className="text-gray-900">Total Paid:</span><span className="text-brand-600">{formatPHP(total)}</span></div>

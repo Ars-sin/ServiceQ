@@ -13,6 +13,7 @@ import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
+import LocationPicker from '@/components/ui/LocationPicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import {
@@ -46,6 +47,8 @@ const INITIAL_FORM = {
   minDuration: '1',
   maxDuration: '10',
   location: '',
+  lat: null,
+  lng: null,
   serviceArea: '',
   days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
   hoursFrom: '08:00',
@@ -384,6 +387,8 @@ export default function ProviderListings() {
       availableTo: form.ongoingAvailability ? null : form.availableTo,
       ongoingAvailability: form.ongoingAvailability,
       location: form.location || profile?.city || 'Cebu City',
+      lat: form.lat || (profile?.lat ? parseFloat(profile.lat) : 10.3157),
+      lng: form.lng || (profile?.lng ? parseFloat(profile.lng) : 123.8854),
       serviceArea: form.serviceArea || 'Metro Cebu',
       description: form.description || form.title,
     }
@@ -723,15 +728,23 @@ export default function ProviderListings() {
         {/* Step 3: Location */}
         {wizardStep === 3 && (
           <div className="flex flex-col gap-4">
-            <div className="form-group">
-              <label className="label">Primary Location / Base City <span className="text-red-500 font-bold">*</span></label>
-              <input
-                className="input"
-                value={form.location}
-                onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                placeholder="e.g. Cebu City"
-              />
-            </div>
+            <LocationPicker
+              value={{
+                address: form.location,
+                lat: form.lat,
+                lng: form.lng,
+              }}
+              onChange={(loc) => {
+                setForm(f => ({
+                  ...f,
+                  location: loc.address || loc.city || f.location,
+                  lat: loc.lat || f.lat,
+                  lng: loc.lng || f.lng,
+                  serviceArea: f.serviceArea || (loc.city ? `${loc.city}, Metro Cebu` : f.serviceArea),
+                }))
+              }}
+              label="Shop / Base Workshop Location in Cebu (Google Maps)"
+            />
             <div className="form-group">
               <label className="label">Service Area Coverage <span className="text-red-500 font-bold">*</span></label>
               <input

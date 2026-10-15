@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { MessageCircle, CalendarCheck, RefreshCw } from 'lucide-react'
+import { MessageCircle, CalendarCheck, RefreshCw, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
@@ -333,6 +333,24 @@ export default function ProviderBookings() {
                 {b.customerEmail && <p className="text-xs text-gray-500">{b.customerEmail}</p>}
               </div>
             </div>
+
+            {/* ── Service Address with Maps Link ── */}
+            {(b.serviceAddress || b.providerLocation) && (
+              <div className="flex items-center justify-between text-xs text-gray-700 bg-amber-50/70 border border-amber-200/60 rounded-xl px-3 py-2">
+                <span className="flex items-center gap-1.5 font-medium truncate">
+                  <MapPin size={13} className="text-amber-700 shrink-0" />
+                  <span className="truncate">Service Address: <strong className="text-gray-900">{b.serviceAddress || b.providerLocation}</strong></span>
+                </span>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.serviceAddress || b.providerLocation)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand-600 hover:text-brand-700 font-semibold hover:underline shrink-0 ml-2"
+                >
+                  View on Map ↗
+                </a>
+              </div>
+            )}
 
             {/* ── Detail chips ── */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

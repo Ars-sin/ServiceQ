@@ -1,13 +1,12 @@
 /**
  * LocationPicker.jsx
- * Provides address and location fields for registration and onboarding.
- * If VITE_GOOGLE_MAPS_API_KEY is provided, activates Google Maps autocomplete.
- * Otherwise, presents standard manual address fields cleanly without any warning banner.
+ * Provides address and location fields for registration, onboarding, and listings.
+ * Uses Google Maps autocomplete & dynamic map preview when VITE_GOOGLE_MAPS_API_KEY is configured.
+ * Otherwise, presents standard manual address fields cleanly without error.
  */
 import { useEffect, useRef, useState } from 'react'
 import { MapPin, Search, CheckCircle, AlertCircle } from 'lucide-react'
-
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ''
+import { loadGoogleMaps, GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps'
 
 // ─── Parse Google Place address_components ─────────────────────────────────
 function parsePlace(place) {
@@ -37,35 +36,30 @@ function parsePlace(place) {
   return { barangay, city, province, postalCode, lat, lng, formattedAddress }
 }
 
-// ─── Load Google Maps script once ──────────────────────────────────────────
-let mapsLoaded = false
-let mapsLoading = false
-const mapsCallbacks = []
+// ─── Interactive Mini Map ──────────────────────────────────────────────────
+function MiniInteractiveMap({ lat, lng }) {
+  const containerRef = useRef(null)
 
-function loadGoogleMaps(apiKey) {
-  return new Promise((resolve, reject) => {
-    if (mapsLoaded) return resolve()
-    mapsCallbacks.push({ resolve, reject })
-    if (mapsLoading) return
-    mapsLoading = true
+  useEffect(() => {
+    if (!containerRef.current || !window.google?.maps || !lat || !lng) return
+    const pos = { lat: parseFloat(lat), lng: parseFloat(lng) }
+    const map = new window.google.maps.Map(containerRef.current, {
+      center: pos,
+      zoom: 16,
+      disableDefaultUI: true,
+      zoomControl: true,
+    })
+    new window.google.maps.Marker({
+      position: pos,
+      map,
+    })
+  }, [lat, lng])
 
-    const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      mapsLoaded = true
-      mapsCallbacks.forEach(cb => cb.resolve())
-    }
-    script.onerror = () => {
-      mapsCallbacks.forEach(cb => cb.reject(new Error('Google Maps failed to load')))
-    }
-    document.head.appendChild(script)
-  })
-}
-
-function staticMapUrl(lat, lng, apiKey) {
-  return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=600x200&markers=color:red%7C${lat},${lng}&key=${apiKey}`
+  return (
+    <div className="rounded-xl overflow-hidden border border-gray-200 shadow-2xs">
+      <div ref={containerRef} className="w-full h-40" />
+    </div>
+  )
 }
 
 // ─── Manual Address Form ───────────────────────────────────────────────────
@@ -144,12 +138,12 @@ export default function LocationPicker({ value = {}, onChange, label = 'Service 
   const [error, setError] = useState('')
   const [manual, setManual] = useState(false)
 
-  const hasKey = Boolean(API_KEY && API_KEY.trim().length > 0)
+  const hasKey = Boolean(GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY.trim().length > 0)
 
   // Load Maps if API key exists
   useEffect(() => {
     if (!hasKey) return
-    loadGoogleMaps(API_KEY)
+    loadGoogleMaps(GOOGLE_MAPS_API_KEY)
       .then(() => setReady(true))
       .catch(() => {
         setManual(true)
@@ -158,7 +152,7 @@ export default function LocationPicker({ value = {}, onChange, label = 'Service 
 
   // Attach Autocomplete once ready
   useEffect(() => {
-    if (!ready || !inputRef.current || manual) return
+    if (!ready || !inputRef.current || manual || !window.google?.maps?.places) return
 
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: { country: 'ph' },
@@ -185,7 +179,7 @@ export default function LocationPicker({ value = {}, onChange, label = 'Service 
       })
     })
 
-    return () => window.google.maps.event.clearInstanceListeners(autocomplete)
+    return () => window.google?.maps?.event?.clearInstanceListeners(autocomplete)
   }, [ready, manual])
 
   // If no Google Maps API key is configured or manual is toggled, render clean address inputs
@@ -215,7 +209,7 @@ export default function LocationPicker({ value = {}, onChange, label = 'Service 
         <input
           ref={inputRef}
           type="text"
-          placeholder="Search your address in Cebu..."
+          placeholder="Search your address in Cebu (powered by Google Maps)..."
           defaultValue={value.address || ''}
           className="input pl-9"
         />
@@ -228,20 +222,13 @@ export default function LocationPicker({ value = {}, onChange, label = 'Service 
       )}
 
       {hasPin && (
-        <div className="rounded-xl overflow-hidden border border-gray-200">
-          <img
-            src={staticMapUrl(value.lat, value.lng, API_KEY)}
-            alt="Location map"
-            className="w-full h-40 object-cover"
-            onError={e => { e.target.style.display = 'none' }}
-          />
-        </div>
+        <MiniInteractiveMap lat={value.lat} lng={value.lng} />
       )}
 
       {hasPin && (
         <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-1.5">
           <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5 mb-2">
-            <CheckCircle size={13} /> Location confirmed
+            <CheckCircle size={13} /> Location confirmed on Google Maps
           </p>
           {[
             ['Barangay', value.barangay],

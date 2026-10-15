@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Star } from 'lucide-react'
+import { Star, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { CANCELLATION_REASONS } from '@/lib/constants'
@@ -378,6 +378,12 @@ export default function CustomerBookings() {
                 <p className="text-xs text-gray-500 mt-0.5">
                   Provider: <span className="font-medium text-gray-700">{b.provider}</span> · Date: {b.date}
                 </p>
+                {(b.serviceAddress || b.providerLocation) && (
+                  <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                    <MapPin size={12} className="text-brand-600 shrink-0" />
+                    <span className="truncate max-w-sm">{b.serviceAddress || b.providerLocation}</span>
+                  </p>
+                )}
               </div>
 
               <div className="flex sm:flex-col items-end justify-between w-full sm:w-auto gap-2">
