@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, XCircle, AlertCircle, RefreshCw, Loader, Check, Trash2 } from 'lucide-react'
+import { CheckCircle, XCircle, AlertCircle, RefreshCw, Loader, Check, Trash2, Eye, Upload, Maximize2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { statusVariant } from '@/lib/utils'
+import { statusVariant, fileToDataUrl } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
@@ -22,6 +22,7 @@ export default function AdminProviders() {
   const [queue, setQueue]       = useState([])
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [zoomImage, setZoomImage] = useState(null)
 
   const PAGE_SIZE = 5
   const isDefaultAll = tab === 'all'
@@ -46,9 +47,26 @@ export default function AdminProviders() {
 
       const provMap = new Map((provRows || []).map(p => [p.user_id, p]))
 
+      // 2b. Fetch KYC documents from platform_settings
+      const { data: kycRows } = await supabase
+        .from('platform_settings')
+        .select('key, value')
+        .like('key', 'serviceq_provider_kyc_%')
+
+      const kycMap = new Map()
+      if (Array.isArray(kycRows)) {
+        for (const row of kycRows) {
+          const uId = row.key.replace('serviceq_provider_kyc_', '')
+          try {
+            kycMap.set(uId, JSON.parse(row.value))
+          } catch {}
+        }
+      }
+
       // 3. Merge profiles and provider applications
       const combined = (profs || []).map(p => {
         const prov = provMap.get(p.id)
+        const kycCloud = kycMap.get(p.id)
 
         let meta = null
         try {
@@ -75,6 +93,32 @@ export default function AdminProviders() {
         const idType = prov?.gov_id_type || meta?.gov_id_type || 'PhilSys (National ID)'
         const idNum = prov?.gov_id_number || meta?.gov_id_number || 'Awaiting ID upload'
 
+        // Extract KYC document URLs from metadata, providers table, platform_settings, or localStorage
+        let idFrontUrl = prov?.id_front_url || meta?.id_front_url || meta?.id_photo || kycCloud?.idFrontUrl || null
+        let idBackUrl = prov?.id_back_url || meta?.id_back_url || kycCloud?.idBackUrl || null
+        let selfieUrl = prov?.selfie_url || meta?.selfie_url || kycCloud?.selfieUrl || null
+        let photoUrl = prov?.photo_url || meta?.photo_url || kycCloud?.photoUrl || null
+
+        if (!idFrontUrl) idFrontUrl = localStorage.getItem(`provider_id_front_${p.id}`)
+        if (!idBackUrl) idBackUrl = localStorage.getItem(`provider_id_back_${p.id}`)
+        if (!selfieUrl) selfieUrl = localStorage.getItem(`provider_selfie_${p.id}`)
+        if (!photoUrl) photoUrl = localStorage.getItem(`provider_photo_${p.id}`)
+
+        try {
+          const storedProf = JSON.parse(localStorage.getItem(`provider_profile_${p.id}`))
+          if (storedProf) {
+            if (!idFrontUrl) idFrontUrl = storedProf.idFrontUrl || storedProf.id_front_url
+            if (!idBackUrl) idBackUrl = storedProf.idBackUrl || storedProf.id_back_url
+            if (!selfieUrl) selfieUrl = storedProf.selfieUrl || storedProf.selfie_url
+            if (!photoUrl) photoUrl = storedProf.photoUrl || storedProf.photo_url
+          }
+        } catch {}
+
+        if (!idFrontUrl && p.email) {
+          idFrontUrl = localStorage.getItem(`provider_id_front_${p.email.toLowerCase()}`)
+          if (!selfieUrl) selfieUrl = localStorage.getItem(`provider_selfie_${p.email.toLowerCase()}`)
+        }
+
         return {
           id: p.id,
           providerRowId: prov?.id,
@@ -89,6 +133,10 @@ export default function AdminProviders() {
           submitted: meta?.submitted_at ? meta.submitted_at.slice(0, 10) : (p.created_at ? p.created_at.slice(0, 10) : 'Recent'),
           idType: idType,
           idNum: idNum,
+          idFrontUrl,
+          idBackUrl,
+          selfieUrl,
+          photoUrl,
           address: [p.address, p.barangay, p.city, p.province].filter(Boolean).join(', ') || 'Cebu City, Cebu',
           dob: '1995-05-12',
           rejectionReason: meta?.rejection_reason || null,
@@ -105,6 +153,48 @@ export default function AdminProviders() {
       toast.error('Failed to load providers from database')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleAdminAttachDoc = async (providerId, type, file) => {
+    if (!file) return
+    try {
+      const dataUrl = await fileToDataUrl(file, 1200, 1200, 0.85)
+      if (!dataUrl) return toast.error('Could not process image')
+
+      const field = type === 'idFront' ? 'idFrontUrl' : 'selfieUrl'
+      const storageKey = type === 'idFront' ? `provider_id_front_${providerId}` : `provider_selfie_${providerId}`
+
+      // Update local state immediately
+      setReview(prev => prev ? { ...prev, [field]: dataUrl } : null)
+      setProviders(prev => prev.map(p => p.id === providerId ? { ...p, [field]: dataUrl } : p))
+      setQueue(prev => prev.map(p => p.id === providerId ? { ...p, [field]: dataUrl } : p))
+
+      // Update localStorage
+      localStorage.setItem(storageKey, dataUrl)
+
+      // Sync to Supabase platform_settings for cross-browser persistence
+      try {
+        const cloudKey = `serviceq_provider_kyc_${providerId}`
+        const { data: existingRow } = await supabase.from('platform_settings').select('value').eq('key', cloudKey).maybeSingle()
+        let cloudData = {}
+        if (existingRow?.value) {
+          try { cloudData = JSON.parse(existingRow.value) } catch {}
+        }
+        cloudData[field] = dataUrl
+        await supabase.from('platform_settings').upsert({
+          key: cloudKey,
+          value: JSON.stringify(cloudData),
+          updated_at: new Date().toISOString()
+        })
+      } catch (e) {
+        console.warn('Sync warning:', e)
+      }
+
+      toast.success(`${type === 'idFront' ? 'ID Document' : 'Selfie'} attached successfully!`)
+    } catch (err) {
+      console.error('Attach error:', err)
+      toast.error('Failed to attach document')
     }
   }
 
@@ -639,18 +729,110 @@ export default function AdminProviders() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-xl h-36 flex flex-col items-center justify-center text-gray-500 text-xs gap-1 border border-dashed border-gray-300">
-                <span className="text-2xl">🪪</span>
-                <span className="font-semibold text-gray-800">Government ID Document</span>
-                <span className="text-[11px] text-gray-500">{reviewItem.idType}</span>
-                <span className="text-[10px] text-gray-400 font-mono">{reviewItem.idNum}</span>
+            {/* ── Document Pictures & Verification Selfie ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* ID Document Card */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                    🪪 Government ID ({reviewItem.idType})
+                  </span>
+                  {reviewItem.idFrontUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setZoomImage({ src: reviewItem.idFrontUrl, title: `${reviewItem.name} – ${reviewItem.idType} (${reviewItem.idNum})` })}
+                      className="text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1 hover:underline"
+                    >
+                      <Maximize2 size={12} /> Full Size
+                    </button>
+                  )}
+                </div>
+
+                {reviewItem.idFrontUrl ? (
+                  <div
+                    onClick={() => setZoomImage({ src: reviewItem.idFrontUrl, title: `${reviewItem.name} – ${reviewItem.idType} (${reviewItem.idNum})` })}
+                    className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-900/5 h-44 flex items-center justify-center cursor-pointer shadow-xs hover:border-brand-500 transition-all"
+                  >
+                    <img
+                      src={reviewItem.idFrontUrl}
+                      alt="Government ID"
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-semibold">
+                      <Eye size={16} /> Click to Inspect Full Size
+                    </div>
+                    <span className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-xs text-white text-[10px] font-mono px-2 py-0.5 rounded-md">
+                      {reviewItem.idNum}
+                    </span>
+                  </div>
+                ) : (
+                  <label className="rounded-xl h-44 flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-gray-300 hover:border-brand-500 hover:bg-brand-50/20 cursor-pointer transition-colors bg-gray-50/60">
+                    <span className="text-3xl mb-1">🪪</span>
+                    <span className="font-semibold text-gray-800 text-xs">No ID Image Attached</span>
+                    <span className="text-[11px] text-gray-400 mt-0.5">Click to upload or attach ID picture</span>
+                    <span className="mt-2 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-brand-600 shadow-2xs hover:bg-brand-50">
+                      Upload ID Document
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => handleAdminAttachDoc(reviewItem.id, 'idFront', e.target.files?.[0])}
+                    />
+                  </label>
+                )}
               </div>
-              <div className="bg-gray-50 rounded-xl h-36 flex flex-col items-center justify-center text-gray-500 text-xs gap-1 border border-dashed border-gray-300">
-                <span className="text-2xl">🤳</span>
-                <span className="font-semibold text-gray-800">Verification Selfie</span>
-                <span className="text-[11px] text-gray-500">Identity facial match check</span>
-                <span className="text-[10px] text-emerald-600 font-medium">Ready for verification</span>
+
+              {/* Verification Selfie Card */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                    🤳 Verification Selfie
+                  </span>
+                  {reviewItem.selfieUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setZoomImage({ src: reviewItem.selfieUrl, title: `${reviewItem.name} – Verification Selfie` })}
+                      className="text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1 hover:underline"
+                    >
+                      <Maximize2 size={12} /> Full Size
+                    </button>
+                  )}
+                </div>
+
+                {reviewItem.selfieUrl ? (
+                  <div
+                    onClick={() => setZoomImage({ src: reviewItem.selfieUrl, title: `${reviewItem.name} – Verification Selfie` })}
+                    className="relative group rounded-xl overflow-hidden border border-gray-200 bg-gray-900/5 h-44 flex items-center justify-center cursor-pointer shadow-xs hover:border-emerald-500 transition-all"
+                  >
+                    <img
+                      src={reviewItem.selfieUrl}
+                      alt="Verification Selfie"
+                      className="w-full h-full object-contain"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-semibold">
+                      <Eye size={16} /> Click to Inspect Face Match
+                    </div>
+                    <span className="absolute bottom-2 left-2 bg-emerald-700/90 backdrop-blur-xs text-white text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                      Selfie Facial Match ✓
+                    </span>
+                  </div>
+                ) : (
+                  <label className="rounded-xl h-44 flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-gray-300 hover:border-emerald-500 hover:bg-emerald-50/20 cursor-pointer transition-colors bg-gray-50/60">
+                    <span className="text-3xl mb-1">🤳</span>
+                    <span className="font-semibold text-gray-800 text-xs">No Selfie Attached</span>
+                    <span className="text-[11px] text-gray-400 mt-0.5">Click to upload or attach verification selfie</span>
+                    <span className="mt-2 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[10px] font-bold text-emerald-700 shadow-2xs hover:bg-emerald-50">
+                      Upload Selfie Photo
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => handleAdminAttachDoc(reviewItem.id, 'selfie', e.target.files?.[0])}
+                    />
+                  </label>
+                )}
               </div>
             </div>
 
@@ -739,6 +921,21 @@ export default function AdminProviders() {
               >
                 {deleting ? 'Deleting...' : 'Yes, Delete Provider'}
               </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── Document Zoom Inspection Modal ── */}
+      <Modal open={!!zoomImage} onClose={() => setZoomImage(null)} title={zoomImage?.title || 'Document Inspection'} size="lg">
+        {zoomImage && (
+          <div className="flex flex-col items-center justify-center gap-3">
+            <div className="max-h-[70vh] overflow-auto rounded-xl border border-gray-200 bg-gray-900/5 p-2 flex items-center justify-center w-full">
+              <img src={zoomImage.src} alt="Document Full Size" className="max-h-[65vh] w-auto object-contain rounded-lg shadow-sm" />
+            </div>
+            <div className="flex items-center justify-between w-full text-xs text-gray-500 px-1">
+              <span>Inspect high-resolution details, ID numbers, and facial clarity</span>
+              <button onClick={() => setZoomImage(null)} className="btn-secondary btn-sm">Close Preview</button>
             </div>
           </div>
         )}

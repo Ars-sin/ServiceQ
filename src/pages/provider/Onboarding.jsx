@@ -8,6 +8,7 @@ import { PROVIDER_TYPES, GOV_ID_TYPES } from '@/lib/constants'
 import Modal from '@/components/ui/Modal'
 import LocationPicker from '@/components/ui/LocationPicker'
 import { supabase } from '@/lib/supabase'
+import { fileToDataUrl } from '@/lib/utils'
 
 const STEPS = [
   'Basic Info', 'Contact & Address', 'Provider Details',
@@ -21,11 +22,25 @@ export default function ProviderOnboarding() {
   const [done, setDone]         = useState(false)
   const [agreed, setAgreed]     = useState({ terms: false, agreement: false, fee: false })
   
-  // Image previews
+  // Image previews (Persistent base64 Data URLs)
   const [photoPreview, setPhotoPreview]       = useState(null)
   const [idFrontPreview, setIdFrontPreview]   = useState(null)
   const [idBackPreview, setIdBackPreview]     = useState(null)
   const [selfiePreview, setSelfiePreview]     = useState(null)
+
+  // Preload previously uploaded photos if any
+  useEffect(() => {
+    const uId = user?.id || profile?.id
+    if (!uId) return
+    const storedFront = localStorage.getItem(`provider_id_front_${uId}`)
+    const storedBack = localStorage.getItem(`provider_id_back_${uId}`)
+    const storedSelfie = localStorage.getItem(`provider_selfie_${uId}`)
+    const storedPhoto = localStorage.getItem(`provider_photo_${uId}`)
+    if (storedFront && !idFrontPreview) setIdFrontPreview(storedFront)
+    if (storedBack && !idBackPreview) setIdBackPreview(storedBack)
+    if (storedSelfie && !selfiePreview) setSelfiePreview(storedSelfie)
+    if (storedPhoto && !photoPreview) setPhotoPreview(storedPhoto)
+  }, [user?.id, profile?.id])
 
   const [form, setForm]         = useState({
     // Step 0
@@ -161,7 +176,11 @@ export default function ProviderOnboarding() {
             payout_account_name: form.accountName || form.fullName,
             payout_account_number: payoutAccountNum || null,
             payout_bank_name: payoutBank,
-            submitted_at: new Date().toISOString()
+            submitted_at: new Date().toISOString(),
+            id_front_url: idFrontPreview || null,
+            id_back_url: idBackPreview || null,
+            selfie_url: selfiePreview || null,
+            photo_url: photoPreview || null,
           })
         }).eq('id', user.id)
 
@@ -182,6 +201,9 @@ export default function ProviderOnboarding() {
             payout_account_number: payoutAccountNum || null,
             payout_bank_name: payoutBank,
             status: 'under_verification',
+            id_front_url: idFrontPreview || null,
+            id_back_url: idBackPreview || null,
+            selfie_url: selfiePreview || null,
           }
         })
 
@@ -203,12 +225,39 @@ export default function ProviderOnboarding() {
           facebook_url: form.facebook || '',
           instagram_url: form.instagram || '',
           status: 'under_verification',
+          id_front_url: idFrontPreview || null,
+          id_back_url: idBackPreview || null,
+          selfie_url: selfiePreview || null,
+          photo_url: photoPreview || null,
         }, { onConflict: 'user_id' })
 
         if (provErr) {
           console.warn('Provider table upsert warning (check RLS):', provErr.message)
         } else {
           console.log('Provider application saved to database!')
+        }
+
+        // Cross-portal cloud backup in platform_settings
+        try {
+          await supabase.from('platform_settings').upsert({
+            key: `serviceq_provider_kyc_${user.id}`,
+            value: JSON.stringify({
+              idFrontUrl: idFrontPreview || null,
+              idBackUrl: idBackPreview || null,
+              selfieUrl: selfiePreview || null,
+              photoUrl: photoPreview || null,
+              idType: form.idType || 'PhilSys (National ID)',
+              idNumber: form.idNumber || '',
+              fullName: form.fullName,
+              businessName: form.businessName || form.fullName,
+              email: form.email || user.email,
+              phone: form.phone,
+              submittedAt: new Date().toISOString(),
+            }),
+            updated_at: new Date().toISOString(),
+          })
+        } catch (e) {
+          console.warn('KYC platform_settings backup warning:', e)
         }
 
         // Cache locally for immediate synchronization
@@ -229,7 +278,15 @@ export default function ProviderOnboarding() {
             facebookUrl: form.facebook || '',
             instagramUrl: form.instagram || '',
             status: 'under_verification',
+            idFrontUrl: idFrontPreview || null,
+            idBackUrl: idBackPreview || null,
+            selfieUrl: selfiePreview || null,
+            photoUrl: photoPreview || null,
           }))
+          if (idFrontPreview) localStorage.setItem(`provider_id_front_${user.id}`, idFrontPreview)
+          if (idBackPreview) localStorage.setItem(`provider_id_back_${user.id}`, idBackPreview)
+          if (selfiePreview) localStorage.setItem(`provider_selfie_${user.id}`, selfiePreview)
+          if (photoPreview) localStorage.setItem(`provider_photo_${user.id}`, photoPreview)
           localStorage.setItem('provider_verified', 'false')
         } catch {}
       } catch (err) {
@@ -392,11 +449,14 @@ export default function ProviderOnboarding() {
                                 type="file"
                                 accept="image/*"
                                 className="hidden"
-                                onChange={e => {
+                                onChange={async e => {
                                   const file = e.target.files?.[0]
                                   if (file) {
-                                    setPhotoPreview(URL.createObjectURL(file))
-                                    toast.success('Profile photo attached!')
+                                    const dataUrl = await fileToDataUrl(file, 400, 400, 0.85)
+                                    if (dataUrl) {
+                                      setPhotoPreview(dataUrl)
+                                      toast.success('Profile photo attached!')
+                                    }
                                   }
                                 }}
                               />
@@ -540,11 +600,16 @@ export default function ProviderOnboarding() {
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            onChange={e => {
+                            onChange={async e => {
                               const f = e.target.files?.[0]
                               if (f) {
-                                setIdFrontPreview(URL.createObjectURL(f))
-                                toast.success('ID Front attached!')
+                                const dataUrl = await fileToDataUrl(f, 1200, 1200, 0.85)
+                                if (dataUrl) {
+                                  setIdFrontPreview(dataUrl)
+                                  const uId = user?.id || profile?.id
+                                  if (uId) localStorage.setItem(`provider_id_front_${uId}`, dataUrl)
+                                  toast.success('ID Front attached!')
+                                }
                               }
                             }}
                           />
@@ -578,11 +643,16 @@ export default function ProviderOnboarding() {
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            onChange={e => {
+                            onChange={async e => {
                               const f = e.target.files?.[0]
                               if (f) {
-                                setIdBackPreview(URL.createObjectURL(f))
-                                toast.success('ID Back attached!')
+                                const dataUrl = await fileToDataUrl(f, 1200, 1200, 0.85)
+                                if (dataUrl) {
+                                  setIdBackPreview(dataUrl)
+                                  const uId = user?.id || profile?.id
+                                  if (uId) localStorage.setItem(`provider_id_back_${uId}`, dataUrl)
+                                  toast.success('ID Back attached!')
+                                }
                               }
                             }}
                           />
@@ -617,11 +687,16 @@ export default function ProviderOnboarding() {
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={e => {
+                          onChange={async e => {
                             const f = e.target.files?.[0]
                             if (f) {
-                              setSelfiePreview(URL.createObjectURL(f))
-                              toast.success('Selfie attached!')
+                              const dataUrl = await fileToDataUrl(f, 1200, 1200, 0.85)
+                              if (dataUrl) {
+                                setSelfiePreview(dataUrl)
+                                const uId = user?.id || profile?.id
+                                if (uId) localStorage.setItem(`provider_selfie_${uId}`, dataUrl)
+                                toast.success('Selfie attached!')
+                              }
                             }
                           }}
                         />
