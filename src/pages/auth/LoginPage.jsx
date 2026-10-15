@@ -187,178 +187,122 @@ export default function LoginPage() {
     setLoading(true)
     setUnconfirmed(false)
     try {
-      // ── Step 1: Pre-check role by email BEFORE signing in ──
-      // This prevents the AuthContext race condition where onAuthStateChange
-      // sets the user and redirects them before our role check can fire.
-      const { data: preCheck } = await supabase
-        .from('profiles')
-        .select('*')
-        .ilike('email', form.email.trim())
-        .maybeSingle()
-
-      if (preCheck) {
-        // Suspended user — block before signing in
-        if (preCheck.is_active === false) {
-          toast.error('Your account has been suspended. Please contact support for assistance.')
-          return
-        }
-
-        const preRole = preCheck.role || 'customer'
-
-        // SQI-35: Admin credentials cannot log in on customer/provider login screen
-        if (isAdminAccount(form.email, preRole)) {
-          toast.error('This login screen is for customers and providers only.')
-          return
-        }
-
-        // Wrong portal — show error, auto-switch tab, don't sign in at all
-        if (loginRole === 'customer' && preRole === 'provider') {
-          toast.error('This is a Provider account. Please use the Provider tab to sign in.')
-          setLoginRole('provider')
-          return
-        }
-        if (loginRole === 'provider' && preRole === 'customer') {
-          toast.error('This is a Customer account. Please use the Customer tab to sign in.')
-          setLoginRole('customer')
-          return
-        }
-      } else {
-        // Even if no preCheck profile row found yet, block if email belongs to admin/staff (SQI-35)
-        if (isAdminAccount(form.email, null)) {
-          toast.error('This login screen is for customers and providers only.')
-          return
-        }
-      }
-
-      // ── Step 2: Role matches (or no profile yet) — attempt sign-in ──
       const cleanEmail = form.email.trim().toLowerCase()
+      const enteredPassword = form.password
+
+      // ── Step 1: Verify Credentials First ──
+      // Check cached password if exists for this account
       const cachedPw =
-        localStorage.getItem(`serviceq_password_${cleanEmail}`) ||
-        localStorage.getItem(`serviceq_customer_password_${cleanEmail}`) ||
-        localStorage.getItem(`serviceq_provider_password_${cleanEmail}`)
+        (loginRole === 'provider'
+          ? (localStorage.getItem(`serviceq_provider_password_${cleanEmail}`) || localStorage.getItem(`serviceq_password_${cleanEmail}`))
+          : (localStorage.getItem(`serviceq_customer_password_${cleanEmail}`) || localStorage.getItem(`serviceq_password_${cleanEmail}`)))
+        || localStorage.getItem(`serviceq_password_${cleanEmail}`)
 
-      // If a password was explicitly set or updated, strictly verify against it
-      if (cachedPw) {
-        if (form.password !== cachedPw) {
-          throw new Error('Incorrect password. Please enter your valid updated password.')
-        }
+      let authenticatedUser = null
+      let isPasswordValid = false
 
-        // Attempt background Supabase sign-in to refresh tokens if available
+      if (cachedPw && enteredPassword === cachedPw) {
+        isPasswordValid = true
+        // Try background Supabase sign-in to sync tokens if available
         try {
-          await supabase.auth.signInWithPassword({
+          const { data: supaAuth } = await supabase.auth.signInWithPassword({
             email: form.email.trim(),
-            password: form.password,
+            password: enteredPassword,
           })
+          if (supaAuth?.user) authenticatedUser = supaAuth.user
         } catch {}
-
-        let resolvedProf = preCheck
-        if (!resolvedProf || !resolvedProf.id) {
-          try {
-            const stored = JSON.parse(localStorage.getItem('serviceq_auth_profile'))
-            if (stored?.email?.toLowerCase() === cleanEmail) {
-              resolvedProf = stored
-            }
-          } catch {}
-        }
-        if (!resolvedProf || !resolvedProf.id) {
-          try {
-            const provStored = JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${cleanEmail}`))
-            if (provStored) {
-              resolvedProf = {
-                id: `prov_${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
-                email: cleanEmail,
-                full_name: provStored.fullName || provStored.businessName || 'Service Provider',
-                role: 'provider',
-              }
-            }
-          } catch {}
-        }
-        if (!resolvedProf || !resolvedProf.id) {
-          resolvedProf = {
-            id: `user_${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
-            email: cleanEmail,
-            full_name: cleanEmail.split('@')[0],
-            role: loginRole || 'customer',
-          }
-        }
-
-        const effectiveRole = resolvedProf.role || loginRole || 'customer'
-
-        // SQI-35 check
-        if (isAdminAccount(cleanEmail, effectiveRole)) {
-          toast.error('This login screen is for customers and providers only.')
-          return
-        }
-
-        // Strict role boundary
-        if (loginRole === 'customer' && effectiveRole === 'provider') {
-          toast.error('This is a Provider account. Please use the Provider tab to sign in.')
-          setLoginRole('provider')
-          return
-        }
-        if (loginRole === 'provider' && effectiveRole === 'customer') {
-          toast.error('This is a Customer account. Please use the Customer tab to sign in.')
-          setLoginRole('customer')
-          return
-        }
-
-        loginWithProfile(resolvedProf)
-        localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'email')
-        localStorage.setItem(`serviceq_password_${cleanEmail}`, form.password)
-
-        const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
-        if (isMaintenance && effectiveRole !== 'admin') {
-          navigate('/maintenance', { replace: true })
-          return
-        }
-        const destination = ROLE_REDIRECT[effectiveRole] ?? (effectiveRole === 'provider' ? '/provider/dashboard' : '/customer/explore')
-        toast.success(`Welcome back, ${resolvedProf.full_name || resolvedProf.email}! 👋`, { id: 'welcome-toast' })
-        navigate(destination, { replace: true })
-        return
-      }
-
-      // If no cached password exists, attempt direct Supabase auth sign-in
-      let { data, error } = await supabase.auth.signInWithPassword({
-        email: form.email.trim(),
-        password: form.password,
-      })
-
-      if (error) {
-        throw error
-      }
-
-      localStorage.setItem(`serviceq_password_${cleanEmail}`, form.password)
-      if (loginRole === 'provider') {
-        localStorage.setItem(`serviceq_provider_password_${cleanEmail}`, form.password)
       } else {
-        localStorage.setItem(`serviceq_customer_password_${cleanEmail}`, form.password)
+        // Authenticate directly via Supabase Auth
+        const { data: supaAuth, error: supaErr } = await supabase.auth.signInWithPassword({
+          email: form.email.trim(),
+          password: enteredPassword,
+        })
+
+        if (supaErr) {
+          throw supaErr
+        }
+
+        if (supaAuth?.user) {
+          isPasswordValid = true
+          authenticatedUser = supaAuth.user
+        }
       }
 
-      // ── Step 3: Fetch full profile post-login ──
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .maybeSingle()
+      if (!isPasswordValid) {
+        throw new Error('Invalid email or password. Please try again.')
+      }
 
-      // Deleted user (profile row removed by admin)
+      // ── Step 2: Credentials Verified! Now Check Profile & Role Boundaries ──
+      let profile = null
+      if (authenticatedUser?.id) {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', authenticatedUser.id)
+          .maybeSingle()
+        profile = p
+      }
+
       if (!profile) {
-        await supabase.auth.signOut()
-        toast.error('This account no longer exists. Please contact support or create a new account.')
-        return
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('email', cleanEmail)
+          .maybeSingle()
+        profile = p
+      }
+
+      if (!profile) {
+        try {
+          const stored = JSON.parse(localStorage.getItem('serviceq_auth_profile'))
+          if (stored?.email?.toLowerCase() === cleanEmail) {
+            profile = stored
+          }
+        } catch {}
+      }
+
+      if (!profile && loginRole === 'provider') {
+        try {
+          const provStored = JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${cleanEmail}`))
+          if (provStored) {
+            profile = {
+              id: `prov_${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+              email: cleanEmail,
+              full_name: provStored.fullName || provStored.businessName || 'Service Provider',
+              role: 'provider',
+            }
+          }
+        } catch {}
+      }
+
+      if (!profile) {
+        profile = {
+          id: authenticatedUser?.id || `user_${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+          email: cleanEmail,
+          full_name: cleanEmail.split('@')[0],
+          role: loginRole || 'customer',
+        }
       }
 
       const userRole = profile.role || 'customer'
 
-      // SQI-35: Block admin credentials on customer/provider login screen
-      if (isAdminAccount(profile.email, userRole)) {
+      // Block Suspended Accounts
+      if (profile.is_active === false) {
+        await supabase.auth.signOut()
+        localStorage.removeItem('serviceq_auth_profile')
+        toast.error('Your account has been suspended. Please contact support for assistance.')
+        return
+      }
+
+      // SQI-35: Block admin accounts on public customer/provider login screen
+      if (isAdminAccount(cleanEmail, userRole)) {
         await supabase.auth.signOut()
         localStorage.removeItem('serviceq_auth_profile')
         toast.error('This login screen is for customers and providers only.')
         return
       }
 
-      // Strict Role Boundary: Prevent provider from logging in under customer tab and vice versa
+      // Strict Role Boundary Enforcement (Only triggers if credentials were 100% correct!)
       if (loginRole === 'customer' && userRole === 'provider') {
         await supabase.auth.signOut()
         localStorage.removeItem('serviceq_auth_profile')
@@ -366,6 +310,7 @@ export default function LoginPage() {
         setLoginRole('provider')
         return
       }
+
       if (loginRole === 'provider' && userRole === 'customer') {
         await supabase.auth.signOut()
         localStorage.removeItem('serviceq_auth_profile')
@@ -374,20 +319,35 @@ export default function LoginPage() {
         return
       }
 
-      localStorage.setItem(`serviceq_auth_provider_${form.email.trim().toLowerCase()}`, 'email')
+      // ── Step 3: Login Success & Session Persistence ──
+      loginWithProfile(profile)
+      localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'email')
+      localStorage.setItem(`serviceq_password_${cleanEmail}`, enteredPassword)
+      if (userRole === 'provider') {
+        localStorage.setItem(`serviceq_provider_password_${cleanEmail}`, enteredPassword)
+      } else {
+        localStorage.setItem(`serviceq_customer_password_${cleanEmail}`, enteredPassword)
+      }
 
       const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
       if (isMaintenance && userRole !== 'admin') {
         navigate('/maintenance', { replace: true })
         return
       }
-      const destination = ROLE_REDIRECT[userRole] ?? '/customer/explore'
+
+      const destination = ROLE_REDIRECT[userRole] ?? (userRole === 'provider' ? '/provider/dashboard' : '/customer/explore')
       toast.success(`Welcome back, ${profile.full_name || profile.email}! 👋`, { id: 'welcome-toast' })
       navigate(destination, { replace: true })
     } catch (err) {
       if (err.message?.toLowerCase().includes('email not confirmed')) {
         setUnconfirmed(true)
         toast.error('Your email is not verified yet. Please check your inbox.')
+      } else if (
+        err.message?.toLowerCase().includes('invalid login credentials') ||
+        err.message?.toLowerCase().includes('incorrect password') ||
+        err.message?.toLowerCase().includes('invalid grant')
+      ) {
+        toast.error('Invalid email or password. Please check your credentials and try again.')
       } else {
         toast.error(err.message ?? 'Login failed. Please try again.')
       }
