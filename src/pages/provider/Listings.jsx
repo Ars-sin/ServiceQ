@@ -840,25 +840,26 @@ export default function ProviderListings() {
 
             {/* Calendar Availability Date Range (Month, Day, Year) */}
             <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="label !mb-0 flex items-center gap-1.5 text-emerald-950 font-semibold">
                   <Calendar size={14} className="text-emerald-600" />
-                  Active Calendar Availability (Month, Day, Year) <span className="text-red-500 font-bold">*</span>
+                  Active Calendar Availability <span className="text-red-500 font-bold">*</span>
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer">
+                <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={form.ongoingAvailability}
-                    onChange={e => setForm(f => ({ ...f, ongoingAvailability: e.target.checked }))}
+                    onChange={e => setForm(f => ({ ...f, ongoingAvailability: e.target.checked, availableTo: e.target.checked ? '' : f.availableTo }))}
                     className="accent-emerald-600"
                   />
                   <span>Ongoing / No Expiration</span>
                 </label>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {form.ongoingAvailability ? (
+                /* Ongoing — single start date */
                 <div className="form-group !mb-0">
-                  <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available From (Month / Day / Year)</span>
+                  <span className="text-[11px] font-medium text-gray-500 mb-1 block">Start Date (Month / Day / Year)</span>
                   <input
                     type="date"
                     className="input bg-white"
@@ -866,21 +867,58 @@ export default function ProviderListings() {
                     min={new Date().toISOString().split('T')[0]}
                     onChange={e => setForm(f => ({ ...f, availableFrom: e.target.value }))}
                   />
+                  <p className="text-[11px] text-emerald-700 mt-1.5 flex items-center gap-1">
+                    <span>∞</span> This listing will stay active with no end date.
+                  </p>
                 </div>
-                {!form.ongoingAvailability && (
-                  <div className="form-group !mb-0">
-                    <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available Until (Month / Day / Year)</span>
-                    <input
-                      type="date"
-                      className="input bg-white"
-                      value={form.availableTo}
-                      min={form.availableFrom || new Date().toISOString().split('T')[0]}
-                      onChange={e => setForm(f => ({ ...f, availableTo: e.target.value }))}
-                    />
+              ) : (
+                /* With expiration — date RANGE picker */
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 form-group !mb-0">
+                      <span className="text-[11px] font-medium text-gray-500 mb-1 block">From (Start Date)</span>
+                      <input
+                        type="date"
+                        className="input bg-white"
+                        value={form.availableFrom}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={e => setForm(f => ({ ...f, availableFrom: e.target.value }))}
+                      />
+                    </div>
+                    <div className="pb-2 text-gray-400 font-bold text-base select-none">→</div>
+                    <div className="flex-1 form-group !mb-0">
+                      <span className="text-[11px] font-medium text-red-500 mb-1 block font-semibold">Until (Expiry Date) ✱</span>
+                      <input
+                        type="date"
+                        className="input bg-white border-red-200 focus:border-red-400"
+                        value={form.availableTo}
+                        min={form.availableFrom || new Date().toISOString().split('T')[0]}
+                        onChange={e => setForm(f => ({ ...f, availableTo: e.target.value }))}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+                  {form.availableFrom && form.availableTo && (() => {
+                    const from = new Date(form.availableFrom)
+                    const to   = new Date(form.availableTo)
+                    const days = Math.round((to - from) / 86400000)
+                    if (days <= 0) return (
+                      <p className="text-[11px] text-red-600 font-medium">⚠ Expiry date must be after the start date.</p>
+                    )
+                    return (
+                      <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-3 py-2">
+                        <span className="text-emerald-600 text-[11px]">📅</span>
+                        <span className="text-[11px] text-emerald-800 font-medium">
+                          Active for <strong>{days} day{days !== 1 ? 's' : ''}</strong>
+                          {days >= 30 ? ` (~${Math.round(days / 30)} month${Math.round(days / 30) !== 1 ? 's' : ''})` : ''}
+                          {' '}— expires on <strong>{to.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
+                        </span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
             </div>
+
 
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
@@ -1236,25 +1274,26 @@ export default function ProviderListings() {
 
             {/* Calendar Availability Date Range (Month, Day, Year) */}
             <div className="border border-emerald-100 bg-emerald-50/40 rounded-xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="label !mb-0 flex items-center gap-1.5 text-emerald-950 font-semibold">
                   <Calendar size={14} className="text-emerald-600" />
-                  Active Calendar Availability (Month, Day, Year) <span className="text-red-500 font-bold">*</span>
+                  Active Calendar Availability <span className="text-red-500 font-bold">*</span>
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer">
+                <label className="flex items-center gap-1.5 text-xs text-emerald-800 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={availForm.ongoingAvailability}
-                    onChange={e => setAvailForm(f => ({ ...f, ongoingAvailability: e.target.checked }))}
+                    onChange={e => setAvailForm(f => ({ ...f, ongoingAvailability: e.target.checked, availableTo: e.target.checked ? '' : f.availableTo }))}
                     className="accent-emerald-600"
                   />
                   <span>Ongoing / No Expiration</span>
                 </label>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {availForm.ongoingAvailability ? (
+                /* Ongoing — single start date */
                 <div className="form-group !mb-0">
-                  <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available From (Month / Day / Year)</span>
+                  <span className="text-[11px] font-medium text-gray-500 mb-1 block">Start Date (Month / Day / Year)</span>
                   <input
                     type="date"
                     className="input bg-white"
@@ -1262,23 +1301,60 @@ export default function ProviderListings() {
                     min={new Date().toISOString().split('T')[0]}
                     onChange={e => setAvailForm(f => ({ ...f, availableFrom: e.target.value }))}
                   />
+                  <p className="text-[11px] text-emerald-700 mt-1.5 flex items-center gap-1">
+                    <span>∞</span> This listing will stay active with no end date.
+                  </p>
                 </div>
-                {!availForm.ongoingAvailability && (
-                  <div className="form-group !mb-0">
-                    <span className="text-[11px] font-medium text-gray-500 mb-1 block">Available Until (Month / Day / Year)</span>
-                    <input
-                      type="date"
-                      className="input bg-white"
-                      value={availForm.availableTo}
-                      min={availForm.availableFrom || new Date().toISOString().split('T')[0]}
-                      onChange={e => setAvailForm(f => ({ ...f, availableTo: e.target.value }))}
-                    />
+              ) : (
+                /* With expiration — date RANGE picker */
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1 form-group !mb-0">
+                      <span className="text-[11px] font-medium text-gray-500 mb-1 block">From (Start Date)</span>
+                      <input
+                        type="date"
+                        className="input bg-white"
+                        value={availForm.availableFrom}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={e => setAvailForm(f => ({ ...f, availableFrom: e.target.value }))}
+                      />
+                    </div>
+                    <div className="pb-2 text-gray-400 font-bold text-base select-none">→</div>
+                    <div className="flex-1 form-group !mb-0">
+                      <span className="text-[11px] font-medium text-red-500 mb-1 block font-semibold">Until (Expiry Date) ✱</span>
+                      <input
+                        type="date"
+                        className="input bg-white border-red-200 focus:border-red-400"
+                        value={availForm.availableTo}
+                        min={availForm.availableFrom || new Date().toISOString().split('T')[0]}
+                        onChange={e => setAvailForm(f => ({ ...f, availableTo: e.target.value }))}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+                  {availForm.availableFrom && availForm.availableTo && (() => {
+                    const from = new Date(availForm.availableFrom)
+                    const to   = new Date(availForm.availableTo)
+                    const days = Math.round((to - from) / 86400000)
+                    if (days <= 0) return (
+                      <p className="text-[11px] text-red-600 font-medium">⚠ Expiry date must be after the start date.</p>
+                    )
+                    return (
+                      <div className="flex items-center gap-2 bg-white border border-emerald-200 rounded-lg px-3 py-2">
+                        <span className="text-emerald-600 text-[11px]">📅</span>
+                        <span className="text-[11px] text-emerald-800 font-medium">
+                          Active for <strong>{days} day{days !== 1 ? 's' : ''}</strong>
+                          {days >= 30 ? ` (~${Math.round(days / 30)} month${Math.round(days / 30) !== 1 ? 's' : ''})` : ''}
+                          {' '}— expires on <strong>{to.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</strong>
+                        </span>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Operating Hours */}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="label">Operating From</label>
