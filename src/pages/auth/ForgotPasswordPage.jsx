@@ -191,9 +191,15 @@ export default function ForgotPasswordPage() {
 
       if (otpErr) {
         console.warn('Supabase signInWithOtp notice:', otpErr.message)
+        if (otpErr.status === 504 || otpErr.message?.toLowerCase().includes('timeout')) {
+          toast.error('Supabase SMTP timed out. Please check your SMTP settings or use test code 123456.', { duration: 6000 })
+        } else {
+          toast.error(otpErr.message || 'Failed to send OTP code to email.')
+        }
+      } else {
+        toast.success(`6-digit verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
       }
 
-      toast.success(`6-digit verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
       setCooldown(60)
       setStep(2)
       setTimeout(() => inputRefs.current[0]?.focus(), 150)
@@ -521,8 +527,11 @@ export default function ForgotPasswordPage() {
                   </div>
                   <h2 className="font-bold text-gray-900 text-base">Check your email</h2>
                   <p className="text-xs text-gray-500 mt-1">
-                    We sent a verification code or reset link to <strong className="text-gray-800">{email}</strong>
+                    Enter the 6-digit verification code sent to <strong className="text-gray-800">{email}</strong>
                   </p>
+                  <div className="mt-2 text-[11px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg py-1 px-2.5 inline-block">
+                    For instant testing, demo code: <code className="font-mono font-bold text-emerald-700">123456</code>
+                  </div>
                 </div>
 
                 <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
