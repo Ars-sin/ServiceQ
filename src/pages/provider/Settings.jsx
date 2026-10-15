@@ -359,58 +359,36 @@ export default function ProviderSettings() {
                       </div>
                     </div>
 
-                    {/* Requirements Box Right (Slide 44) */}
+                    {/* Requirements Box Right */}
                     <div className="lg:col-span-5 bg-gray-50 border border-gray-100 rounded-2xl p-4 flex flex-col justify-center">
-                      <p className="text-xs font-semibold text-gray-500 mb-2.5">Your new password must have:</p>
+                      <p className="text-xs font-semibold text-gray-500 mb-3">Your new password must have:</p>
                       <ul className="space-y-2 text-xs">
-                        <li className="flex items-center gap-2 text-gray-500 text-xs">
-                          {hasMinLength ? (
-                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
-                          ) : (
-                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
-                          )}
-                          At least 8 characters
-                        </li>
-                        <li className="flex items-center gap-2 text-gray-500 text-xs">
-                          {hasUppercase ? (
-                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
-                          ) : (
-                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
-                          )}
-                          One uppercase letter (A–Z)
-                        </li>
-                        <li className="flex items-center gap-2 text-gray-500 text-xs">
-                          {hasLowercase ? (
-                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
-                          ) : (
-                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
-                          )}
-                          One lowercase letter (a–z)
-                        </li>
-                        <li className="flex items-center gap-2 text-gray-500 text-xs">
-                          {hasNumber ? (
-                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
-                          ) : (
-                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
-                          )}
-                          One number (0–9)
-                        </li>
-                        <li className="flex items-center gap-2 text-gray-500 text-xs">
-                          {hasSpecial ? (
-                            <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
-                          ) : (
-                            <Circle size={15} className="text-gray-300 flex-shrink-0" />
-                          )}
-                          One special character (e.g. !@#)
-                        </li>
+                        {[
+                          { met: hasMinLength,  label: 'At least 8 characters' },
+                          { met: hasUppercase,  label: 'One uppercase letter (A–Z)' },
+                          { met: hasLowercase,  label: 'One lowercase letter (a–z)' },
+                          { met: hasNumber,     label: 'One number (0–9)' },
+                          { met: hasSpecial,    label: 'One special character (e.g. !@#)' },
+                        ].map(({ met, label }) => (
+                          <li key={label} className="flex items-center gap-2">
+                            {met ? (
+                              <CheckCircle2 size={15} className="text-emerald-500 flex-shrink-0" />
+                            ) : (
+                              <Circle size={15} className="text-gray-300 flex-shrink-0" />
+                            )}
+                            <span className={met ? 'text-emerald-600 font-medium' : 'text-gray-400'}>
+                              {label}
+                            </span>
+                          </li>
+                        ))}
                         {passwordForm.confirm && (
-                          <li className="flex items-center gap-2 pt-1 border-t border-gray-200 text-xs">
+                          <li className="flex items-center gap-2 pt-1.5 border-t border-gray-200">
                             {passwordsMatch ? (
-                              <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0" />
+                              <CheckCircle2 size={15} className="text-emerald-500 flex-shrink-0" />
                             ) : (
                               <X size={15} className="text-red-500 flex-shrink-0" />
                             )}
-                            <span className={passwordsMatch ? 'text-emerald-600 font-semibold' : 'text-red-500'}>
+                            <span className={passwordsMatch ? 'text-emerald-600 font-medium' : 'text-red-500'}>
                               {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
                             </span>
                           </li>
@@ -438,7 +416,7 @@ export default function ProviderSettings() {
                       disabled={pwLoading || !isPasswordValid}
                       className={`text-xs px-6 py-2.5 rounded-xl font-bold transition-all shadow-sm flex items-center gap-2 ${
                         isPasswordValid && !pwLoading
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95'
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer active:scale-95'
                           : 'border border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
                       }`}
                     >
