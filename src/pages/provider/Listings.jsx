@@ -13,7 +13,6 @@ import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
-import LocationPicker from '@/components/ui/LocationPicker'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import {
@@ -36,6 +35,40 @@ const WIZARD_STEPS = ['Type & Category', 'Details & Photos', 'Pricing', 'Locatio
 const tomorrowDateStr = new Date(Date.now() + 86400000).toISOString().split('T')[0]
 const sixMonthsDateStr = new Date(Date.now() + 180 * 86400000).toISOString().split('T')[0]
 
+export const CEBU_CITIES = [
+  'Cebu City',
+  'Mandaue City',
+  'Lapu-Lapu City',
+  'Talisay City',
+  'Consolacion',
+  'Liloan',
+  'Minglanilla',
+  'Cordova',
+  'Toledo City',
+  'Danao City',
+  'Carcar City',
+  'Naga City',
+  'Compostela',
+  'Balamban',
+]
+
+export const CEBU_CITY_COORDINATES = {
+  'Cebu City': { lat: 10.3157, lng: 123.8854 },
+  'Mandaue City': { lat: 10.3333, lng: 123.9333 },
+  'Lapu-Lapu City': { lat: 10.3103, lng: 123.9494 },
+  'Talisay City': { lat: 10.2500, lng: 123.8333 },
+  'Consolacion': { lat: 10.3792, lng: 123.9572 },
+  'Liloan': { lat: 10.4000, lng: 123.9833 },
+  'Minglanilla': { lat: 10.2444, lng: 123.7961 },
+  'Cordova': { lat: 10.2528, lng: 123.9500 },
+  'Toledo City': { lat: 10.3769, lng: 123.6406 },
+  'Danao City': { lat: 10.5186, lng: 124.0253 },
+  'Carcar City': { lat: 10.1111, lng: 123.6425 },
+  'Naga City': { lat: 10.2072, lng: 123.7583 },
+  'Compostela': { lat: 10.4578, lng: 124.0125 },
+  'Balamban': { lat: 10.4994, lng: 123.7125 },
+}
+
 const INITIAL_FORM = {
   type: '',
   category: '',
@@ -46,10 +79,10 @@ const INITIAL_FORM = {
   unit: 'per session',
   minDuration: '1',
   maxDuration: '10',
-  location: '',
-  lat: null,
-  lng: null,
-  serviceArea: '',
+  location: 'Cebu City',
+  lat: 10.3157,
+  lng: 123.8854,
+  serviceArea: 'Cebu City',
   days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
   hoursFrom: '08:00',
   hoursTo: '17:00',
@@ -186,7 +219,15 @@ export default function ProviderListings() {
   const [form, setForm] = useState(INITIAL_FORM)
 
   const handleOpenAdd = () => {
-    setForm(INITIAL_FORM)
+    const defaultCity = profile?.city || 'Cebu City'
+    const coords = CEBU_CITY_COORDINATES[defaultCity] || CEBU_CITY_COORDINATES['Cebu City']
+    setForm({
+      ...INITIAL_FORM,
+      location: defaultCity,
+      serviceArea: defaultCity,
+      lat: coords.lat,
+      lng: coords.lng,
+    })
     setShowAdd(true)
     setWizardStep(0)
   }
@@ -387,9 +428,9 @@ export default function ProviderListings() {
       availableTo: form.ongoingAvailability ? null : form.availableTo,
       ongoingAvailability: form.ongoingAvailability,
       location: form.location || profile?.city || 'Cebu City',
-      lat: form.lat || (profile?.lat ? parseFloat(profile.lat) : 10.3157),
-      lng: form.lng || (profile?.lng ? parseFloat(profile.lng) : 123.8854),
-      serviceArea: form.serviceArea || 'Metro Cebu',
+      lat: form.lat || CEBU_CITY_COORDINATES[form.location]?.lat || (profile?.lat ? parseFloat(profile.lat) : 10.3157),
+      lng: form.lng || CEBU_CITY_COORDINATES[form.location]?.lng || (profile?.lng ? parseFloat(profile.lng) : 123.8854),
+      serviceArea: form.serviceArea || form.location || 'Entire Metro Cebu',
       description: form.description || form.title,
     }
 
@@ -728,31 +769,50 @@ export default function ProviderListings() {
         {/* Step 3: Location */}
         {wizardStep === 3 && (
           <div className="flex flex-col gap-4">
-            <LocationPicker
-              value={{
-                address: form.location,
-                lat: form.lat,
-                lng: form.lng,
-              }}
-              onChange={(loc) => {
-                setForm(f => ({
-                  ...f,
-                  location: loc.address || loc.city || f.location,
-                  lat: loc.lat || f.lat,
-                  lng: loc.lng || f.lng,
-                  serviceArea: f.serviceArea || (loc.city ? `${loc.city}, Metro Cebu` : f.serviceArea),
-                }))
-              }}
-              label="Shop / Base Workshop Location in Cebu (Google Maps)"
-            />
             <div className="form-group">
-              <label className="label">Service Area Coverage <span className="text-red-500 font-bold">*</span></label>
-              <input
+              <label className="label">
+                Primary Location / Base City <span className="text-red-500 font-bold">*</span>
+              </label>
+              <select
                 className="input"
-                placeholder="e.g. Cebu City, Mandaue, Lapu-Lapu, Talisay"
-                value={form.serviceArea}
+                value={form.location || 'Cebu City'}
+                onChange={e => {
+                  const chosenCity = e.target.value
+                  const coords = CEBU_CITY_COORDINATES[chosenCity] || CEBU_CITY_COORDINATES['Cebu City']
+                  setForm(f => ({
+                    ...f,
+                    location: chosenCity,
+                    lat: coords.lat,
+                    lng: coords.lng,
+                    serviceArea: !f.serviceArea || f.serviceArea === f.location ? chosenCity : f.serviceArea,
+                  }))
+                }}
+              >
+                {CEBU_CITIES.map(city => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="label">
+                Service Area Coverage <span className="text-red-500 font-bold">*</span>
+              </label>
+              <select
+                className="input"
+                value={form.serviceArea || form.location || 'Entire Metro Cebu'}
                 onChange={e => setForm(f => ({ ...f, serviceArea: e.target.value }))}
-              />
+              >
+                <option value="Entire Metro Cebu">Entire Metro Cebu (Cebu, Mandaue, Lapu-Lapu, Talisay)</option>
+                <option value="All Cebu Province">All Cebu Province</option>
+                {CEBU_CITIES.map(city => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         )}
