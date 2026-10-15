@@ -24,29 +24,34 @@ export default function ProviderDashboard() {
       if (Array.isArray(stored)) setListings(stored)
     } catch {}
 
-    fetchProviderListings(user.id).then(live => {
+    const effectiveId = user?.id || profile?.id
+    if (!effectiveId) return
+
+    fetchProviderListings(effectiveId).then(live => {
       if (Array.isArray(live) && live.length > 0) setListings(live)
     }).catch(() => {})
-  }, [user?.id])
+  }, [user?.id, profile?.id])
 
   const [bookings, setBookings] = useState([])
 
   useEffect(() => {
-    if (!user?.id) return
+    const effectiveId = user?.id || profile?.id
+    if (!effectiveId) return
     const provName = profile?.full_name || profile?.business_name
     try {
-      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${user.id}`))
+      const stored = JSON.parse(localStorage.getItem(`serviceq_provider_bookings_${effectiveId}`))
       if (Array.isArray(stored)) setBookings(stored)
     } catch {}
 
-    fetchProviderBookings(user.id, provName).then(live => {
+    fetchProviderBookings(effectiveId, provName).then(live => {
       if (Array.isArray(live)) setBookings(live)
     }).catch(() => {})
-  }, [user?.id, profile?.full_name])
+  }, [user?.id, profile?.id, profile?.full_name, profile?.business_name])
 
   useEffect(() => {
     async function checkVerification() {
-      if (!user?.id) return
+      const effectiveId = user?.id || profile?.id
+      if (!effectiveId) return
 
       // 1. Check profile avatar_url metadata (persisted in profiles table)
       let meta = null
@@ -60,7 +65,7 @@ export default function ProviderDashboard() {
         const { data: prof } = await supabase
           .from('profiles')
           .select('avatar_url, is_active')
-          .eq('id', user.id)
+          .eq('id', effectiveId)
           .maybeSingle()
 
         if (prof?.avatar_url && prof.avatar_url.startsWith('{')) {
@@ -81,7 +86,7 @@ export default function ProviderDashboard() {
       const { data: prov } = await supabase
         .from('providers')
         .select('status')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveId)
         .maybeSingle()
 
       if (prov?.status === 'approved') {
@@ -94,7 +99,7 @@ export default function ProviderDashboard() {
       }
 
       // 3. Local storage fallback
-      const localApproved = localStorage.getItem(`provider_verified_${user.id}`) === 'true' ||
+      const localApproved = localStorage.getItem(`provider_verified_${effectiveId}`) === 'true' ||
                             localStorage.getItem('serviceq_kyc_approved') === 'true'
       setIsVerified(localApproved)
     }

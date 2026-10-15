@@ -35,6 +35,20 @@ function formatMemberSince(dateString) {
   return new Date(dateString).toLocaleDateString('en-PH', { year: 'numeric', month: 'long' })
 }
 
+function extractAvatar(val) {
+  if (!val) return null
+  if (typeof val === 'string' && (val.startsWith('data:image') || val.startsWith('http'))) return val
+  if (typeof val === 'string' && val.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(val)
+      return parsed.photo_url || parsed.avatar_photo || parsed.avatar_url || null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 export default function ProviderProfile() {
   const { user, profile } = useAuth()
   const effectiveUserId = user?.id || profile?.id || null
@@ -118,14 +132,16 @@ export default function ProviderProfile() {
     try {
       const uId = user?.id || profile?.id
       const uEmail = (user?.email || profile?.email || '').trim().toLowerCase()
-      return (
-        (uId && localStorage.getItem(`serviceq_provider_avatar_${uId}`)) ||
-        (uEmail && localStorage.getItem(`serviceq_provider_avatar_${uEmail}`)) ||
-        (uId && localStorage.getItem(`serviceq_avatar_${uId}`)) ||
-        localStorage.getItem('serviceq_provider_avatar_latest') ||
-        (profile?.avatar_url && !profile.avatar_url.startsWith('{') ? profile.avatar_url : null) ||
-        null
-      )
+      const fromStorage =
+        (uEmail && (localStorage.getItem(`serviceq_provider_avatar_${uEmail}`) || localStorage.getItem(`serviceq_avatar_${uEmail}`))) ||
+        (uId && (localStorage.getItem(`serviceq_provider_avatar_${uId}`) || localStorage.getItem(`serviceq_avatar_${uId}`))) ||
+        localStorage.getItem('serviceq_provider_avatar_latest')
+      if (fromStorage) return fromStorage
+
+      const fromProfile = extractAvatar(profile?.avatar_url)
+      if (fromProfile) return fromProfile
+
+      return null
     } catch {
       return null
     }
@@ -147,38 +163,54 @@ export default function ProviderProfile() {
 
     try {
       const compressedDataUrl = await resizeImageToDataUrl(file, 360, 360, 0.85)
+      
+      // 1. Immediately update UI state
       setAvatarPhoto(compressedDataUrl)
 
-      // 1. Immediately cache across all relevant local keys so refreshes always show it
+      // 2. Persist to all local storage caches immediately
       try {
+        if (effectiveUserEmail) {
+          localStorage.setItem(`serviceq_provider_avatar_${effectiveUserEmail}`, compressedDataUrl)
+          localStorage.setItem(`serviceq_avatar_${effectiveUserEmail}`, compressedDataUrl)
+        }
         if (effectiveUserId) {
           localStorage.setItem(`serviceq_provider_avatar_${effectiveUserId}`, compressedDataUrl)
           localStorage.setItem(`serviceq_avatar_${effectiveUserId}`, compressedDataUrl)
-        }
-        if (effectiveUserEmail) {
-          localStorage.setItem(`serviceq_provider_avatar_${effectiveUserEmail}`, compressedDataUrl)
         }
         localStorage.setItem('serviceq_provider_avatar_latest', compressedDataUrl)
 
         const cachedAuthProf = JSON.parse(localStorage.getItem('serviceq_auth_profile') || 'null')
         if (cachedAuthProf) {
-          cachedAuthProf.avatar_url = compressedDataUrl
+          let meta = {}
+          if (cachedAuthProf.avatar_url && cachedAuthProf.avatar_url.startsWith('{')) {
+            try { meta = JSON.parse(cachedAuthProf.avatar_url) } catch {}
+          }
+          meta.photo_url = compressedDataUrl
+          meta.avatar_photo = compressedDataUrl
+          meta.avatar_url = compressedDataUrl
+          cachedAuthProf.avatar_url = JSON.stringify(meta)
           localStorage.setItem('serviceq_auth_profile', JSON.stringify(cachedAuthProf))
         }
 
         window.dispatchEvent(new Event('serviceq_provider_avatar_updated'))
-      } catch (e) {
-        console.warn('Local storage avatar cache notice:', e)
+      } catch (storageErr) {
+        console.warn('Local storage avatar cache notice:', storageErr)
       }
 
-      // 2. Persist to Supabase profiles & providers tables so it survives page reloads and refreshes (SQI-3)
+      // 3. Persist to Supabase profiles database table
       if (effectiveUserId || effectiveUserEmail) {
         try {
-          let metaToSave = {}
-          const { data: curProf } = effectiveUserId
-            ? await supabase.from('profiles').select('avatar_url').eq('id', effectiveUserId).maybeSingle()
-            : await supabase.from('profiles').select('avatar_url').ilike('email', effectiveUserEmail).maybeSingle()
+          let curProf = null
+          if (effectiveUserId) {
+            const { data } = await supabase.from('profiles').select('*').eq('id', effectiveUserId).maybeSingle()
+            if (data) curProf = data
+          }
+          if (!curProf && effectiveUserEmail) {
+            const { data } = await supabase.from('profiles').select('*').ilike('email', effectiveUserEmail).maybeSingle()
+            if (data) curProf = data
+          }
 
+          let metaToSave = {}
           if (curProf?.avatar_url && curProf.avatar_url.startsWith('{')) {
             try { metaToSave = JSON.parse(curProf.avatar_url) } catch {}
           }
@@ -186,18 +218,22 @@ export default function ProviderProfile() {
           metaToSave.avatar_photo = compressedDataUrl
           metaToSave.avatar_url = compressedDataUrl
 
-          if (effectiveUserId) {
-            await supabase.from('profiles').update({ avatar_url: JSON.stringify(metaToSave) }).eq('id', effectiveUserId)
-            await supabase.from('providers').update({ avatar_url: compressedDataUrl }).eq('user_id', effectiveUserId)
+          const payloadStr = JSON.stringify(metaToSave)
+
+          if (curProf?.id) {
+            await supabase.from('profiles').update({ avatar_url: payloadStr }).eq('id', curProf.id)
+          } else if (effectiveUserId) {
+            await supabase.from('profiles').update({ avatar_url: payloadStr }).eq('id', effectiveUserId)
           }
           if (effectiveUserEmail) {
-            await supabase.from('profiles').update({ avatar_url: JSON.stringify(metaToSave) }).ilike('email', effectiveUserEmail)
+            await supabase.from('profiles').update({ avatar_url: payloadStr }).ilike('email', effectiveUserEmail)
           }
+
           try {
             await supabase.auth.updateUser({ data: { avatar_url: compressedDataUrl, photo_url: compressedDataUrl } })
           } catch {}
-        } catch (err) {
-          console.warn('Avatar photo Supabase save notice:', err)
+        } catch (dbErr) {
+          console.warn('Avatar photo Supabase save notice:', dbErr)
         }
       }
 
@@ -205,6 +241,8 @@ export default function ProviderProfile() {
     } catch (err) {
       console.error('Photo processing failed:', err)
       toast.error('Could not process selected image. Please try another photo.')
+    } finally {
+      if (e.target) e.target.value = ''
     }
   }
 
@@ -216,80 +254,84 @@ export default function ProviderProfile() {
     // Load saved avatar photo if available locally
     try {
       const savedPhoto =
+        (effectiveUserEmail && (localStorage.getItem(`serviceq_provider_avatar_${effectiveUserEmail}`) || localStorage.getItem(`serviceq_avatar_${effectiveUserEmail}`))) ||
         (effectiveUserId && (localStorage.getItem(`serviceq_provider_avatar_${effectiveUserId}`) || localStorage.getItem(`serviceq_avatar_${effectiveUserId}`))) ||
-        (effectiveUserEmail && localStorage.getItem(`serviceq_provider_avatar_${effectiveUserEmail}`)) ||
         localStorage.getItem('serviceq_provider_avatar_latest')
       if (savedPhoto) setAvatarPhoto(savedPhoto)
     } catch {}
 
     try {
-      // 1. Fetch fresh profile from Supabase
+      // 1. Fetch fresh profile from Supabase (by ID or Email)
       let profData = null
       if (effectiveUserId) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', effectiveUserId)
-          .maybeSingle()
-        profData = data
-      } else if (effectiveUserEmail) {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .ilike('email', effectiveUserEmail)
-          .maybeSingle()
-        profData = data
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', effectiveUserId)
+            .maybeSingle()
+          if (data) profData = data
+        } catch {}
+      }
+      if (!profData && effectiveUserEmail) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .ilike('email', effectiveUserEmail)
+            .maybeSingle()
+          if (data) profData = data
+        } catch {}
       }
 
       // Load avatar from Supabase profile if present (SQI-3)
-      let photoFromSupabase = null
-      if (profData?.avatar_url) {
-        if (profData.avatar_url.startsWith('data:image') || profData.avatar_url.startsWith('http')) {
-          photoFromSupabase = profData.avatar_url
-        } else if (profData.avatar_url.startsWith('{')) {
-          try {
-            const parsed = JSON.parse(profData.avatar_url)
-            photoFromSupabase = parsed.photo_url || parsed.avatar_photo || parsed.avatar_url || null
-          } catch {}
-        }
-      }
+      const photoFromSupabase = extractAvatar(profData?.avatar_url)
 
       const savedPhoto = (
+        (effectiveUserEmail && (localStorage.getItem(`serviceq_provider_avatar_${effectiveUserEmail}`) || localStorage.getItem(`serviceq_avatar_${effectiveUserEmail}`))) ||
         (effectiveUserId && (localStorage.getItem(`serviceq_provider_avatar_${effectiveUserId}`) || localStorage.getItem(`serviceq_avatar_${effectiveUserId}`))) ||
-        (effectiveUserEmail && localStorage.getItem(`serviceq_provider_avatar_${effectiveUserEmail}`)) ||
         localStorage.getItem('serviceq_provider_avatar_latest')
       )
 
-      // Ensure uploaded photo (savedPhoto) always persists across refreshes and is not clobbered (SQI-3)
+      // Ensure uploaded photo always persists across refreshes and is not clobbered (SQI-3)
       if (savedPhoto) {
         setAvatarPhoto(savedPhoto)
       } else if (photoFromSupabase) {
         setAvatarPhoto(photoFromSupabase)
-        if (effectiveUserId) {
-          try { localStorage.setItem(`serviceq_provider_avatar_${effectiveUserId}`, photoFromSupabase) } catch {}
-        }
+        try {
+          if (effectiveUserEmail) localStorage.setItem(`serviceq_provider_avatar_${effectiveUserEmail}`, photoFromSupabase)
+          if (effectiveUserId) localStorage.setItem(`serviceq_provider_avatar_${effectiveUserId}`, photoFromSupabase)
+        } catch {}
       }
 
-      // 2. Fetch provider row if available
-      const { data: provData } = await supabase
-        .from('providers')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (provData) setProviderRow(provData)
+      // 2. Fetch provider row if available (safe without throwing if user or user.id is missing)
+      const targetUserId = profData?.id || effectiveUserId
+      let provData = null
+      if (targetUserId) {
+        try {
+          const { data } = await supabase
+            .from('providers')
+            .select('*')
+            .eq('user_id', targetUserId)
+            .maybeSingle()
+          if (data) {
+            provData = data
+            setProviderRow(data)
+          }
+        } catch {}
+      }
 
       // 3. User metadata
-      const meta = user.user_metadata || {}
+      const meta = user?.user_metadata || {}
 
-      // 4. Local storage caches from registration (scoped strictly to user.id or user.email)
+      // 4. Local storage caches from registration (scoped strictly to targetUserId or effectiveUserEmail)
       let localCache = {}
       try {
-        localCache = JSON.parse(localStorage.getItem(`serviceq_provider_profile_${user.id}`)) || {}
+        if (targetUserId) localCache = JSON.parse(localStorage.getItem(`serviceq_provider_profile_${targetUserId}`)) || {}
       } catch {}
       let emailCache = {}
       try {
-        emailCache = JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${user.email?.toLowerCase()}`)) || {}
+        if (effectiveUserEmail) emailCache = JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${effectiveUserEmail}`)) || {}
       } catch {}
 
       // Strictly merge ONLY this user's caches — never fall back to global latestCache
@@ -302,7 +344,7 @@ export default function ProviderProfile() {
         }
       } catch {}
 
-      const effectiveName = profData?.full_name || meta.full_name || mergedCache.fullName || user.email?.split('@')[0] || 'Service Provider'
+      const effectiveName = profData?.full_name || meta.full_name || mergedCache.fullName || (effectiveUserEmail ? effectiveUserEmail.split('@')[0] : 'Service Provider')
       const effectivePhone = profData?.phone || meta.phone || mergedCache.phone || ''
       const effectiveCity = profData?.city || mergedCache.city || 'Cebu City'
 
@@ -326,7 +368,7 @@ export default function ProviderProfile() {
 
       const effectiveStatus = provData?.status ||
         profileMeta?.status ||
-        (localStorage.getItem(`provider_verified_${user.id}`) === 'true' ? 'approved' :
+        (targetUserId && localStorage.getItem(`provider_verified_${targetUserId}`) === 'true' ? 'approved' :
         (profData?.is_active === false ? 'suspended' : 'under_verification'))
 
       // SQI-30: Resolve payout account name — do not use obsolete Google metadata names
@@ -382,16 +424,32 @@ export default function ProviderProfile() {
   // ─── Save changes to Supabase & localStorage ─────────────────────────────
   const handleSave = async (e) => {
     e?.preventDefault()
-    if (!effectiveUserId) return toast.error('You must be logged in')
+    if (!effectiveUserId && !effectiveUserEmail) return toast.error('You must be logged in')
 
     setSaving(true)
     try {
       // 1. Fetch current profile to retain metadata
-      const { data: currentProf } = await supabase
-        .from('profiles')
-        .select('avatar_url')
-        .eq('id', effectiveUserId)
-        .maybeSingle()
+      let currentProf = null
+      if (effectiveUserId) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', effectiveUserId)
+            .maybeSingle()
+          if (data) currentProf = data
+        } catch {}
+      }
+      if (!currentProf && effectiveUserEmail) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .ilike('email', effectiveUserEmail)
+            .maybeSingle()
+          if (data) currentProf = data
+        } catch {}
+      }
 
       let currentMeta = {}
       try {
@@ -424,7 +482,10 @@ export default function ProviderProfile() {
         instagram_url: form.instagramUrl,
       }
 
-      await supabase.from('profiles').update({
+      const metaStr = JSON.stringify(updatedMeta)
+      const targetId = currentProf?.id || effectiveUserId
+
+      const updateData = {
         full_name: form.fullName,
         phone: form.phone,
         address: form.address,
@@ -432,8 +493,26 @@ export default function ProviderProfile() {
         city: form.city,
         province: form.province,
         postal_code: form.postalCode,
-        avatar_url: JSON.stringify(updatedMeta),
-      }).eq('id', effectiveUserId)
+        avatar_url: metaStr,
+      }
+
+      if (targetId) {
+        await supabase.from('profiles').update(updateData).eq('id', targetId)
+      }
+      if (effectiveUserEmail) {
+        await supabase.from('profiles').update(updateData).ilike('email', effectiveUserEmail)
+      }
+
+      // Update cached session auth profile
+      try {
+        const cachedAuthProf = JSON.parse(localStorage.getItem('serviceq_auth_profile') || 'null')
+        if (cachedAuthProf) {
+          cachedAuthProf.full_name = form.fullName
+          cachedAuthProf.phone = form.phone
+          cachedAuthProf.avatar_url = metaStr
+          localStorage.setItem('serviceq_auth_profile', JSON.stringify(cachedAuthProf))
+        }
+      } catch {}
 
       // 2. Auth user metadata update if auth session exists
       try {
@@ -450,31 +529,35 @@ export default function ProviderProfile() {
       } catch {}
 
       // 3. Update providers table
-      try {
-        await supabase.from('providers').upsert({
-          user_id: effectiveUserId,
-          business_name: form.businessName,
-          business_description: form.description,
-          provider_type: [form.category || 'service'],
-          years_experience: parseInt(form.yearsExp) || 1,
-          operating_hours_from: form.hoursFrom || '08:00',
-          operating_hours_to: form.hoursTo || '17:00',
-          service_area: form.serviceArea,
-          gov_id_type: form.idType,
-          gov_id_number: form.idNumber,
-          payout_method: form.payoutMethod || null,
-          payout_account_name: form.payoutAccountName || null,
-          payout_account_number: form.payoutAccountNumber || null,
-          payout_bank_name: form.payoutBankName || null,
-          facebook_url: form.facebookUrl,
-          instagram_url: form.instagramUrl,
-        }, { onConflict: 'user_id' })
-      } catch (err) {
-        console.warn('Providers table upsert note:', err.message)
+      if (targetId) {
+        try {
+          await supabase.from('providers').upsert({
+            user_id: targetId,
+            business_name: form.businessName,
+            business_description: form.description,
+            provider_type: [form.category || 'service'],
+            years_experience: parseInt(form.yearsExp) || 1,
+            operating_hours_from: form.hoursFrom || '08:00',
+            operating_hours_to: form.hoursTo || '17:00',
+            service_area: form.serviceArea,
+            gov_id_type: form.idType,
+            gov_id_number: form.idNumber,
+            payout_method: form.payoutMethod || null,
+            payout_account_name: form.payoutAccountName || null,
+            payout_account_number: form.payoutAccountNumber || null,
+            payout_bank_name: form.payoutBankName || null,
+            facebook_url: form.facebookUrl,
+            instagram_url: form.instagramUrl,
+          }, { onConflict: 'user_id' })
+        } catch (err) {
+          console.warn('Providers table upsert note:', err.message)
+        }
       }
 
       // 4. Save to localStorage cache
-      localStorage.setItem(`serviceq_provider_profile_${effectiveUserId}`, JSON.stringify(form))
+      if (targetId) {
+        localStorage.setItem(`serviceq_provider_profile_${targetId}`, JSON.stringify(form))
+      }
       if (effectiveUserEmail) {
         localStorage.setItem(`serviceq_provider_profile_email_${effectiveUserEmail}`, JSON.stringify(form))
       }
@@ -567,7 +650,12 @@ export default function ProviderProfile() {
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden bg-emerald-100 flex items-center justify-center text-emerald-800 font-black text-3xl shadow-sm border border-emerald-200 flex-shrink-0">
             {avatarPhoto ? (
-              <img src={avatarPhoto} alt="Provider avatar" className="w-full h-full object-cover" />
+              <img
+                src={avatarPhoto}
+                alt="Provider avatar"
+                className="w-full h-full object-cover"
+                onError={() => setAvatarPhoto(null)}
+              />
             ) : (
               getInitials(form.businessName || form.fullName || 'PR')
             )}
@@ -602,15 +690,21 @@ export default function ProviderProfile() {
           </div>
         </div>
 
-        <label className="btn-secondary btn-sm gap-1.5 cursor-pointer text-xs self-end sm:self-auto hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition-colors">
-          <Upload size={13} /> Change Photo
+        <div>
           <input
+            id="provider-photo-input"
             type="file"
             accept="image/*"
             className="hidden"
             onChange={handlePhotoUpload}
           />
-        </label>
+          <label
+            htmlFor="provider-photo-input"
+            className="btn-secondary btn-sm gap-1.5 cursor-pointer text-xs self-end sm:self-auto hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300 transition-colors inline-flex items-center"
+          >
+            <Upload size={13} /> Change Photo
+          </label>
+        </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────

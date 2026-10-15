@@ -119,7 +119,7 @@ export default function ForgotPasswordPage() {
         console.warn('Supabase resetPasswordForEmail notice:', err)
       }
 
-      toast.success(`Verification code generated for ${cleanEmail}! (Code: ${generatedOtp})`, { duration: 6000 })
+      toast.success(`Verification code sent to ${cleanEmail}. Please check your email inbox.`, { duration: 5000 })
       setCooldown(60)
       setStep(2)
       setTimeout(() => inputRefs.current[0]?.focus(), 150)
@@ -186,7 +186,7 @@ export default function ForgotPasswordPage() {
         })
       } catch {}
 
-      toast.success(`Fresh verification code: ${newOtp}!`, { duration: 6000 })
+      toast.success(`A fresh verification code has been sent to ${cleanEmail}. Please check your inbox.`, { duration: 5000 })
       setCooldown(60)
       setOtp(['', '', '', '', '', ''])
       inputRefs.current[0]?.focus()
@@ -409,28 +409,6 @@ export default function ForgotPasswordPage() {
                   <p className="text-xs text-gray-500 mt-1">
                     We sent a verification code or reset link to <strong className="text-gray-800">{email}</strong>
                   </p>
-                </div>
-
-                {/* Instant Verification Code Helper */}
-                <div className={`border rounded-xl p-3 text-xs flex items-center justify-between ${
-                  role === 'provider' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-brand-50 border-brand-200 text-brand-900'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">Reset Code:</span>
-                    <span className="font-mono font-bold text-sm bg-white px-2.5 py-0.5 rounded border border-gray-200 shadow-2xs">
-                      {sessionStorage.getItem(`serviceq_recovery_otp_${email.trim().toLowerCase()}`) || '123456'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const code = sessionStorage.getItem(`serviceq_recovery_otp_${email.trim().toLowerCase()}`) || '123456'
-                      setOtp(code.slice(0, 6).split(''))
-                    }}
-                    className={`font-bold hover:underline text-xs ${role === 'provider' ? 'text-emerald-700' : 'text-brand-600'}`}
-                  >
-                    Auto-fill Code
-                  </button>
                 </div>
 
                 <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>

@@ -346,6 +346,46 @@ test('Password Change & Re-login: Password changes across customer, provider, an
   )
 })
 
+// -------------------------------------------------------------
+// TEST 16: OTP Privacy on Password Reset & Provider Photo Persistence
+// -------------------------------------------------------------
+test('Security & UX: Forgot password OTP is never shown on screen/toast & provider photo upload persists reliably', () => {
+  const forgotPwSrc = fs.readFileSync('src/pages/auth/ForgotPasswordPage.jsx', 'utf8')
+  const provProfSrc = fs.readFileSync('src/pages/provider/Profile.jsx', 'utf8')
+
+  // OTP Privacy: No onscreen reset code box or code leaks
+  assert.ok(
+    !forgotPwSrc.includes('Reset Code:'),
+    'ForgotPasswordPage does not display Reset Code on screen'
+  )
+  assert.ok(
+    !forgotPwSrc.includes('Auto-fill Code'),
+    'ForgotPasswordPage does not display Auto-fill Code button on screen'
+  )
+  assert.ok(
+    !forgotPwSrc.includes('(Code: ${generatedOtp})'),
+    'ForgotPasswordPage does not leak OTP in toast message'
+  )
+  assert.ok(
+    forgotPwSrc.includes('Please check your email inbox'),
+    'ForgotPasswordPage prompts user to check email inbox for OTP'
+  )
+
+  // Provider Photo Upload & Persistence
+  assert.ok(
+    provProfSrc.includes('function extractAvatar('),
+    'Provider Profile defines extractAvatar helper'
+  )
+  assert.ok(
+    provProfSrc.includes('id="provider-photo-input"') && provProfSrc.includes('htmlFor="provider-photo-input"'),
+    'Provider Profile links Change Photo button to file input via htmlFor and id'
+  )
+  assert.ok(
+    !provProfSrc.includes("update({ avatar_url: compressedDataUrl }).eq('user_id'"),
+    'Provider Profile does not query non-existent providers.avatar_url column'
+  )
+})
+
 console.log(`\n========================================`)
 console.log(`TEST RUN COMPLETE: ${passCount} PASSED, ${failCount} FAILED`)
 console.log(`========================================`)
@@ -355,3 +395,4 @@ if (failCount > 0) {
 } else {
   process.exit(0)
 }
+
