@@ -162,7 +162,12 @@ export default function AdminProfile() {
       setNewPassword('')
 
       // 4. SQI-28: Sign out and redirect to admin login
-      await signOut()
+      try {
+        if (signOut) await signOut()
+        else await supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
       navigate('/admin/login', { replace: true })
     } catch (err) {
       toast.error(err.message || 'Failed to update password')

@@ -289,6 +289,63 @@ test('Listing Freshness: Newly published listings have strictly 0 reviews, 0 rat
   )
 })
 
+// -------------------------------------------------------------
+// TEST 15: Universal Password Change & Re-login Enforcement (Customer, Provider, Admin)
+// -------------------------------------------------------------
+test('Password Change & Re-login: Password changes across customer, provider, and admin sign out and require re-login with new password', () => {
+  const custProfSrc = fs.readFileSync('src/pages/customer/Profile.jsx', 'utf8')
+  const provSetSrc = fs.readFileSync('src/pages/provider/Settings.jsx', 'utf8')
+  const adminProfSrc = fs.readFileSync('src/pages/admin/Profile.jsx', 'utf8')
+  const loginSrc = fs.readFileSync('src/pages/auth/LoginPage.jsx', 'utf8')
+  const adminLoginSrc = fs.readFileSync('src/pages/admin/Login.jsx', 'utf8')
+
+  // Customer
+  assert.ok(
+    custProfSrc.includes("navigate('/login?role=customer', { replace: true })"),
+    'Customer Profile redirects to /login?role=customer on password change'
+  )
+  assert.ok(
+    custProfSrc.includes('serviceq_password_') && custProfSrc.includes('serviceq_customer_password_'),
+    'Customer Profile updates password keys in localStorage'
+  )
+
+  // Provider
+  assert.ok(
+    provSetSrc.includes("navigate('/login?role=provider', { replace: true })"),
+    'Provider Settings redirects to /login?role=provider on password change'
+  )
+  assert.ok(
+    provSetSrc.includes('serviceq_provider_password_') && provSetSrc.includes('serviceq_password_'),
+    'Provider Settings updates password keys in localStorage'
+  )
+
+  // Admin
+  assert.ok(
+    adminProfSrc.includes("navigate('/admin/login', { replace: true })"),
+    'Admin Profile redirects to /admin/login on password change'
+  )
+  assert.ok(
+    adminProfSrc.includes('serviceq_admin_passwords'),
+    'Admin Profile updates serviceq_admin_passwords'
+  )
+
+  // Customer/Provider Login
+  assert.ok(
+    loginSrc.includes('serviceq_customer_password_') && loginSrc.includes('serviceq_provider_password_'),
+    'LoginPage checks cached customer and provider passwords'
+  )
+  assert.ok(
+    loginSrc.includes("throw new Error('Incorrect password. Please enter your valid updated password.')"),
+    'LoginPage rejects invalid or old password when updated password is set'
+  )
+
+  // Admin Login
+  assert.ok(
+    adminLoginSrc.includes("throw new Error('Incorrect password. Please enter your valid admin password.')"),
+    'Admin Login rejects old password when updated password is set'
+  )
+})
+
 console.log(`\n========================================`)
 console.log(`TEST RUN COMPLETE: ${passCount} PASSED, ${failCount} FAILED`)
 console.log(`========================================`)

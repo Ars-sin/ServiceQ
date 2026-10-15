@@ -220,9 +220,16 @@ export default function ForgotPasswordPage() {
       if (cleanEmail) {
         localStorage.setItem(`serviceq_password_${cleanEmail}`, passwords.newPw)
         localStorage.setItem(`serviceq_provider_password_${cleanEmail}`, passwords.newPw)
+        localStorage.setItem(`serviceq_customer_password_${cleanEmail}`, passwords.newPw)
       }
 
-      toast.success('Password updated successfully!')
+      try {
+        await supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
+
+      toast.success('Password updated successfully! Please sign in with your new credentials.')
       setStep(4)
     } catch (err) {
       console.error('Update password error:', err)

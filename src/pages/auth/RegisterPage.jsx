@@ -675,6 +675,14 @@ export default function RegisterPage() {
           try {
             await supabase.auth.updateUser({ password: form.password })
           } catch {}
+          if (cleanEmail) {
+            localStorage.setItem(`serviceq_password_${cleanEmail}`, form.password)
+            if (role === 'provider') {
+              localStorage.setItem(`serviceq_provider_password_${cleanEmail}`, form.password)
+            } else {
+              localStorage.setItem(`serviceq_customer_password_${cleanEmail}`, form.password)
+            }
+          }
         }
 
         const resolvedFullName = getFullName()

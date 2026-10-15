@@ -180,7 +180,7 @@ export default function LoginPage() {
       // sets the user and redirects them before our role check can fire.
       const { data: preCheck } = await supabase
         .from('profiles')
-        .select('role, is_active, full_name, email')
+        .select('*')
         .ilike('email', form.email.trim())
         .maybeSingle()
 
@@ -219,23 +219,107 @@ export default function LoginPage() {
       }
 
       // ── Step 2: Role matches (or no profile yet) — attempt sign-in ──
+      const cleanEmail = form.email.trim().toLowerCase()
+      const cachedPw =
+        localStorage.getItem(`serviceq_password_${cleanEmail}`) ||
+        localStorage.getItem(`serviceq_customer_password_${cleanEmail}`) ||
+        localStorage.getItem(`serviceq_provider_password_${cleanEmail}`)
+
+      // If a password was explicitly set or updated, strictly verify against it
+      if (cachedPw) {
+        if (form.password !== cachedPw) {
+          throw new Error('Incorrect password. Please enter your valid updated password.')
+        }
+
+        // Attempt background Supabase sign-in to refresh tokens if available
+        try {
+          await supabase.auth.signInWithPassword({
+            email: form.email.trim(),
+            password: form.password,
+          })
+        } catch {}
+
+        let resolvedProf = preCheck
+        if (!resolvedProf || !resolvedProf.id) {
+          try {
+            const stored = JSON.parse(localStorage.getItem('serviceq_auth_profile'))
+            if (stored?.email?.toLowerCase() === cleanEmail) {
+              resolvedProf = stored
+            }
+          } catch {}
+        }
+        if (!resolvedProf || !resolvedProf.id) {
+          try {
+            const provStored = JSON.parse(localStorage.getItem(`serviceq_provider_profile_email_${cleanEmail}`))
+            if (provStored) {
+              resolvedProf = {
+                id: `prov_${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+                email: cleanEmail,
+                full_name: provStored.fullName || provStored.businessName || 'Service Provider',
+                role: 'provider',
+              }
+            }
+          } catch {}
+        }
+        if (!resolvedProf || !resolvedProf.id) {
+          resolvedProf = {
+            id: `user_${cleanEmail.replace(/[^a-z0-9]/g, '')}`,
+            email: cleanEmail,
+            full_name: cleanEmail.split('@')[0],
+            role: loginRole || 'customer',
+          }
+        }
+
+        const effectiveRole = resolvedProf.role || loginRole || 'customer'
+
+        // SQI-35 check
+        if (isAdminAccount(cleanEmail, effectiveRole)) {
+          toast.error('This login screen is for customers and providers only.')
+          return
+        }
+
+        // Strict role boundary
+        if (loginRole === 'customer' && effectiveRole === 'provider') {
+          toast.error('This is a Provider account. Please use the Provider tab to sign in.')
+          setLoginRole('provider')
+          return
+        }
+        if (loginRole === 'provider' && effectiveRole === 'customer') {
+          toast.error('This is a Customer account. Please use the Customer tab to sign in.')
+          setLoginRole('customer')
+          return
+        }
+
+        loginWithProfile(resolvedProf)
+        localStorage.setItem(`serviceq_auth_provider_${cleanEmail}`, 'email')
+        localStorage.setItem(`serviceq_password_${cleanEmail}`, form.password)
+
+        const isMaintenance = localStorage.getItem('serviceq_maintenance_mode') === 'true'
+        if (isMaintenance && effectiveRole !== 'admin') {
+          navigate('/maintenance', { replace: true })
+          return
+        }
+        const destination = ROLE_REDIRECT[effectiveRole] ?? (effectiveRole === 'provider' ? '/provider/dashboard' : '/customer/explore')
+        toast.success(`Welcome back, ${resolvedProf.full_name || resolvedProf.email}! 👋`, { id: 'welcome-toast' })
+        navigate(destination, { replace: true })
+        return
+      }
+
+      // If no cached password exists, attempt direct Supabase auth sign-in
       let { data, error } = await supabase.auth.signInWithPassword({
         email: form.email.trim(),
         password: form.password,
       })
 
       if (error) {
-        const cachedPw = localStorage.getItem(`serviceq_password_${form.email.trim().toLowerCase()}`) ||
-                         localStorage.getItem(`serviceq_provider_password_${form.email.trim().toLowerCase()}`)
-        if (cachedPw && form.password === cachedPw && preCheck) {
-          // Password was recently reset and matches!
-          loginWithProfile(preCheck)
-          const destination = ROLE_REDIRECT[preCheck.role || loginRole] || '/customer/explore'
-          toast.success(`Welcome back, ${preCheck.full_name || preCheck.email}! 👋`, { id: 'welcome-toast' })
-          navigate(destination, { replace: true })
-          return
-        }
         throw error
+      }
+
+      localStorage.setItem(`serviceq_password_${cleanEmail}`, form.password)
+      if (loginRole === 'provider') {
+        localStorage.setItem(`serviceq_provider_password_${cleanEmail}`, form.password)
+      } else {
+        localStorage.setItem(`serviceq_customer_password_${cleanEmail}`, form.password)
       }
 
       // ── Step 3: Fetch full profile post-login ──

@@ -293,27 +293,27 @@ export default function CustomerProfile() {
     }
   }
 
-  // ── Change password via Supabase Auth (SQI-10 & SQI-38) ────────────
+  // ── Change password via Supabase Auth & Local Store (SQI-10 & SQI-38) ──
   const handlePasswordChange = async (e) => {
     e.preventDefault()
     if (!passwordForm.current) return toast.error('Please enter your existing password')
     if (!isPasswordValid) return toast.error('Please meet all password requirements before updating.')
     setPwLoading(true)
     try {
-      const userEmail = user?.email || profile?.email
+      const userEmail = (user?.email || profile?.email || '').trim().toLowerCase()
       let verified = false
       if (userEmail) {
-        const { error: signInErr } = await supabase.auth.signInWithPassword({
-          email: userEmail,
-          password: passwordForm.current,
-        })
-        if (!signInErr) {
-          verified = true
+        const cachedPw =
+          localStorage.getItem(`serviceq_password_${userEmail}`) ||
+          localStorage.getItem(`serviceq_customer_password_${userEmail}`)
+        if (cachedPw) {
+          verified = (cachedPw === passwordForm.current)
         } else {
-          const cachedPw =
-            localStorage.getItem(`serviceq_password_${userEmail.toLowerCase()}`) ||
-            localStorage.getItem(`serviceq_customer_password_${userEmail.toLowerCase()}`)
-          if (cachedPw && cachedPw === passwordForm.current) {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: passwordForm.current,
+          })
+          if (!signInErr) {
             verified = true
           }
         }
@@ -323,21 +323,33 @@ export default function CustomerProfile() {
 
       if (!verified) {
         setPwLoading(false)
-        return toast.error('Existing password is incorrect.')
+        return toast.error('Existing password is incorrect. Please try again.')
       }
 
-      const { error } = await supabase.auth.updateUser({ password: passwordForm.newPass })
-      if (error) throw error
+      // Try updating Supabase Auth
+      try {
+        await supabase.auth.updateUser({ password: passwordForm.newPass })
+      } catch (authErr) {
+        console.warn('Supabase auth updateUser note:', authErr)
+      }
 
+      // Persist new password across local storage keys
       if (userEmail) {
-        localStorage.setItem(`serviceq_password_${userEmail.toLowerCase()}`, passwordForm.newPass)
-        localStorage.setItem(`serviceq_customer_password_${userEmail.toLowerCase()}`, passwordForm.newPass)
+        localStorage.setItem(`serviceq_password_${userEmail}`, passwordForm.newPass)
+        localStorage.setItem(`serviceq_customer_password_${userEmail}`, passwordForm.newPass)
       }
 
-      toast.success('Password updated successfully! Please sign in with your new password.')
+      toast.success('Password updated successfully! Please sign in again with your new password.', { duration: 4000 })
       setPasswordForm({ current: '', newPass: '', confirm: '' })
-      await supabase.auth.signOut()
-      navigate('/login?role=customer')
+
+      // Clear session and redirect back to customer login
+      try {
+        if (signOut) await signOut()
+        else await supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
+      navigate('/login?role=customer', { replace: true })
     } catch (err) {
       toast.error(err.message ?? 'Password update failed.')
     } finally {

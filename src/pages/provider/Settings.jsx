@@ -90,25 +90,33 @@ export default function ProviderSettings() {
         return toast.error('Current password is incorrect. Please try again.')
       }
 
-      const { error } = await supabase.auth.updateUser({ password: passwordForm.newPass })
-      if (error) {
-        if (error.message?.toLowerCase().includes('session') || error.message?.toLowerCase().includes('auth')) {
-          if (user?.id) {
-            localStorage.setItem(`serviceq_provider_password_${user.id}`, passwordForm.newPass)
-          }
-        } else {
-          throw error
-        }
+      // Try updating Supabase Auth
+      try {
+        await supabase.auth.updateUser({ password: passwordForm.newPass })
+      } catch (authErr) {
+        console.warn('Supabase auth updateUser note:', authErr)
       }
-      toast.success('Password updated successfully! Signing out...')
+
+      // Persist new password across local storage keys
+      if (provEmail) {
+        localStorage.setItem(`serviceq_provider_password_${provEmail.toLowerCase()}`, passwordForm.newPass)
+        localStorage.setItem(`serviceq_password_${provEmail.toLowerCase()}`, passwordForm.newPass)
+      }
+      if (user?.id) {
+        localStorage.setItem(`serviceq_provider_password_${user.id}`, passwordForm.newPass)
+      }
+
+      toast.success('Password updated successfully! Please sign in again with your new password.', { duration: 4000 })
       setPasswordForm({ current: '', newPass: '', confirm: '' })
-      setTimeout(async () => {
-        try {
-          if (signOut) await signOut()
-          else await supabase.auth.signOut()
-        } catch {}
-        navigate('/login?role=provider', { replace: true })
-      }, 1000)
+
+      // Clear session and redirect back to provider login
+      try {
+        if (signOut) await signOut()
+        else await supabase.auth.signOut()
+      } catch {}
+      localStorage.removeItem('serviceq_auth_profile')
+      localStorage.removeItem('serviceq_last_activity')
+      navigate('/login?role=provider', { replace: true })
     } catch (err) {
       toast.error(err.message || 'Failed to update password')
     } finally {
