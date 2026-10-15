@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Package, CalendarCheck, Star, Users, Plus, DollarSign, TrendingUp, Clock, CheckCircle2 } from 'lucide-react'
+import { Package, CalendarCheck, Star, Users, Plus, DollarSign, TrendingUp, Clock, CheckCircle2, XCircle, Ban, AlertTriangle } from 'lucide-react'
+
 import { formatPHP, statusVariant } from '@/lib/utils'
 import StatCard from '@/components/ui/StatCard'
 import Badge from '@/components/ui/Badge'
@@ -12,9 +13,61 @@ import { fetchProviderBookings } from '@/lib/bookingsService'
 export default function ProviderDashboard() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
-  const [isVerified, setIsVerified] = useState(false)
+  const [kycStatus, setKycStatus] = useState('pending') // 'approved'|'rejected'|'suspended'|'pending'
+  const [kycMeta, setKycMeta]     = useState(null)       // { rejection_reason, suspend_until, suspended_at, ... }
+  const isVerified = kycStatus === 'approved'
 
-  // Load listings from user-scoped key (mirrors Listings.jsx)
+  useEffect(() => {
+    async function checkVerification() {
+      const effectiveId = user?.id || profile?.id
+      if (!effectiveId) return
+
+      let meta = null
+      // 1. Try profile context first
+      try {
+        if (profile?.avatar_url && profile.avatar_url.startsWith('{')) {
+          meta = JSON.parse(profile.avatar_url)
+        }
+      } catch {}
+
+      // 2. Fetch from Supabase profiles if not in context
+      if (!meta) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('avatar_url, is_active')
+          .eq('id', effectiveId)
+          .maybeSingle()
+
+        if (prof?.avatar_url && prof.avatar_url.startsWith('{')) {
+          try { meta = JSON.parse(prof.avatar_url) } catch {}
+        }
+      }
+
+      // 3. Fetch providers table for status and suspension info
+      const { data: prov } = await supabase
+        .from('providers')
+        .select('status, rejection_reason, suspend_until, suspended_at')
+        .eq('user_id', effectiveId)
+        .maybeSingle()
+
+      // Merge: providers table takes priority for status
+      const resolvedStatus =
+        prov?.status ||
+        meta?.status ||
+        (localStorage.getItem(`provider_verified_${effectiveId}`) === 'true' ? 'approved' : 'pending')
+
+      setKycStatus(resolvedStatus)
+      setKycMeta({
+        rejection_reason: prov?.rejection_reason || meta?.rejection_reason || null,
+        suspend_until:    prov?.suspend_until    || meta?.suspend_until    || null,
+        suspended_at:     prov?.suspended_at     || meta?.suspended_at     || null,
+        correction_message: meta?.correction_message || null,
+      })
+    }
+    checkVerification()
+  }, [profile, user?.id])
+
+
   const [listings, setListings] = useState([])
 
   useEffect(() => {
@@ -48,65 +101,9 @@ export default function ProviderDashboard() {
     }).catch(() => {})
   }, [user?.id, profile?.id, profile?.full_name, profile?.business_name])
 
-  useEffect(() => {
-    async function checkVerification() {
-      const effectiveId = user?.id || profile?.id
-      if (!effectiveId) return
-
-      // 1. Check profile avatar_url metadata (persisted in profiles table)
-      let meta = null
-      try {
-        if (profile?.avatar_url && profile.avatar_url.startsWith('{')) {
-          meta = JSON.parse(profile.avatar_url)
-        }
-      } catch {}
-
-      if (!meta) {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('avatar_url, is_active')
-          .eq('id', effectiveId)
-          .maybeSingle()
-
-        if (prof?.avatar_url && prof.avatar_url.startsWith('{')) {
-          try { meta = JSON.parse(prof.avatar_url) } catch {}
-        }
-      }
-
-      if (meta?.status === 'approved') {
-        setIsVerified(true)
-        return
-      }
-      if (meta?.status === 'rejected' || meta?.status === 'suspended') {
-        setIsVerified(false)
-        return
-      }
-
-      // 2. Check providers table if populated
-      const { data: prov } = await supabase
-        .from('providers')
-        .select('status')
-        .eq('user_id', effectiveId)
-        .maybeSingle()
-
-      if (prov?.status === 'approved') {
-        setIsVerified(true)
-        return
-      }
-      if (prov?.status === 'rejected' || prov?.status === 'suspended') {
-        setIsVerified(false)
-        return
-      }
-
-      // 3. Local storage fallback
-      const localApproved = localStorage.getItem(`provider_verified_${effectiveId}`) === 'true' ||
-                            localStorage.getItem('serviceq_kyc_approved') === 'true'
-      setIsVerified(localApproved)
-    }
-    checkVerification()
-  }, [profile, user?.id])
 
   // Calculations for stats
+
   const totalListings = listings.length
   const totalBookings = bookings.length
   const uniqueCustomers = new Set(bookings.map(b => b.customer || b.customer_name)).size
@@ -147,15 +144,32 @@ export default function ProviderDashboard() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-2xl font-bold text-gray-900">Provider Dashboard</h1>
-            {isVerified ? (
+            {kycStatus === 'approved' && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
                 <CheckCircle2 size={12} /> Verified Provider
               </span>
-            ) : (
+            )}
+            {kycStatus === 'suspended' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                <Ban size={12} /> Suspended
+              </span>
+            )}
+            {kycStatus === 'rejected' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                <XCircle size={12} /> KYC Rejected
+              </span>
+            )}
+            {(kycStatus === 'pending' || kycStatus === 'under_verification') && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
                 <Clock size={12} /> Verification Pending
               </span>
             )}
+            {kycStatus === 'correction_requested' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+                <AlertTriangle size={12} /> Correction Required
+              </span>
+            )}
+
           </div>
           <p className="text-sm text-gray-500 mt-0.5">Welcome back{profile?.full_name ? `, ${profile.full_name}` : ''}! Here's what's happening.</p>
         </div>
@@ -168,8 +182,87 @@ export default function ProviderDashboard() {
         </button>
       </div>
 
-      {/* Verification Status Banner (Option B) */}
-      {!isVerified && (
+      {/* ── KYC / Account Status Banners ─────────────────────────────── */}
+
+      {/* SUSPENDED — full stop, show duration */}
+      {kycStatus === 'suspended' && (() => {
+        const until = kycMeta?.suspend_until ? new Date(kycMeta.suspend_until) : null
+        const now   = new Date()
+        const isIndefinite = !until
+        const isExpired    = until && until <= now
+        let durationText = 'indefinitely'
+        if (until && !isExpired) {
+          const diffMs   = until - now
+          const diffDays = Math.ceil(diffMs / 86400000)
+          if (diffDays < 31)       durationText = `for ${diffDays} more day${diffDays !== 1 ? 's' : ''}`
+          else if (diffDays < 365) durationText = `for ~${Math.round(diffDays / 30)} more month${Math.round(diffDays / 30) !== 1 ? 's' : ''}`
+          else                     durationText = `for ~${Math.round(diffDays / 365)} more year${Math.round(diffDays / 365) !== 1 ? 's' : ''}`
+        }
+        return (
+          <div className="bg-red-50 border border-red-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-700 flex-shrink-0 mt-0.5">
+                <Ban size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-bold text-red-900 text-sm sm:text-base">Account Suspended</h3>
+                  <span className="bg-red-200 text-red-900 text-[10px] font-bold px-2 py-0.5 rounded-full">SUSPENDED</span>
+                </div>
+                <p className="text-xs sm:text-sm text-red-800 mt-1 leading-relaxed">
+                  {isExpired
+                    ? 'Your suspension period has ended. Please contact support to reactivate your account.'
+                    : isIndefinite
+                    ? 'Your account has been suspended indefinitely by the admin. Contact support for assistance.'
+                    : <>Your account has been suspended <strong>{durationText}</strong> (until <strong>{until.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>). During this period you cannot accept bookings or publish listings.</>
+                  }
+                </p>
+              </div>
+            </div>
+            <a
+              href="mailto:support@serviceq.ph"
+              className="text-xs font-semibold bg-white border border-red-300 text-red-900 hover:bg-red-100 px-3.5 py-2 rounded-xl transition flex-shrink-0 text-center"
+            >
+              Contact Support
+            </a>
+          </div>
+        )
+      })()}
+
+      {/* REJECTED — show reason + resubmit button */}
+      {kycStatus === 'rejected' && (
+        <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700 flex-shrink-0 mt-0.5">
+              <XCircle size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-rose-900 text-sm sm:text-base">KYC Application Rejected</h3>
+                <span className="bg-rose-200 text-rose-900 text-[10px] font-bold px-2 py-0.5 rounded-full">REJECTED</span>
+              </div>
+              <p className="text-xs sm:text-sm text-rose-800 mt-1 leading-relaxed">
+                Your KYC application was not approved. You can update your documents and resubmit.
+              </p>
+              {kycMeta?.rejection_reason && (
+                <div className="mt-2 bg-white border border-rose-200 rounded-xl px-3 py-2 text-xs text-rose-900">
+                  <span className="font-semibold text-rose-700">Reason: </span>
+                  {kycMeta.rejection_reason}
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/provider/onboarding')}
+            className="text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 px-4 py-2 rounded-xl transition flex-shrink-0 text-center shadow-sm"
+          >
+            ✏ Edit &amp; Resubmit KYC
+          </button>
+        </div>
+      )}
+
+      {/* PENDING — under review */}
+      {kycStatus === 'pending' && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
@@ -185,14 +278,38 @@ export default function ProviderDashboard() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button
-              onClick={() => navigate('/provider/profile')}
-              className="text-xs font-semibold bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 px-3.5 py-2 rounded-xl transition flex-1 sm:flex-none text-center"
-            >
-              View KYC Status
-            </button>
+          <button
+            onClick={() => navigate('/provider/profile')}
+            className="text-xs font-semibold bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 px-3.5 py-2 rounded-xl transition flex-1 sm:flex-none text-center"
+          >
+            View KYC Status
+          </button>
+        </div>
+      )}
+
+      {/* correction_requested — same as pending but highlight the note */}
+      {kycStatus === 'correction_requested' && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
+              <AlertTriangle size={22} />
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-900 text-sm sm:text-base">Action Required: Correction Requested</h3>
+              {kycMeta?.correction_message && (
+                <div className="mt-1 bg-white border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-900">
+                  <span className="font-semibold text-amber-700">Admin note: </span>
+                  {kycMeta.correction_message}
+                </div>
+              )}
+            </div>
           </div>
+          <button
+            onClick={() => navigate('/provider/onboarding')}
+            className="text-xs font-bold bg-amber-600 text-white hover:bg-amber-700 px-4 py-2 rounded-xl transition flex-shrink-0 shadow-sm"
+          >
+            ✏ Update &amp; Resubmit
+          </button>
         </div>
       )}
 

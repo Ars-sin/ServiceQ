@@ -356,15 +356,16 @@ export async function fetchProviderListings(userId, profileName) {
   const seenIds = new Set(localItems.map(l => String(l.id)))
   const merged = [...localItems]
 
+  // Strict ownership check — only match by explicit userId/providerId field.
+  // Name-based matching is intentionally removed because it causes cross-account
+  // listing bleed when two accounts share the same display name.
   const isMatchingItem = (item) => {
     if (!item) return false
     const pid = String(item.providerId || item.provider_id || item.userId || item.user_id || '')
-    if (pid && pid === String(userId)) return true
-    if (profileName && item.provider && typeof item.provider === 'string' && item.provider.toLowerCase().trim() === String(profileName).toLowerCase().trim()) return true
-    return false
+    return pid !== '' && pid === String(userId)
   }
 
-  // Check local custom listings for this provider
+  // Check local custom listings for this provider (userId-scoped only)
   try {
     const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
     if (Array.isArray(custom)) {
@@ -379,6 +380,7 @@ export async function fetchProviderListings(userId, profileName) {
       }
     }
   } catch {}
+
 
   // A. Check Supabase platform_settings for this specific provider
   try {

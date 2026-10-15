@@ -23,6 +23,9 @@ export default function AdminProviders() {
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [zoomImage, setZoomImage] = useState(null)
+  const [suspendModal, setSuspendModal] = useState(null) // { id, name, status }
+  const [suspendUntilInput, setSuspendUntilInput] = useState('') // ISO date string or ''
+
 
   const PAGE_SIZE = 5
   const isDefaultAll = tab === 'all'
@@ -396,7 +399,7 @@ export default function AdminProviders() {
   }
 
   // ─── Toggle Suspend ───────────────────────────────────────────────────────
-  const toggleSuspend = async (providerUserId, currentStatus) => {
+  const toggleSuspend = async (providerUserId, currentStatus, suspendUntil = null) => {
     const isSuspending = currentStatus !== 'suspended'
     const newStatus = isSuspending ? 'suspended' : 'approved'
     setActionLoading(providerUserId)
@@ -418,6 +421,8 @@ export default function AdminProviders() {
       const updatedMeta = {
         ...currentMeta,
         status: newStatus,
+        suspended_at: isSuspending ? new Date().toISOString() : null,
+        suspend_until: isSuspending ? (suspendUntil || null) : null,
       }
 
       const { error: profErr } = await supabase
@@ -433,7 +438,11 @@ export default function AdminProviders() {
       try {
         await supabase
           .from('providers')
-          .update({ status: newStatus })
+          .update({
+            status: newStatus,
+            suspended_at: isSuspending ? new Date().toISOString() : null,
+            suspend_until: isSuspending ? (suspendUntil || null) : null,
+          })
           .eq('user_id', providerUserId)
       } catch {}
 
@@ -450,6 +459,7 @@ export default function AdminProviders() {
       setActionLoading(null)
     }
   }
+
 
   const handleDeleteProvider = async (providerToDelete) => {
     if (!providerToDelete) return
@@ -578,7 +588,7 @@ export default function AdminProviders() {
 
                             {p.status === 'approved' && (
                               <button
-                                onClick={() => toggleSuspend(p.id, p.status)}
+                                onClick={() => { setSuspendModal(p) ; setSuspendUntilInput('') }}
                                 disabled={actionLoading === p.id}
                                 className="btn-sm bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg px-2.5 py-1 text-xs font-medium"
                               >
@@ -980,6 +990,120 @@ export default function AdminProviders() {
           </div>
         )}
       </Modal>
+
+      {/* ── Suspend Duration Modal ────────────────────────────────────── */}
+
+      <Modal
+        open={!!suspendModal}
+        onClose={() => setSuspendModal(null)}
+        title="Suspend Provider Account"
+        size="sm"
+      >
+        {suspendModal && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0">
+                <span className="text-lg">⛔</span>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900 text-sm">{suspendModal.name}</p>
+                <p className="text-xs text-gray-500">{suspendModal.email}</p>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+              Suspended providers cannot accept bookings or publish listings. Choose how long to suspend this account.
+            </div>
+
+            {/* Quick presets */}
+            <div>
+              <p className="text-xs font-semibold text-gray-600 mb-2">Quick Presets</p>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: '7 days', days: 7 },
+                  { label: '14 days', days: 14 },
+                  { label: '1 month', days: 30 },
+                  { label: '3 months', days: 90 },
+                  { label: '6 months', days: 180 },
+                  { label: '1 year', days: 365 },
+                ].map(({ label, days }) => {
+                  const d = new Date()
+                  d.setDate(d.getDate() + days)
+                  const iso = d.toISOString().split('T')[0]
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => setSuspendUntilInput(iso)}
+                      className={`py-1.5 px-2 rounded-lg text-xs font-medium border transition ${
+                        suspendUntilInput === iso
+                          ? 'bg-amber-500 text-white border-amber-500'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-amber-400'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Custom date */}
+            <div className="form-group !mb-0">
+              <label className="label text-xs">Or pick a specific date</label>
+              <input
+                type="date"
+                className="input"
+                value={suspendUntilInput}
+                min={new Date().toISOString().split('T')[0]}
+                onChange={e => setSuspendUntilInput(e.target.value)}
+              />
+            </div>
+
+            {/* Indefinite option */}
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-600">
+              <input
+                type="checkbox"
+                className="accent-red-600"
+                checked={suspendUntilInput === 'indefinite'}
+                onChange={e => setSuspendUntilInput(e.target.checked ? 'indefinite' : '')}
+              />
+              Suspend indefinitely (no end date)
+            </label>
+
+            {/* Duration summary */}
+            {suspendUntilInput && suspendUntilInput !== 'indefinite' && (() => {
+              const until = new Date(suspendUntilInput)
+              const days  = Math.ceil((until - new Date()) / 86400000)
+              return days > 0 ? (
+                <p className="text-xs text-amber-700 font-medium">
+                  📅 Will be suspended for <strong>{days} day{days !== 1 ? 's' : ''}</strong> until <strong>{until.toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>
+                </p>
+              ) : (
+                <p className="text-xs text-red-600">⚠ Please select a future date.</p>
+              )
+            })()}
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button onClick={() => setSuspendModal(null)} className="btn-secondary flex-1 text-xs">
+                Cancel
+              </button>
+              <button
+                disabled={!suspendUntilInput || actionLoading === suspendModal.id}
+                onClick={async () => {
+                  const until = suspendUntilInput === 'indefinite' ? null : suspendUntilInput
+                  await toggleSuspend(suspendModal.id, suspendModal.status, until)
+                  setSuspendModal(null)
+                }}
+                className="btn-danger flex-1 text-xs font-bold"
+              >
+                {actionLoading === suspendModal?.id ? 'Suspending...' : '⛔ Confirm Suspension'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
     </motion.div>
+
   )
 }
