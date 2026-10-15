@@ -54,9 +54,13 @@ export function normalizeListing(raw) {
     status: raw.status || 'active',
     bookings: parseInt(raw.bookings || raw.total_bookings) || 0,
     color: raw.color || (type === 'rentals' ? 'from-emerald-400 to-teal-400' : 'from-blue-400 to-indigo-400'),
-    provider: (raw.provider && raw.provider !== 'Verified Provider')
-      ? raw.provider
-      : (raw.provider_name || raw.business_name || 'Service Provider'),
+    provider: (raw.business_name && raw.business_name !== 'Verified Provider')
+      ? raw.business_name
+      : (raw.provider && raw.provider !== 'Verified Provider')
+        ? raw.provider
+        : (raw.provider_name || raw.business_name || 'Service Provider'),
+    businessName: raw.business_name || raw.businessName || raw.provider_name || raw.provider || 'Service Provider',
+
     providerId: raw.providerId || raw.provider_id || raw.userId || raw.user_id || null,
     distance: parseFloat(raw.distance) || 1.0,
     lat: raw.lat !== undefined && raw.lat !== null ? parseFloat(raw.lat) : 10.3157,

@@ -411,7 +411,9 @@ export default function ProviderListings() {
       status: 'active',
       bookings: 0,
       color: typeNormalized === 'rentals' ? 'from-emerald-400 to-teal-400' : 'from-blue-400 to-indigo-400',
-      provider: profile?.full_name || profile?.business_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Service Provider',
+      provider: profile?.business_name || profile?.full_name || user?.user_metadata?.business_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Service Provider',
+      businessName: profile?.business_name || profile?.full_name || user?.user_metadata?.business_name || user?.user_metadata?.full_name || 'Service Provider',
+
       providerId: user?.id,
       tag: (profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true') ? 'Verified' : '',
       isVerified: !!(profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true'),

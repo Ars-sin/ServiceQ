@@ -296,12 +296,13 @@ export default function ListingDetail() {
       lng: matched.lng || null,
       distance: matched.distance || null,
       provider: {
-        name: matched.provider || 'Service Provider',
+        name: matched.businessName || matched.business_name || matched.provider || 'Service Provider',
         avatar: initials,
         rating: Number(calculatedRating) || 5.0,
         verified: !!(matched.isVerified || matched.provider_verified || matched.providerVerified),
         joined: 'January 2024',
       },
+
       providerId: matched.providerId || null,
       photos: displayPhotos,
     }

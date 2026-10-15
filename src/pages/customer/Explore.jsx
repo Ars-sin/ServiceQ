@@ -112,7 +112,8 @@ function ListingCard({ listing, onClick, isFav, onToggleFav, userCoords }) {
             {listing.title}
           </h3>
           <p className="text-xs text-gray-500 mb-3 flex items-center justify-between">
-            <span>{(listing.provider && listing.provider !== 'Verified Provider') ? listing.provider : 'Service Provider'}</span>
+            <span>{(listing.businessName && listing.businessName !== 'Service Provider') ? listing.businessName : (listing.provider && listing.provider !== 'Verified Provider') ? listing.provider : 'Service Provider'}</span>
+
             <span className="text-gray-400 flex items-center gap-0.5 text-[11px]">
               <MapPin size={11} className="text-gray-400" /> {displayDist ? `${displayDist} km away` : 'Cebu'}
             </span>
