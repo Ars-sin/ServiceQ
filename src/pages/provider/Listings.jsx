@@ -13,6 +13,8 @@ import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
 import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
+import PlacesAutocomplete from '@/components/ui/PlacesAutocomplete'
+
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import {
@@ -802,19 +804,38 @@ export default function ProviderListings() {
               <label className="label">
                 Service Area Coverage <span className="text-red-500 font-bold">*</span>
               </label>
-              <select
-                className="input"
-                value={form.serviceArea || form.location || 'Entire Metro Cebu'}
-                onChange={e => setForm(f => ({ ...f, serviceArea: e.target.value }))}
-              >
-                <option value="Entire Metro Cebu">Entire Metro Cebu (Cebu, Mandaue, Lapu-Lapu, Talisay)</option>
-                <option value="All Cebu Province">All Cebu Province</option>
-                {CEBU_CITIES.map(city => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
+              <p className="text-[11px] text-gray-400 mb-1.5">
+                Type a barangay, city, or district — e.g. "Lahug", "Lapu-lapu", "Mandaue"
+              </p>
+              <PlacesAutocomplete
+                value={form.serviceArea || form.location || ''}
+                placeholder="Search area, barangay, city in Cebu…"
+                onChange={(placeName, coords) => {
+                  setForm(f => ({
+                    ...f,
+                    serviceArea: placeName,
+                    // If coords returned, update lat/lng for better map pinning
+                    ...(coords ? { lat: coords.lat, lng: coords.lng } : {}),
+                  }))
+                }}
+              />
+              {/* Quick-pick chips for common areas */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {['Entire Metro Cebu', 'Cebu City', 'Mandaue City', 'Lapu-Lapu City', 'Talisay City', 'Consolacion'].map(area => (
+                  <button
+                    key={area}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, serviceArea: area }))}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border font-medium transition-all ${
+                      form.serviceArea === area
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-400 hover:text-emerald-700'
+                    }`}
+                  >
+                    {area}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
           </div>
         )}
