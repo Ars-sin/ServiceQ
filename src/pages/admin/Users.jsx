@@ -26,9 +26,9 @@ export default function AdminUsers() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      const userMap = new Map()
+      const userMap = new Map() // keyed by user id (UUID)
 
-      // 1. Fetch live profiles from Supabase
+      // 1. Fetch ALL profiles from Supabase — use id as the key
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -36,15 +36,16 @@ export default function AdminUsers() {
 
       if (!error && Array.isArray(data)) {
         data.forEach(u => {
-          if (!u) return
-          const key = (u.email || u.id || '').toLowerCase().trim()
-          if (!key) return
-          userMap.set(key, {
+          if (!u || !u.id) return
+          // Skip admin rows from user list
+          if (u.role === 'admin') return
+          userMap.set(u.id, {
             id: u.id,
-            name: u.full_name || 'Unnamed User',
-            email: u.email,
+            name: u.full_name || u.email?.split('@')[0] || 'Unnamed User',
+            email: u.email || 'N/A',
             phone: u.phone || 'N/A',
-            role: u.role || 'customer',
+            // treat null/undefined/empty role as customer
+            role: u.role === 'provider' ? 'provider' : 'customer',
             joined: u.created_at ? u.created_at.slice(0, 10) : 'Recent',
             bookings: 0,
             status: u.is_active === false ? 'suspended' : 'active',
@@ -53,15 +54,16 @@ export default function AdminUsers() {
         })
       }
 
-      // 2. Fetch providers table to ensure all registered providers appear
+      // 2. Fetch providers table — add/update any provider not already in map
       try {
         const { data: provRows } = await supabase.from('providers').select('*')
         if (Array.isArray(provRows)) {
           provRows.forEach(p => {
-            const key = (p.email || p.user_id || p.id || '').toLowerCase().trim()
-            if (key && !userMap.has(key)) {
-              userMap.set(key, {
-                id: p.user_id || p.id,
+            const uid = p.user_id || p.id
+            if (!uid) return
+            if (!userMap.has(uid)) {
+              userMap.set(uid, {
+                id: uid,
                 name: p.business_name || p.full_name || 'Service Provider',
                 email: p.email || 'N/A',
                 phone: p.phone || 'N/A',
@@ -71,22 +73,27 @@ export default function AdminUsers() {
                 status: p.status === 'suspended' ? 'suspended' : 'active',
                 address: p.address || 'Cebu City, Cebu',
               })
+            } else {
+              // Ensure role is correct for existing map entry
+              const existing = userMap.get(uid)
+              userMap.set(uid, { ...existing, role: 'provider' })
             }
           })
         }
       } catch {}
 
-      // 3. Merge locally registered provider profiles (SQI-53)
+      // 3. Merge locally cached provider registrations (offline fallback)
       try {
         for (let i = 0; i < localStorage.length; i++) {
           const k = localStorage.key(i)
-          if (k && k.startsWith('serviceq_provider_profile_')) {
+          if (k && k.startsWith('serviceq_provider_profile_') && !k.includes('email')) {
             const parsed = JSON.parse(localStorage.getItem(k) || 'null')
             if (parsed && parsed.email) {
-              const key = parsed.email.toLowerCase().trim()
-              if (!userMap.has(key)) {
+              const key = `local_${parsed.email.toLowerCase().trim()}`
+              const alreadyExists = Array.from(userMap.values()).some(u => u.email?.toLowerCase() === parsed.email.toLowerCase())
+              if (!alreadyExists) {
                 userMap.set(key, {
-                  id: `prov_${key.replace(/[^a-z0-9]/g, '')}`,
+                  id: key,
                   name: parsed.fullName || parsed.businessName || 'Service Provider',
                   email: parsed.email,
                   phone: parsed.phone || 'N/A',
@@ -102,6 +109,35 @@ export default function AdminUsers() {
         }
       } catch {}
 
+      // 4. Merge locally cached customer registrations (localStorage fallback for unconfirmed emails)
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i)
+          if (k && k.startsWith('serviceq_customer_profile_') && !k.includes('email')) {
+            const parsed = JSON.parse(localStorage.getItem(k) || 'null')
+            if (parsed && parsed.email) {
+              const alreadyExists = Array.from(userMap.values()).some(u =>
+                u.email?.toLowerCase() === parsed.email.toLowerCase() ||
+                u.id === parsed.id
+              )
+              if (!alreadyExists) {
+                userMap.set(parsed.id || `cust_${parsed.email.toLowerCase()}`, {
+                  id: parsed.id || `cust_${parsed.email.toLowerCase()}`,
+                  name: parsed.fullName || parsed.email?.split('@')[0] || 'Customer',
+                  email: parsed.email,
+                  phone: parsed.phone || 'N/A',
+                  role: 'customer',
+                  joined: parsed.joined || 'Recent',
+                  bookings: 0,
+                  status: parsed.status || 'active',
+                  address: [parsed.address, parsed.barangay, parsed.city, parsed.province].filter(Boolean).join(', ') || 'N/A',
+                })
+              }
+            }
+          }
+        }
+      } catch {}
+
       setUsers(Array.from(userMap.values()))
     } catch (err) {
       console.error('Error fetching users:', err)
@@ -110,6 +146,7 @@ export default function AdminUsers() {
       setLoading(false)
     }
   }
+
 
   useEffect(() => {
     fetchUsers()

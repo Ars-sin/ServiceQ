@@ -571,6 +571,25 @@ export default function RegisterPage() {
               : JSON.stringify({ auth_provider: fromGoogle ? 'google' : 'email' }),
           }, { onConflict: 'id' })
 
+        // Cache customer registration locally so admin can see them even before email confirmation
+        if (role === 'customer') {
+          const customerCache = {
+            id: data.user.id,
+            fullName: resolvedFullName,
+            email: form.email.trim(),
+            phone: form.phone.replace(/\D/g, ''),
+            role: 'customer',
+            address: location.address,
+            barangay: location.barangay,
+            city: location.city || '',
+            province: location.province || '',
+            joined: new Date().toISOString().slice(0, 10),
+            status: 'active',
+          }
+          localStorage.setItem(`serviceq_customer_profile_${data.user.id}`, JSON.stringify(customerCache))
+          localStorage.setItem(`serviceq_customer_profile_email_${form.email.trim().toLowerCase()}`, JSON.stringify(customerCache))
+        }
+
         // If registering as a provider, create initial provider entry
         if (role === 'provider') {
           try {
@@ -593,6 +612,7 @@ export default function RegisterPage() {
       if (data?.user?.id) {
         sessionStorage.setItem(`serviceq_signup_uid_${form.email.trim().toLowerCase()}`, data.user.id)
       }
+
 
       // Generate local fallback OTP so customers are never blocked by Supabase SMTP rate limits
       const signupOtp = Math.floor(100000 + Math.random() * 900000).toString()
