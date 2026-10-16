@@ -2,11 +2,12 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   LayoutDashboard, Package, CalendarCheck, DollarSign,
-  Zap, User, Settings, LogOut, Bell, Menu,
+  Zap, User, Settings, LogOut, Menu,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
+import NotificationBell from '@/components/ui/NotificationBell'
 
 const NAV = [
   { to: '/provider/dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
@@ -113,11 +114,9 @@ export default function ProviderLayout() {
           </button>
           <div className="flex-1 lg:flex-none" />
           <div className="flex items-center gap-2">
-            <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
-              <Bell size={20} className="text-gray-500" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full" />
-            </button>
+            <NotificationBell userId={user?.id} dotColor="bg-emerald-500" />
           </div>
+
         </header>
 
         {/* Page content */}

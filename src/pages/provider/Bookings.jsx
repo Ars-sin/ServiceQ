@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { MessageCircle, CalendarCheck, RefreshCw, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { pushNotification } from '@/lib/notificationsService'
+
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
 import Badge from '@/components/ui/Badge'
@@ -219,12 +221,43 @@ export default function ProviderBookings() {
           payout: 'released',
         }, ...txns]))
 
+        // Notify customer
+        if (bookingToUpdate.customerId) {
+          pushNotification(bookingToUpdate.customerId, {
+            title: 'Service Completed ✅',
+            message: `Your booking for "${bookingToUpdate.service || 'service'}" has been marked as completed. Thank you!`,
+            type: 'success',
+            link: '/customer/bookings',
+          })
+        }
+
         toast.success(`✅ Booking completed! ${formatPHP(netAmt)} credited to your available balance.`)
         window.dispatchEvent(new Event('serviceq_withdrawals_updated'))
       } else {
-        const labels = { scheduled: '✅ Booking accepted', cancelled: '❌ Booking declined', active: '🔵 Service started' }
+        const labels = {
+          scheduled: '✅ Booking accepted',
+          cancelled:  '❌ Booking declined',
+          active:     '🔵 Service started',
+        }
         toast.success(labels[status] || `Status updated to ${status}`)
+
+        // Notify the customer about the status change
+        if (bookingToUpdate?.customerId) {
+          const notifMap = {
+            scheduled: { title: 'Booking Accepted! 🎉', message: `Your booking for "${bookingToUpdate.service || 'service'}" has been accepted. Get ready!`, type: 'success' },
+            cancelled:  { title: 'Booking Declined', message: `Unfortunately, your booking for "${bookingToUpdate.service || 'service'}" was declined by the provider.`, type: 'error' },
+            active:     { title: 'Service In Progress 🔵', message: `Your booking for "${bookingToUpdate.service || 'service'}" has started!`, type: 'info' },
+          }
+          const notif = notifMap[status]
+          if (notif) {
+            pushNotification(bookingToUpdate.customerId, {
+              ...notif,
+              link: '/customer/bookings',
+            })
+          }
+        }
       }
+
     } catch (e) {
       console.error(e)
     }

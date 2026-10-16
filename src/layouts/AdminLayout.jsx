@@ -2,11 +2,13 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   LayoutDashboard, Users, Briefcase, Package, CalendarCheck,
-  DollarSign, Shield, Settings, ScrollText, LogOut, Bell, Menu, User,
+  DollarSign, Shield, Settings, ScrollText, LogOut, Menu, User,
   ChevronsUpDown,
 } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import NotificationBell from '@/components/ui/NotificationBell'
+
 
 const NAV = [
   { to: '/admin/dashboard',  label: 'Dashboard',    icon: LayoutDashboard },
@@ -168,10 +170,8 @@ export default function AdminLayout() {
           </button>
           <div className="flex-1 lg:flex-none" />
           <div className="flex items-center gap-3">
-            <button className="relative p-2 rounded-xl hover:bg-gray-100 transition-colors">
-              <Bell size={18} className="text-gray-500" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full" />
-            </button>
+            <NotificationBell userId={user?.id} dotColor="bg-rose-500" />
+
             <NavLink
               to="/admin/profile"
               className="flex items-center gap-2 py-1.5 px-3 rounded-xl border border-gray-200/80 bg-gray-50 hover:bg-gray-100 transition-all text-xs font-semibold text-gray-800"

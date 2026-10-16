@@ -9,6 +9,8 @@ import Modal from '@/components/ui/Modal'
 import Pagination from '@/components/ui/Pagination'
 import { supabase } from '@/lib/supabase'
 import { deleteAccountCompletely } from '@/lib/accountDeletion'
+import { pushNotification } from '@/lib/notificationsService'
+
 
 export default function AdminProviders() {
   const [tab, setTab]           = useState('all')
@@ -347,7 +349,16 @@ export default function AdminProviders() {
       setQueue(prev => prev.filter(p => p.id !== providerUserId))
       setReview(null)
 
+      // Notify the provider
+      pushNotification(providerUserId, {
+        title: 'KYC Approved! 🎉',
+        message: 'Your account has been verified by the admin. Your listings are now live for customers!',
+        type: 'success',
+        link: '/provider/dashboard',
+      })
+
       toast.success('Provider KYC approved! Account is now verified in database.')
+
       await fetchProviders()
     } catch (err) {
       console.error('Error approving provider:', err)
@@ -408,11 +419,20 @@ export default function AdminProviders() {
       setProviders(prev => prev.map(p => p.id === providerUserId ? { ...p, status: 'rejected' } : p))
       setQueue(prev => prev.filter(p => p.id !== providerUserId))
 
+      // Notify the provider of the rejection with reason
+      pushNotification(providerUserId, {
+        title: 'KYC Verification Rejected',
+        message: `Your KYC was not approved. Reason: ${rejectReason.trim()}. Please update your documents and resubmit.`,
+        type: 'error',
+        link: '/provider/dashboard',
+      })
+
       toast.error('Provider KYC rejected')
       setReview(null)
       setShowReject(false)
       setRR('')
       await fetchProviders()
+
     } catch (err) {
       console.error('Error rejecting provider:', err)
       toast.error('Error rejecting provider: ' + err.message)
