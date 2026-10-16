@@ -6,8 +6,9 @@ import toast from 'react-hot-toast'
 import {
   Plus, Trash2, Edit2, Globe, Wrench, XCircle, HelpCircle,
   Home, Package, Laptop, PartyPopper, Car, Sparkles,
-  GraduationCap, Utensils, Shield, Heart, Camera
+  GraduationCap, Utensils, Shield, Heart, Camera, AlertTriangle
 } from 'lucide-react'
+
 import { supabase } from '@/lib/supabase'
 
 const TABS = [
@@ -685,6 +686,94 @@ export default function AdminSettings() {
           </div>
         )}
       </Modal>
+
+      {/* ── Danger Zone — Clear All App Data ── */}
+      {tab === 'general' && (
+
+        <div className="card flex flex-col gap-4 border border-red-200 bg-red-50/40 shadow-sm">
+          <div className="flex items-center gap-2 border-b border-red-100 pb-3">
+            <AlertTriangle size={16} className="text-red-500" />
+            <h2 className="font-bold text-red-700">Danger Zone</h2>
+          </div>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Clear All App Data</p>
+              <p className="text-xs text-gray-500 mt-0.5 max-w-sm">
+                Permanently deletes all non-admin data — providers, listings, bookings, reviews, and all cached data from Supabase and localStorage. Admin accounts and admin settings are preserved.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors"
+              onClick={async () => {
+                const confirmed = window.confirm(
+                  '⚠️ WARNING: This will permanently delete ALL non-admin data from the database and clear the app cache.\n\nAdmin accounts and admin platform settings will be kept.\n\nThis cannot be undone. Are you absolutely sure?'
+                )
+                if (!confirmed) return
+
+                const toastId = toast.loading('Clearing database…')
+                try {
+                  // 1. Keep admin profile IDs, delete the rest
+                  const { data: adminRows } = await supabase
+                    .from('profiles').select('id').in('role', ['admin', 'superadmin'])
+                  const adminIds = (adminRows || []).map(r => r.id)
+                  if (adminIds.length > 0) {
+                    await supabase.from('profiles').delete()
+                      .not('id', 'in', `(${adminIds.join(',')})`)
+                  } else {
+                    await supabase.from('profiles').delete()
+                      .neq('id', '00000000-0000-0000-0000-000000000000')
+                  }
+
+                  // 2. Delete all providers
+                  await supabase.from('providers').delete()
+                    .neq('id', '00000000-0000-0000-0000-000000000000')
+
+                  // 3. Delete all listings
+                  await supabase.from('listings').delete()
+                    .neq('id', '00000000-0000-0000-0000-000000000000').catch(() => {})
+
+                  // 4. Delete all bookings
+                  await supabase.from('bookings').delete()
+                    .neq('id', '00000000-0000-0000-0000-000000000000').catch(() => {})
+
+                  // 5. Delete all reviews
+                  await supabase.from('reviews').delete()
+                    .neq('id', '00000000-0000-0000-0000-000000000000').catch(() => {})
+
+                  // 6. Delete non-admin platform_settings keys
+                  const { data: allSettings } = await supabase
+                    .from('platform_settings').select('key')
+                  const nonAdminKeys = (allSettings || [])
+                    .map(r => r.key)
+                    .filter(k => !k?.startsWith('serviceq_admin_'))
+                  if (nonAdminKeys.length > 0) {
+                    await supabase.from('platform_settings').delete().in('key', nonAdminKeys)
+                  }
+
+                  // 7. Clear localStorage — keep admin keys and Supabase auth session
+                  const keysToRemove = []
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i)
+                    if (k && !k.startsWith('serviceq_admin_') && !k.startsWith('sb-')) {
+                      keysToRemove.push(k)
+                    }
+                  }
+                  keysToRemove.forEach(k => localStorage.removeItem(k))
+
+                  toast.success('✅ All non-admin data cleared successfully!', { id: toastId, duration: 4000 })
+                } catch (err) {
+                  console.error(err)
+                  toast.error('Error during cleanup: ' + err.message, { id: toastId })
+                }
+              }}
+            >
+              Clear All Data
+            </button>
+          </div>
+        </div>
+      )}
+
     </motion.div>
   )
 }
