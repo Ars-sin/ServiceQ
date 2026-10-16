@@ -101,17 +101,38 @@ export default function CustomerProfile() {
   useEffect(() => {
     if (profile) {
       setProfileForm({
-        fullName:    profile.full_name    ?? '',
+        fullName:    profile.full_name    ?? user?.user_metadata?.full_name ?? '',
         email:       profile.email        ?? user?.email ?? '',
-        phone:       profile.phone        ?? '',
+        phone:       profile.phone        ?? user?.user_metadata?.phone ?? '',
         address:     profile.address      ?? '',
         city:        profile.city         ?? '',
         province:    profile.province     ?? '',
         barangay:    profile.barangay     ?? '',
         postal_code: profile.postal_code  ?? '',
       })
+    } else if (user) {
+      // Fallback: seed from auth user_metadata while profile row loads
+      const meta = user.user_metadata || {}
+      // Also try localStorage customer cache
+      let cached = null
+      try {
+        const raw = localStorage.getItem(`serviceq_customer_profile_${user.id}`)
+        if (raw) cached = JSON.parse(raw)
+      } catch {}
+
+      setProfileForm(prev => ({
+        ...prev,
+        fullName: prev.fullName || cached?.fullName || meta.full_name || meta.name || '',
+        email:    prev.email    || user.email || cached?.email || '',
+        phone:    prev.phone    || cached?.phone || meta.phone || '',
+        address:  prev.address  || cached?.address || '',
+        city:     prev.city     || cached?.city || '',
+        province: prev.province || cached?.province || '',
+        barangay: prev.barangay || cached?.barangay || '',
+      }))
     }
   }, [profile, user])
+
 
   const [passwordForm, setPasswordForm] = useState({ current: '', newPass: '', confirm: '' })
   const [notifications, setNotifications] = useState({

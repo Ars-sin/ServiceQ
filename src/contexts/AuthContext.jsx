@@ -191,9 +191,45 @@ export function AuthProvider({ children }) {
         if (emailRes.data) data = emailRes.data
       }
 
+      // If still no profile row (e.g. RLS blocked upsert before email confirmation),
+      // build a fallback from auth user_metadata + localStorage cache
+      if (!data && userId) {
+        // Try localStorage customer cache first (written at registration)
+        let cached = null
+        try {
+          const raw = localStorage.getItem(`serviceq_customer_profile_${userId}`)
+          if (raw) cached = JSON.parse(raw)
+        } catch {}
+
+        // Try auth session user_metadata as last resort
+        const { data: sessionData } = await supabase.auth.getSession()
+        const meta = sessionData?.session?.user?.user_metadata || {}
+
+        data = {
+          id:          userId,
+          email:       userEmail || cached?.email || meta.email || '',
+          full_name:   cached?.fullName || meta.full_name || meta.name || '',
+          phone:       cached?.phone || meta.phone || '',
+          role:        cached?.role || meta.role || 'customer',
+          address:     cached?.address || meta.address || '',
+          barangay:    cached?.barangay || meta.barangay || '',
+          city:        cached?.city || meta.city || '',
+          province:    cached?.province || meta.province || '',
+          postal_code: cached?.postal_code || meta.postal_code || '',
+          is_active:   true,
+          _isFallback: true, // flag so we can upsert on next save
+        }
+      }
+
       if (data) {
         setProfile(data)
         localStorage.setItem('serviceq_auth_profile', JSON.stringify(data))
+
+        // If this was a fallback, try to write the profile row to Supabase in the background
+        if (data._isFallback) {
+          const { _isFallback, ...profileRow } = data
+          supabase.from('profiles').upsert(profileRow, { onConflict: 'id' }).catch(() => {})
+        }
       }
     } catch (err) {
       console.error('Profile fetch error:', err)
@@ -201,6 +237,7 @@ export function AuthProvider({ children }) {
       setLoading(false)
     }
   }
+
 
   function loginWithProfile(profileData) {
     const virtualUser = {
