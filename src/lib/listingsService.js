@@ -181,7 +181,7 @@ export async function fetchBackendListings(includeBase = true) {
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
           const norm = normalizeListing(item)
-          if (norm && !seenIds.has(norm.id) && norm.status !== 'archived') {
+          if (norm && !seenIds.has(norm.id) && norm.status !== 'archived' && norm.status !== 'pending_verification') {
             if (norm.providerId && approvedProvIds.has(String(norm.providerId))) {
               norm.isVerified = true
               norm.tag = 'Verified'
@@ -202,6 +202,7 @@ export async function fetchBackendListings(includeBase = true) {
       .from('listings')
       .select('*')
       .neq('status', 'archived')
+      .neq('status', 'pending_verification')
 
     if (!tableErr && Array.isArray(tableListings)) {
       for (const item of tableListings) {
@@ -219,6 +220,7 @@ export async function fetchBackendListings(includeBase = true) {
   } catch (err) {
     console.warn('Could not read from listings table:', err)
   }
+
 
   // 3. Merge with local custom cache for any offline / newly created local items
   try {
