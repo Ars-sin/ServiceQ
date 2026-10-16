@@ -20,17 +20,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnon, {
   },
 })
 
-// Prevent exposing supabase instance to window or DevTools console
-if (typeof window !== 'undefined') {
-  try {
-    Object.defineProperty(window, 'supabase', {
-      get() {
-        throw new Error('Access denied: Direct database access from browser console is disabled.')
-      },
-      set() {},
-      configurable: false,
-      enumerable: false,
-    })
-  } catch {}
-}
 
