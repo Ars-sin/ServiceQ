@@ -47,18 +47,27 @@ export default function AdminStaff() {
   const [staff, setStaff] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('serviceq_admin_staff'))
-      if (Array.isArray(stored) && stored.length > 0) return stored
+      // Only restore if it contains real staff (not the old hardcoded defaults)
+      if (Array.isArray(stored) && stored.length > 0) {
+        // Filter out the old hardcoded dummy entries
+        const dummyEmails = ['bryce@serviceq.ph','john@serviceq.ph','rain@serviceq.ph','amy@serviceq.ph','leo@serviceq.ph']
+        const real = stored.filter(s => !dummyEmails.includes(s.email?.toLowerCase()))
+        return real
+      }
     } catch {}
-    return STAFF
+    return [] // Start empty — real staff come from DB
   })
+
   const [addModal, setAdd] = useState(false)
   const [editingStaff, setEditingStaff] = useState(null)
   const [form, setForm]    = useState({ name: '', email: '', role: 'support_moderator', defaultPassword: '' })
 
-  // SQI-40 / SQI-47: Fetch all staff and admin profiles from DB & platform_settings on mount
+  // Fetch all real staff from DB & platform_settings on mount
   useEffect(() => {
     async function fetchDBStaff() {
       try {
+        const dummyEmails = ['bryce@serviceq.ph','john@serviceq.ph','rain@serviceq.ph','amy@serviceq.ph','leo@serviceq.ph']
+
         let remoteStaff = []
         try {
           const { data: remoteData } = await supabase
@@ -67,7 +76,9 @@ export default function AdminStaff() {
             .eq('key', 'serviceq_admin_staff')
             .maybeSingle()
           if (remoteData?.value) {
-            remoteStaff = JSON.parse(remoteData.value)
+            const parsed = JSON.parse(remoteData.value)
+            // Strip old dummy entries from remote list too
+            remoteStaff = parsed.filter(s => !dummyEmails.includes(s.email?.toLowerCase()))
           }
         } catch {}
 
@@ -76,46 +87,42 @@ export default function AdminStaff() {
           .select('*')
           .in('role', ['admin', 'superadmin', 'financial_staff', 'support_moderator', 'staff'])
 
-        setStaff(prev => {
-          const map = new Map()
-          const hasCustomStaff =
-            (Array.isArray(prev) && prev.length > 0 && JSON.stringify(prev) !== JSON.stringify(STAFF)) ||
-            (Array.isArray(remoteStaff) && remoteStaff.length > 0) ||
-            (Array.isArray(dbProfiles) && dbProfiles.length > 0)
+        const map = new Map()
 
-          if (!hasCustomStaff) {
-            STAFF.forEach(s => map.set(s.email.toLowerCase(), s))
-          }
-          prev.forEach(s => map.set(s.email.toLowerCase(), s))
-          if (Array.isArray(remoteStaff)) {
-            remoteStaff.forEach(s => map.set(s.email.toLowerCase(), { ...map.get(s.email.toLowerCase()), ...s }))
-          }
-          if (Array.isArray(dbProfiles)) {
-            dbProfiles.forEach(p => {
-              const existing = map.get(p.email.toLowerCase())
-              map.set(p.email.toLowerCase(), {
-                id: p.id || existing?.id,
-                name: p.full_name || existing?.name || p.email.split('@')[0],
-                email: p.email,
-                role: p.role || existing?.role || 'admin',
-                status: p.is_active !== false ? 'active' : 'inactive',
-                lastActive: p.updated_at ? new Date(p.updated_at).toLocaleDateString() : (existing?.lastActive || 'Active'),
-                password: existing?.password,
-              })
+        // Add remote platform_settings staff
+        if (Array.isArray(remoteStaff)) {
+          remoteStaff.forEach(s => map.set(s.email?.toLowerCase(), s))
+        }
+
+        // Merge/override with live DB profiles (source of truth)
+        if (Array.isArray(dbProfiles)) {
+          dbProfiles.forEach(p => {
+            if (!p.email || dummyEmails.includes(p.email.toLowerCase())) return
+            const existing = map.get(p.email.toLowerCase())
+            map.set(p.email.toLowerCase(), {
+              id: p.id || existing?.id,
+              name: p.full_name || existing?.name || p.email.split('@')[0],
+              email: p.email,
+              role: p.role || existing?.role || 'staff',
+              status: p.is_active !== false ? 'active' : 'inactive',
+              lastActive: p.updated_at ? new Date(p.updated_at).toLocaleDateString() : (existing?.lastActive || 'Active'),
+              password: existing?.password,
             })
-          }
-          const merged = Array.from(map.values())
-          try {
-            localStorage.setItem('serviceq_admin_staff', JSON.stringify(merged))
-          } catch {}
-          return merged
-        })
+          })
+        }
+
+        const merged = Array.from(map.values())
+        try {
+          localStorage.setItem('serviceq_admin_staff', JSON.stringify(merged))
+        } catch {}
+        setStaff(merged)
       } catch (err) {
         console.warn('Error fetching staff profiles from DB:', err)
       }
     }
     fetchDBStaff()
   }, [])
+
 
   const saveStaffList = async (updated) => {
     setStaff(updated)
@@ -133,15 +140,16 @@ export default function AdminStaff() {
     if (!form.name.trim() || !form.email.trim() || !form.defaultPassword.trim()) {
       return toast.error('Please fill in all fields including Default Password')
     }
-    if (form.defaultPassword.length < 6) {
-      return toast.error('Default password must be at least 6 characters')
+    if (form.defaultPassword.length < 8) {
+      return toast.error('Default password must be at least 8 characters')
     }
 
     const emailKey = form.email.trim().toLowerCase()
-
-    // SQI-47: Check if profile already exists to reuse its UUID, or generate new UUID
-    let memberId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : null
+    let memberId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `staff_${Date.now()}`
     let existingProfileId = null
+    let emailSent = false
+
+    // Check if profile already exists
     try {
       const { data: existingUser } = await supabase
         .from('profiles')
@@ -153,6 +161,30 @@ export default function AdminStaff() {
         existingProfileId = existingUser.id
       }
     } catch {}
+
+    // Create Supabase auth account — this triggers a confirmation email to their Gmail
+    if (!existingProfileId) {
+      try {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: form.email.trim(),
+          password: form.defaultPassword.trim(),
+          options: {
+            data: {
+              full_name: form.name.trim(),
+              role: form.role === 'superadmin' ? 'admin' : form.role,
+            },
+            // Email redirect after confirmation
+            emailRedirectTo: `${window.location.origin}/admin/login`,
+          },
+        })
+        if (!signUpError && signUpData?.user?.id) {
+          memberId = signUpData.user.id
+          emailSent = true
+        }
+      } catch (err) {
+        console.warn('Auth signup note:', err)
+      }
+    }
 
     const newMember = {
       id: memberId,
@@ -167,7 +199,7 @@ export default function AdminStaff() {
     const updatedList = [...staff.filter(s => s.email?.toLowerCase() !== emailKey), newMember]
     await saveStaffList(updatedList)
 
-    // Store default password for login (SQI-43 & SQI-47)
+    // Store credentials in platform_settings
     try {
       localStorage.setItem(`serviceq_admin_password_${emailKey}`, form.defaultPassword.trim())
       localStorage.setItem(`serviceq_password_${emailKey}`, form.defaultPassword.trim())
@@ -186,7 +218,7 @@ export default function AdminStaff() {
       })
     } catch {}
 
-    // Update or insert into profiles table
+    // Update or insert into profiles table with staff role
     try {
       if (existingProfileId) {
         await supabase
@@ -198,19 +230,19 @@ export default function AdminStaff() {
           })
           .eq('id', existingProfileId)
       } else {
-        await supabase.from('profiles').insert({
+        await supabase.from('profiles').upsert({
           id: memberId,
           email: form.email.trim(),
           full_name: form.name.trim(),
           role: form.role === 'superadmin' ? 'admin' : form.role,
           is_active: true,
-        })
+        }, { onConflict: 'id' })
       }
     } catch (err) {
       console.warn('Profile sync note:', err)
     }
 
-    // Record in audit log
+    // Audit log
     try {
       const existingLogs = JSON.parse(localStorage.getItem('serviceq_audit_log')) || []
       const log = {
@@ -219,7 +251,7 @@ export default function AdminStaff() {
         role: 'admin',
         action: 'Staff Member Added',
         target: `${form.name} (${form.email})`,
-        desc: `Added new staff member with role: ${roleLabel(form.role)}.`,
+        desc: `Added new staff member with role: ${roleLabel(form.role)}. ${emailSent ? 'Invite email sent.' : 'Credentials stored.'}`,
         before: { status: 'none' },
         after: { status: 'active', role: form.role },
         ts: new Date().toISOString(),
@@ -227,10 +259,15 @@ export default function AdminStaff() {
       localStorage.setItem('serviceq_audit_log', JSON.stringify([log, ...existingLogs]))
     } catch {}
 
-    toast.success(`Staff member added! Login password set for ${form.email}.`)
+    if (emailSent) {
+      toast.success(`✅ Staff account created! A confirmation email with login instructions has been sent to ${form.email}.`)
+    } else {
+      toast.success(`Staff member added. Credentials set for ${form.email}.`)
+    }
     setAdd(false)
     setForm({ name: '', email: '', role: 'support_moderator', defaultPassword: '' })
   }
+
 
   const handleSaveRole = async () => {
     if (!editingStaff) return
