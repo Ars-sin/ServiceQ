@@ -274,10 +274,18 @@ export default function AdminProviders() {
               (prof?.full_name && l.provider && l.provider.toLowerCase().trim() === prof.full_name.toLowerCase().trim())
             if (matches) {
               changed = true
-              return { ...l, isVerified: true, provider_verified: true, tag: l.tag && l.tag !== 'Verified' ? l.tag : 'Verified' }
+              return {
+                ...l,
+                isVerified: true,
+                provider_verified: true,
+                tag: l.tag && l.tag !== 'Verified' ? l.tag : 'Verified',
+                // Auto-publish listings that were held pending KYC
+                status: l.status === 'pending_verification' ? 'active' : l.status,
+              }
             }
             return l
           })
+
 
           if (changed) {
             await supabase.from('platform_settings').upsert({
@@ -288,7 +296,7 @@ export default function AdminProviders() {
           }
         }
 
-        // B. Update provider listings in Supabase listings table if row exists
+        // B. Update provider listings in Supabase listings table — activate pending_verification ones
         try {
           await supabase
             .from('listings')
@@ -296,21 +304,36 @@ export default function AdminProviders() {
             .or(`user_id.eq.${providerUserId},provider_id.eq.${providerUserId}`)
         } catch {}
 
-        // C. Update local custom listings and provider listings
+        // C. Update local custom listings and provider listings — publish pending_verification
         const custom = JSON.parse(localStorage.getItem('serviceq_custom_listings')) || []
         const updatedCustom = custom.map(l => {
           const matches =
             (l.providerId && String(l.providerId) === String(providerUserId)) ||
             (prof?.full_name && l.provider && l.provider.toLowerCase().trim() === prof.full_name.toLowerCase().trim())
-          return matches ? { ...l, isVerified: true, tag: 'Verified' } : l
+          if (matches) {
+            return {
+              ...l,
+              isVerified: true,
+              tag: 'Verified',
+              // Publish any listings that were held pending KYC approval
+              status: l.status === 'pending_verification' ? 'active' : l.status,
+            }
+          }
+          return l
         })
         localStorage.setItem('serviceq_custom_listings', JSON.stringify(updatedCustom))
 
-        // D. Update provider-scoped key
+        // D. Update provider-scoped key — publish pending_verification listings
         const pKey = `serviceq_provider_listings_${providerUserId}`
         const pList = JSON.parse(localStorage.getItem(pKey)) || []
-        const updatedPList = pList.map(l => ({ ...l, isVerified: true, tag: 'Verified' }))
+        const updatedPList = pList.map(l => ({
+          ...l,
+          isVerified: true,
+          tag: 'Verified',
+          status: l.status === 'pending_verification' ? 'active' : l.status,
+        }))
         localStorage.setItem(pKey, JSON.stringify(updatedPList))
+
 
         // Trigger events
         window.dispatchEvent(new Event('serviceq_listings_updated'))

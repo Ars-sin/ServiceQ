@@ -107,7 +107,8 @@ export function loadCachedListings() {
     if (Array.isArray(custom)) {
       for (const item of custom) {
         const norm = normalizeListing(item)
-        if (norm && !seenIds.has(norm.id) && norm.status !== 'archived') {
+        // Never show pending_verification or archived listings to customers
+        if (norm && !seenIds.has(norm.id) && norm.status !== 'archived' && norm.status !== 'pending_verification') {
           seenIds.add(norm.id)
           merged.push(norm)
         }
@@ -124,7 +125,8 @@ export function loadCachedListings() {
         if (Array.isArray(provListings)) {
           for (const item of provListings) {
             const norm = normalizeListing(item)
-            if (norm && !seenIds.has(norm.id) && norm.status !== 'archived') {
+            // Never show pending_verification or archived listings to customers
+            if (norm && !seenIds.has(norm.id) && norm.status !== 'archived' && norm.status !== 'pending_verification') {
               seenIds.add(norm.id)
               merged.push(norm)
             }
@@ -133,6 +135,7 @@ export function loadCachedListings() {
       }
     }
   } catch {}
+
 
   // 3. Fallback to base mock listings
   for (const item of BASE_LISTINGS) {

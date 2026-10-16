@@ -5,8 +5,9 @@ import {
   Plus, Archive, Eye, ToggleLeft, ToggleRight,
   ShieldAlert, MapPin, Calendar, Clock,
   ArrowLeft, ArrowRight, Package, Star,
-  Trash2, Camera
+  Trash2, Camera, AlertTriangle, CheckCircle2
 } from 'lucide-react'
+
 import toast from 'react-hot-toast'
 import { formatPHP, statusVariant } from '@/lib/utils'
 import { Tabs } from '@/components/ui/Tabs'
@@ -401,6 +402,21 @@ export default function ProviderListings() {
       return toast.error('Please provide a listing title')
     }
 
+    // Check KYC status — under_verification providers get pending_verification listings
+    const kycMeta = (() => {
+      try {
+        if (profile?.avatar_url?.startsWith('{')) return JSON.parse(profile.avatar_url)
+      } catch {}
+      return {}
+    })()
+    const kycStatus = kycMeta.status || profile?.kyc_status || profile?.role
+    const isApproved = (
+      kycStatus === 'approved' ||
+      profile?.is_verified === true ||
+      localStorage.getItem(`provider_verified_${user?.id}`) === 'true'
+    )
+    const listingStatus = isApproved ? 'active' : 'pending_verification'
+
     const typeNormalized = (form.type || 'Service').toLowerCase().includes('rental') ? 'rentals' : 'services'
     const newListing = {
       id: String(Date.now()),
@@ -410,15 +426,14 @@ export default function ProviderListings() {
       subCategory: form.category || 'General',
       price: parseFloat(form.price) || 0,
       unit: form.unit || 'per session',
-      status: 'active',
+      status: listingStatus,
       bookings: 0,
       color: typeNormalized === 'rentals' ? 'from-emerald-400 to-teal-400' : 'from-blue-400 to-indigo-400',
       provider: profile?.business_name || profile?.full_name || user?.user_metadata?.business_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Service Provider',
       businessName: profile?.business_name || profile?.full_name || user?.user_metadata?.business_name || user?.user_metadata?.full_name || 'Service Provider',
-
       providerId: user?.id,
-      tag: (profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true') ? 'Verified' : '',
-      isVerified: !!(profile?.is_verified || profile?.kyc_status === 'approved' || localStorage.getItem(`provider_verified_${user?.id}`) === 'true'),
+      tag: isApproved ? 'Verified' : '',
+      isVerified: isApproved,
       distance: 1.0,
       rating: 0,
       reviews: 0,
@@ -444,11 +459,16 @@ export default function ProviderListings() {
     // Persist to backend & local cache
     await saveProviderListing(newListing, user?.id)
 
-    toast.success('New listing published and live for customers!')
+    if (listingStatus === 'pending_verification') {
+      toast.success('Listing saved! It will go live automatically once your KYC is approved by the admin.', { duration: 5000 })
+    } else {
+      toast.success('New listing published and live for customers!')
+    }
     setShowAdd(false)
     setWizardStep(0)
     setForm(INITIAL_FORM)
   }
+
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-6">
@@ -466,8 +486,45 @@ export default function ProviderListings() {
         </button>
       </div>
 
+      {/* KYC Pending banner — show when provider is not yet verified */}
+      {(() => {
+        const kycMeta = (() => {
+          try { if (profile?.avatar_url?.startsWith('{')) return JSON.parse(profile.avatar_url) } catch {} return {}
+        })()
+        const kycStatus = kycMeta.status || profile?.kyc_status
+        const isApproved = kycStatus === 'approved' || profile?.is_verified === true || localStorage.getItem(`provider_verified_${user?.id}`) === 'true'
+        const pendingCount = listings.filter(l => l.status === 'pending_verification').length
+        if (!isApproved) {
+          return (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5">
+              <AlertTriangle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-800">Your account is under verification</p>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  You can still create listings — they'll be saved as <strong>Pending</strong> and will go live automatically the moment the admin approves your KYC.
+                  {pendingCount > 0 && <span className="ml-1 font-semibold">({pendingCount} listing{pendingCount > 1 ? 's' : ''} waiting)</span>}
+                </p>
+              </div>
+            </div>
+          )
+        }
+        if (pendingCount > 0) {
+          // Just approved but pending listings still exist — show success note
+          return (
+            <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3.5">
+              <CheckCircle2 size={18} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-emerald-800">
+                Your account is verified! <strong>{pendingCount} pending listing{pendingCount > 1 ? 's are' : ' is'}</strong> being published now.
+              </p>
+            </div>
+          )
+        }
+        return null
+      })()}
+
       <Tabs tabs={TABS.map(t => ({ ...t, count: listings.filter(l => t.id === 'all' || l.status === t.id).length }))}
         active={tab} onChange={handleTabChange} />
+
 
       {visible.length === 0 ? (
         <div className="card py-16 text-center text-gray-400 border border-gray-200/80 shadow-sm flex flex-col items-center justify-center">
